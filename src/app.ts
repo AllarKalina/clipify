@@ -1,0 +1,70 @@
+import { Elysia } from "elysia";
+import type { AppEnv } from "./config/env";
+import { authModule } from "./modules/auth/routes";
+import type { AppAuth } from "./modules/auth/service";
+import { healthModule } from "./modules/health/routes";
+import { publicModule } from "./modules/public/routes";
+import { readyModule } from "./modules/ready/routes";
+import { userModule } from "./modules/user/routes";
+import { createOpenApiPlugin } from "./plugins/openapi";
+import { createOtelPlugin } from "./plugins/otel";
+import { requestIdPlugin } from "./plugins/request-id";
+import type { Logger } from "./plugins/logger";
+
+export type AppDeps = {
+  env: AppEnv;
+  logger: Logger;
+  auth: AppAuth;
+  checkReadiness: () => Promise<boolean>;
+};
+
+export function createApp(deps: AppDeps) {
+  const { env, logger, auth, checkReadiness } = deps;
+
+  const app = new Elysia({ aot: env.NODE_ENV === "production" }).use(requestIdPlugin).use(createOpenApiPlugin(env));
+
+  const otelPlugin = createOtelPlugin(env);
+  if (otelPlugin) {
+    app.use(otelPlugin);
+  }
+
+  app
+    .onRequest(({ request, set }) => {
+      const requestId = set.headers["x-request-id"];
+      logger.info("request.start", {
+        requestId,
+        method: request.method,
+        path: new URL(request.url).pathname
+      });
+    })
+    .onAfterResponse(({ request, set }) => {
+      const requestId = set.headers["x-request-id"];
+      logger.info("request.done", {
+        requestId,
+        method: request.method,
+        path: new URL(request.url).pathname,
+        status: set.status || 200
+      });
+    })
+    .onError(({ code, error, request, set }) => {
+      const requestId = set.headers["x-request-id"];
+      if (error instanceof Response) {
+        return;
+      }
+
+      logger.error("request.error", {
+        requestId,
+        method: request.method,
+        path: new URL(request.url).pathname,
+        code,
+        message: error instanceof Error ? error.message : String(error)
+      });
+    })
+    .use(authModule(auth))
+    .use(publicModule())
+    .use(healthModule(env))
+    .use(readyModule(checkReadiness))
+    .use(userModule(auth));
+
+  return app;
+}
