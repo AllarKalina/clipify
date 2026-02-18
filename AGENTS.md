@@ -1,12 +1,12 @@
 # AGENTS.md (Project-Specific)
 
-Scope: this repo only (`bun-backend-template`).
+Scope: this repo only (`clipify`).
 Source of truth for architecture: `docs/backend-architecture-standard.md`.
 
 ## Intent
 
-Template for new Bun backends.
-Priority: consistency across forks/agent iterations.
+Spotify CLI + backend monorepo.
+Priority: consistency between API, CLI, and release channels.
 
 ## Stack Contract (do not drift by default)
 
@@ -15,6 +15,8 @@ Priority: consistency across forks/agent iterations.
 - Auth: Better Auth (email/password + session)
 - API docs: OpenAPI plugin
 - Telemetry: OpenTelemetry plugin + JSON logs + request-id
+- Monorepo layout: `apps/api`, `apps/cli`, `packages/api-client`
+- Distribution baseline: Homebrew tap + GitHub release binaries
 
 If changing any stack default: add ADR in `docs/` and update `docs/backend-architecture-standard.md`.
 
@@ -32,6 +34,13 @@ If changing any stack default: add ADR in `docs/` and update `docs/backend-archi
 - Business logic in module service/model files
 - DB access only from module service/data layer (not route handlers)
 - Shared cross-cutting behavior only via `src/plugins/*`
+
+## CLI/API Contract Rules
+
+- `apps/cli` must call backend through `packages/api-client` (no ad-hoc fetches in commands)
+- `packages/api-client` owns runtime validation for CLI-consumed responses
+- Backend must expose compatibility metadata at `/v1/public/meta/version`
+- Support matrix target: current CLI release and previous release (`N`, `N-1`)
 
 ## Schema + OpenAPI Rules
 

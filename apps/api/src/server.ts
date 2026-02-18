@@ -2,12 +2,14 @@ import { createApp } from "./app";
 import { readEnv } from "./config/env";
 import { createDb } from "./db/client";
 import { createAuth } from "./modules/auth/service";
+import { createSpotifyService } from "./modules/spotify/service";
 import { createLogger } from "./plugins/logger";
 
 const env = readEnv();
 const logger = createLogger(env);
 const { db, sql } = createDb(env);
 const auth = createAuth(env, db);
+const spotify = createSpotifyService(env);
 
 async function checkReadiness(): Promise<boolean> {
   try {
@@ -26,6 +28,7 @@ const app = createApp({
   env,
   logger,
   auth,
+  spotify,
   checkReadiness
 });
 

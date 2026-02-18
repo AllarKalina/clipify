@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig/base.json",
+  "compilerOptions": {
+    "types": [
+      "bun"
+    ],
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "test"
+  ]
+}

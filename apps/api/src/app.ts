@@ -5,6 +5,8 @@ import type { AppAuth } from "./modules/auth/service";
 import { healthModule } from "./modules/health/routes";
 import { publicModule } from "./modules/public/routes";
 import { readyModule } from "./modules/ready/routes";
+import { spotifyModule } from "./modules/spotify/routes";
+import type { SpotifyService } from "./modules/spotify/service";
 import { userModule } from "./modules/user/routes";
 import { createOpenApiPlugin } from "./plugins/openapi";
 import { createOtelPlugin } from "./plugins/otel";
@@ -15,11 +17,12 @@ export type AppDeps = {
   env: AppEnv;
   logger: Logger;
   auth: AppAuth;
+  spotify: SpotifyService;
   checkReadiness: () => Promise<boolean>;
 };
 
 export function createApp(deps: AppDeps) {
-  const { env, logger, auth, checkReadiness } = deps;
+  const { env, logger, auth, spotify, checkReadiness } = deps;
 
   const app = new Elysia({ aot: env.NODE_ENV === "production" }).use(requestIdPlugin).use(createOpenApiPlugin(env));
 
@@ -61,9 +64,10 @@ export function createApp(deps: AppDeps) {
       });
     })
     .use(authModule(auth))
-    .use(publicModule())
+    .use(publicModule(env))
     .use(healthModule(env))
     .use(readyModule(checkReadiness))
+    .use(spotifyModule(auth, spotify))
     .use(userModule(auth));
 
   return app;

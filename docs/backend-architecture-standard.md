@@ -9,7 +9,7 @@ read_when:
 
 Date: 2026-02-18
 Status: active
-Scope: all future applications created from this template
+Scope: `clipify` backend (`apps/api`) and future backend services derived from it
 
 ## Purpose
 
@@ -112,6 +112,7 @@ Errors must be normalized before returning to clients.
 - Authenticated user routes: `/v1/*`
 - System routes: `/health`, `/ready`
 - Auth routes: `/api/auth/*`
+- Spotify routes: `/v1/spotify/*`
 
 ### Versioning
 
@@ -127,6 +128,10 @@ For every route, define:
 - OpenAPI metadata: summary + tags
 
 Do not merge route without schemas.
+
+Compatibility metadata route is required:
+
+- `GET /v1/public/meta/version`
 
 ### Response envelope policy
 

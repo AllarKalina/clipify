@@ -2,13 +2,19 @@ import { z } from "zod";
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  APP_NAME: z.string().min(1).default("bun-backend-template"),
+  APP_NAME: z.string().min(1).default("clipify-api"),
+  API_VERSION: z.string().min(1).default("v1"),
+  MIN_CLI_VERSION: z.string().min(1).default("0.1.0"),
+  LATEST_CLI_VERSION: z.string().min(1).default("0.1.0"),
   HOST: z.string().min(1).default("0.0.0.0"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
   DATABASE_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.url(),
+  SPOTIFY_CLIENT_ID: z.string().min(1).optional(),
+  SPOTIFY_CLIENT_SECRET: z.string().min(1).optional(),
+  SPOTIFY_REDIRECT_URI: z.url().optional(),
   OTEL_ENABLED: z
     .string()
     .optional()

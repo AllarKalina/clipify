@@ -5,17 +5,20 @@ import { createLogger } from "../src/plugins/logger";
 
 function baseEnv(nodeEnv: AppEnv["NODE_ENV"] = "test"): AppEnv {
   return {
-    APP_NAME: "bun-backend-template",
+    API_VERSION: "v1",
+    APP_NAME: "clipify-api",
     BETTER_AUTH_SECRET: "super-secret-value-123",
     BETTER_AUTH_URL: "http://localhost:3000",
     DATABASE_URL: "https://example.com/db",
     HOST: "127.0.0.1",
+    LATEST_CLI_VERSION: "0.1.0",
     LOG_LEVEL: "error",
+    MIN_CLI_VERSION: "0.1.0",
     NODE_ENV: nodeEnv,
     OTEL_ENABLED: false,
     OTEL_EXPORTER_OTLP_ENDPOINT: "https://otel.example.com/v1/traces",
     OTEL_EXPORTER_OTLP_HEADERS: "",
-    OTEL_SERVICE_NAME: "bun-backend-template",
+    OTEL_SERVICE_NAME: "clipify-api",
     PORT: 3000
   };
 }
@@ -37,6 +40,34 @@ function createAuthMock(user: { id: string; email: string; name: string } | null
   };
 }
 
+function createSpotifyMock() {
+  return {
+    isConfigured() {
+      return true;
+    },
+    startAuthorization() {
+      return {
+        authorizeUrl: "https://accounts.spotify.com/authorize?state=abc",
+        state: "abc"
+      };
+    },
+    async completeAuthorization(userId: string) {
+      return {
+        linked: true,
+        userId
+      };
+    },
+    async getCurrentlyPlaying() {
+      return {
+        isPlaying: true,
+        trackName: "Dreams",
+        artistName: "Fleetwood Mac",
+        albumName: "Rumours"
+      };
+    }
+  };
+}
+
 describe("app routes", () => {
   test("returns public hard-coded payload", async () => {
     const env = baseEnv();
@@ -45,6 +76,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -64,6 +96,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -71,7 +104,7 @@ describe("app routes", () => {
     expect(response.status).toBe(200);
 
     const body = (await response.json()) as { name: string; status: string };
-    expect(body.name).toBe("bun-backend-template");
+    expect(body.name).toBe("clipify-api");
     expect(body.status).toBe("ok");
     expect(response.headers.get("x-request-id")).toBeString();
   });
@@ -83,6 +116,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -97,6 +131,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => false
     });
 
@@ -111,6 +146,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -129,6 +165,7 @@ describe("app routes", () => {
         email: "a@example.com",
         name: "Allar"
       }) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -146,6 +183,7 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
@@ -160,10 +198,67 @@ describe("app routes", () => {
       env,
       logger: createLogger(env),
       auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
     });
 
     const response = await app.handle(new Request("http://localhost/openapi"));
     expect(response.status).toBe(404);
+  });
+
+  test("returns public api compatibility metadata", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/public/meta/version"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { apiVersion: string; minCliVersion: string };
+    expect(body.apiVersion).toBe("v1");
+    expect(body.minCliVersion).toBe("0.1.0");
+  });
+
+  test("blocks spotify route without session", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/auth/start"));
+    expect(response.status).toBe(401);
+  });
+
+  test("returns spotify currently-playing when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/currently-playing"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { trackName: string };
+    expect(body.trackName).toBe("Dreams");
   });
 });

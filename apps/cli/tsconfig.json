@@ -1,0 +1,19 @@
+{
+  "extends": "../../packages/tsconfig/base.json",
+  "compilerOptions": {
+    "types": [
+      "bun"
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@clipify/api-client": [
+        "../../packages/api-client/src/index.ts"
+      ]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "test"
+  ]
+}

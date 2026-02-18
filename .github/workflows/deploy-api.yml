@@ -1,0 +1,29 @@
+name: Deploy API
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/deploy-api.yml"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy on Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "RAILWAY_TOKEN is missing. Configure repository secret before enabling deploy workflow."
+            exit 1
+          fi
+          npm install -g @railway/cli
+          cd apps/api
+          railway up --service clipify-api --detach --ci

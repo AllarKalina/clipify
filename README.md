@@ -1,87 +1,56 @@
-# bun-backend-template
+# clipify
 
-Bun backend template with Elysia, Drizzle, Better Auth, OpenAPI, and OpenTelemetry.
+Spotify CLI + hosted backend monorepo, built on Bun.
 
-## Stack
+## Workspace
 
-- Bun runtime + package manager + test runner
-- Elysia API framework
-- Zod env validation
-- Postgres + Drizzle ORM + SQL migrations
-- Better Auth (email/password + session)
-- OpenAPI via `@elysiajs/openapi`
-- OpenTelemetry via `@elysiajs/opentelemetry`
+- `apps/api`: Elysia backend, auth, DB, Spotify integration layer
+- `apps/cli`: user-facing terminal binary
+- `packages/api-client`: typed HTTP client used by CLI
+- `packages/tsconfig`: shared TypeScript base config
 
-## Quickstart
+## Commands
 
 ```bash
 bun install
-cp .env.example .env
-bun run start
+bun run typecheck
+bun run test
 ```
 
-## Scripts
-
-- `bun run dev` watch mode
-- `bun run start` run server once
-- `bun run test` run tests
-- `bun run typecheck` run TypeScript checks
-- `bun run db:generate` generate migrations from schema
-- `bun run db:migrate` apply migrations
-
-## Routes
-
-- `GET /health` liveness
-- `GET /ready` readiness (checks DB)
-- `GET /v1/public/example` public hard-coded sample payload
-- `GET /v1/me` protected profile route
-- `ALL /api/auth/*` Better Auth routes
-- `GET /openapi` docs UI (development only)
-- `GET /openapi/json` OpenAPI JSON (all envs)
-
-## Environment
-
-Required variables are validated at boot in `src/config/env.ts`.
-Use `.env.example` as source of truth.
-
-## Auth Notes
-
-- Base scaffold enables email/password auth.
-- Better Auth tables are defined in `src/db/schema.ts`.
-- Run migrations before auth flows.
-
-## Project layout
-
-```text
-src/
-  app.ts
-  server.ts
-  config/env.ts
-  db/client.ts
-  db/schema.ts
-  modules/
-  plugins/
-migrations/
-  0000_initial_auth.sql
-test/
-  app.test.ts
-  env.test.ts
-```
-
-## Docker
+### API
 
 ```bash
-docker build -t bun-backend-template .
-docker run --env-file .env -p 3000:3000 bun-backend-template
+cp apps/api/.env.example apps/api/.env
+bun --cwd apps/api run dev
 ```
 
-## CI
+### CLI
 
-GitHub Actions workflow at `.github/workflows/ci.yml` runs:
+```bash
+bun --cwd apps/cli run start -- doctor --api http://localhost:3000
+```
 
-- `bun run typecheck`
-- `bun run test`
+## API Routes (current)
 
-## Architecture Standard
+- `GET /health`
+- `GET /ready`
+- `GET /v1/public/example`
+- `GET /v1/public/meta/version`
+- `GET /v1/me`
+- `GET /v1/spotify/auth/start`
+- `GET /v1/spotify/auth/callback`
+- `GET /v1/spotify/me/player/currently-playing`
+- `ALL /api/auth/*`
 
-Use `docs/backend-architecture-standard.md` as the source of truth for module design, API modeling, testing, and review consistency across agent iterations.
+## Release + Deploy
+
+- CLI release workflow: `.github/workflows/release-cli.yml`
+- API deploy workflow: `.github/workflows/deploy-api.yml` (Railway)
+- CI workflow: `.github/workflows/ci.yml`
+
+## Architecture
+
+- Backend standards: `docs/backend-architecture-standard.md`
+- Monorepo architecture: `docs/architecture.md`
+- API compatibility policy: `docs/api-compatibility.md`
+- Release/deploy notes: `docs/release.md`
