@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1739923200000,
+      "tag": "0000_initial_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1739926800000,
+      "tag": "0001_spotify_connection",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1739930400000,
+      "tag": "0002_spotify_oauth_state",
+      "breakpoints": true
+    }
+  ]
+}

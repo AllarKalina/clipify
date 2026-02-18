@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "setup:backend": "bash scripts/setup-backend.sh",
     "dev:api": "bun run --cwd apps/api dev",
     "start:api": "bun run --cwd apps/api start",
     "typecheck": "bun run --cwd apps/api typecheck && bun run --cwd packages/api-client typecheck && bun run --cwd apps/cli typecheck",

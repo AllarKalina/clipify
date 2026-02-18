@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.string().min(1).optional()
+);
+
+const optionalUrl = z.preprocess(
+  (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+  z.url().optional()
+);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_NAME: z.string().min(1).default("clipify-api"),
@@ -12,10 +22,10 @@ const envSchema = z.object({
   DATABASE_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(16),
   BETTER_AUTH_URL: z.url(),
-  SPOTIFY_CLIENT_ID: z.string().min(1).optional(),
-  SPOTIFY_CLIENT_SECRET: z.string().min(1).optional(),
-  SPOTIFY_REDIRECT_URI: z.url().optional(),
-  SPOTIFY_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
+  SPOTIFY_CLIENT_ID: optionalNonEmptyString,
+  SPOTIFY_CLIENT_SECRET: optionalNonEmptyString,
+  SPOTIFY_REDIRECT_URI: optionalUrl,
+  SPOTIFY_TOKEN_ENCRYPTION_KEY: optionalNonEmptyString,
   OTEL_ENABLED: z
     .string()
     .optional()

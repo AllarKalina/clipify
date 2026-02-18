@@ -14,6 +14,10 @@ export type SpotifyCallbackResponse = {
   userId: string;
 };
 
+export type SpotifyAuthStatusResponse = {
+  linked: boolean;
+};
+
 export type SpotifyCurrentlyPlayingResponse = {
   isPlaying: boolean;
   trackName: string;
@@ -25,6 +29,8 @@ export type SpotifyService = {
   isConfigured: () => boolean;
   startAuthorization: (userId: string) => Promise<SpotifyStartAuthResponse>;
   completeAuthorization: (userId: string, code: string, state: string) => Promise<SpotifyCallbackResponse>;
+  completeAuthorizationFromCallback: (code: string, state: string) => Promise<SpotifyCallbackResponse>;
+  getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
 };
 
@@ -56,7 +62,7 @@ type SpotifyConnectionStore = {
   findBySpotifyUserId: (spotifyUserId: string) => Promise<SpotifyConnection | null>;
   upsertConnection: (connection: SpotifyConnection) => Promise<void>;
   createOauthState: (oauthState: SpotifyOAuthState) => Promise<void>;
-  consumeOauthState: (userId: string, stateHash: string, now: Date) => Promise<boolean>;
+  consumeOauthState: (stateHash: string, now: Date) => Promise<SpotifyOAuthState | null>;
 };
 
 type SpotifyServiceDeps = {
@@ -119,19 +125,19 @@ function createDrizzleStore(db: AppDb): SpotifyConnectionStore {
     async createOauthState(oauthState) {
       await db.insert(spotifyOauthStates).values(oauthState);
     },
-    async consumeOauthState(userId, stateHash, now) {
+    async consumeOauthState(stateHash, now) {
       const [row] = await db
         .select()
         .from(spotifyOauthStates)
         .where(eq(spotifyOauthStates.stateHash, stateHash))
         .limit(1);
 
-      if (!row || row.userId !== userId || row.expiresAt.getTime() <= now.getTime()) {
-        return false;
+      if (!row || row.expiresAt.getTime() <= now.getTime()) {
+        return null;
       }
 
       await db.delete(spotifyOauthStates).where(eq(spotifyOauthStates.id, row.id));
-      return true;
+      return row;
     }
   };
 }
@@ -264,6 +270,46 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     return connection;
   }
 
+  async function completeAuthorizationForUser(userId: string, code: string): Promise<SpotifyCallbackResponse> {
+    const token = await exchangeCodeForToken(code);
+    const profile = await fetchSpotifyProfile(token.access_token);
+    const existing = await connectionStore.findBySpotifyUserId(profile.id);
+
+    if (existing && existing.userId !== userId) {
+      throw new Response("Spotify account already linked to another user", { status: 409 });
+    }
+
+    const cipher = requireCipher();
+    const at = now();
+    const connection: SpotifyConnection = {
+      id: existing?.id ?? randomUUID(),
+      userId,
+      spotifyUserId: profile.id,
+      accessToken: cipher.encrypt(token.access_token),
+      refreshToken: cipher.encrypt(token.refresh_token ?? ""),
+      tokenType: token.token_type,
+      scope: token.scope ?? REQUIRED_SCOPE,
+      expiresAt: toExpiresAt(token.expires_in, at),
+      createdAt: existing?.createdAt ?? at,
+      updatedAt: at
+    };
+
+    if (!token.refresh_token && !existing?.refreshToken) {
+      throw new Response("Spotify refresh token missing", { status: 502 });
+    }
+
+    if (!token.refresh_token && existing?.refreshToken) {
+      connection.refreshToken = existing.refreshToken;
+    }
+
+    await connectionStore.upsertConnection(connection);
+
+    return {
+      linked: true,
+      userId
+    };
+  }
+
   return {
     isConfigured,
     async startAuthorization(userId: string) {
@@ -286,7 +332,8 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         response_type: "code",
         redirect_uri: env.SPOTIFY_REDIRECT_URI!,
         scope: REQUIRED_SCOPE,
-        state
+        state,
+        show_dialog: "true"
       });
 
       return {
@@ -303,47 +350,33 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Missing code or state", { status: 400 });
       }
 
-      const isValidState = await connectionStore.consumeOauthState(userId, createStateHash(state), now());
-      if (!isValidState) {
+      const consumedState = await connectionStore.consumeOauthState(createStateHash(state), now());
+      if (!consumedState || consumedState.userId !== userId) {
         throw new Response("Invalid or expired Spotify state", { status: 400 });
       }
 
-      const token = await exchangeCodeForToken(code);
-      const profile = await fetchSpotifyProfile(token.access_token);
-      const existing = await connectionStore.findBySpotifyUserId(profile.id);
-
-      if (existing && existing.userId !== userId) {
-        throw new Response("Spotify account already linked to another user", { status: 409 });
+      return completeAuthorizationForUser(userId, code);
+    },
+    async completeAuthorizationFromCallback(code: string, state: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const cipher = requireCipher();
-      const at = now();
-      const connection: SpotifyConnection = {
-        id: existing?.id ?? randomUUID(),
-        userId,
-        spotifyUserId: profile.id,
-        accessToken: cipher.encrypt(token.access_token),
-        refreshToken: cipher.encrypt(token.refresh_token ?? ""),
-        tokenType: token.token_type,
-        scope: token.scope ?? REQUIRED_SCOPE,
-        expiresAt: toExpiresAt(token.expires_in, at),
-        createdAt: existing?.createdAt ?? at,
-        updatedAt: at
-      };
-
-      if (!token.refresh_token && !existing?.refreshToken) {
-        throw new Response("Spotify refresh token missing", { status: 502 });
+      if (!code || !state) {
+        throw new Response("Missing code or state", { status: 400 });
       }
 
-      if (!token.refresh_token && existing?.refreshToken) {
-        connection.refreshToken = existing.refreshToken;
+      const consumedState = await connectionStore.consumeOauthState(createStateHash(state), now());
+      if (!consumedState) {
+        throw new Response("Invalid or expired Spotify state", { status: 400 });
       }
 
-      await connectionStore.upsertConnection(connection);
-
+      return completeAuthorizationForUser(consumedState.userId, code);
+    },
+    async getAuthorizationStatus(userId: string) {
+      const existing = await connectionStore.findByUserId(userId);
       return {
-        linked: true,
-        userId
+        linked: Boolean(existing)
       };
     },
     async getCurrentlyPlaying(userId: string) {

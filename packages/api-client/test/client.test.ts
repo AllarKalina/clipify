@@ -91,6 +91,28 @@ describe("api client", () => {
     expect(requestedUrl).toContain("state=state-1");
   });
 
+  test("returns spotify authorization status for authenticated user", async () => {
+    let requestedUrl = "";
+    let cookieHeader = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url, init) => {
+        requestedUrl = String(url);
+        cookieHeader = new Headers(init?.headers).get("cookie") ?? "";
+        return Response.json({
+          linked: true
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyAuthorizationStatus();
+
+    expect(payload.linked).toBeTrue();
+    expect(requestedUrl).toContain("/v1/spotify/auth/status");
+    expect(cookieHeader).toBe("better-auth.session_token=abc123");
+  });
+
   test("throws when protected route is called without session cookie", async () => {
     const client = createApiClient({
       baseUrl: "https://example.com",

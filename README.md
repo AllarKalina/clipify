@@ -13,6 +13,7 @@ Spotify terminal app + hosted backend monorepo, built on Bun.
 
 ```bash
 bun install
+bun run setup:backend
 bun run typecheck
 bun run test
 ```
@@ -20,8 +21,7 @@ bun run test
 ### API
 
 ```bash
-cp apps/api/.env.example apps/api/.env
-bun run --cwd apps/api db:migrate
+bun run setup:backend
 bun --cwd apps/api run dev
 ```
 
@@ -39,6 +39,7 @@ bun --cwd apps/cli run start -- auth-clear-cookie
 The terminal app connects to backend APIs for user/session and Spotify status.
 Protected backend routes require an authenticated session cookie in `--cookie` or `CLIPIFY_SESSION_COOKIE`.
 You can persist a session cookie locally with `auth-set-cookie` (stored in `~/.config/clipify/config.json` by default, or `$XDG_CONFIG_HOME/clipify/config.json`).
+Press `l` in the terminal app to start Spotify linking. Browser callback completion is detected automatically.
 
 ## API Routes (current)
 
@@ -48,7 +49,9 @@ You can persist a session cookie locally with `auth-set-cookie` (stored in `~/.c
 - `GET /v1/public/meta/version`
 - `GET /v1/me`
 - `GET /v1/spotify/auth/start`
+- `GET /v1/spotify/auth/status`
 - `GET /v1/spotify/auth/callback`
+- `GET /v1/spotify/auth/callback/public`
 - `GET /v1/spotify/me/player/currently-playing`
 - `ALL /api/auth/*`
 
@@ -57,6 +60,7 @@ You can persist a session cookie locally with `auth-set-cookie` (stored in `~/.c
 - API exchanges OAuth code for access/refresh token at Spotify Accounts API.
 - OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
 - Linked tokens are stored encrypted in `spotify_connection`.
+- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://localhost:3000/v1/spotify/auth/callback/public`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
 
 ## Release + Deploy

@@ -37,6 +37,10 @@ const spotifyCallbackSchema = z.object({
   userId: z.string()
 });
 
+const spotifyAuthStatusSchema = z.object({
+  linked: z.boolean()
+});
+
 const spotifyCurrentlyPlayingSchema = z.object({
   isPlaying: z.boolean(),
   trackName: z.string(),
@@ -62,6 +66,7 @@ export type ApiClient = {
   getMe: () => Promise<{ user: { id: string; email: string; name: string } }>;
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
+  getSpotifyAuthorizationStatus: () => Promise<{ linked: boolean }>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
 };
 
@@ -145,6 +150,12 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
           code: input.code,
           state: input.state
         },
+        requireSession: true
+      });
+    },
+    getSpotifyAuthorizationStatus() {
+      return request("/v1/spotify/auth/status", {
+        schema: spotifyAuthStatusSchema,
         requireSession: true
       });
     },

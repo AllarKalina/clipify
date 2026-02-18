@@ -57,6 +57,17 @@ function createSpotifyMock() {
         userId
       };
     },
+    async completeAuthorizationFromCallback() {
+      return {
+        linked: true,
+        userId: "u_123"
+      };
+    },
+    async getAuthorizationStatus() {
+      return {
+        linked: true
+      };
+    },
     async getCurrentlyPlaying() {
       return {
         isPlaying: true,
@@ -260,5 +271,37 @@ describe("app routes", () => {
 
     const body = (await response.json()) as { trackName: string };
     expect(body.trackName).toBe("Dreams");
+  });
+
+  test("allows spotify public callback route without session", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/v1/spotify/auth/callback/public?code=code-1&state=state-1")
+    );
+    expect(response.status).toBe(200);
+  });
+
+  test("blocks spotify auth status route without session", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/auth/status"));
+    expect(response.status).toBe(401);
   });
 });

@@ -23,6 +23,22 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
       }
     )
     .get(
+      "/auth/status",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        return spotify.getAuthorizationStatus(session.user.id);
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Get Spotify link status for authenticated user"
+        },
+        response: t.Object({
+          linked: t.Boolean()
+        })
+      }
+    )
+    .get(
       "/auth/callback",
       async ({ request, query }) => {
         const session = await requireSession(auth, request);
@@ -40,6 +56,60 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
         response: t.Object({
           linked: t.Boolean(),
           userId: t.String()
+        })
+      }
+    )
+    .get(
+      "/auth/callback/public",
+      async ({ query }) => {
+        const html = (title: string, description: string) =>
+          `<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title></head><body><h1>${title}</h1><p>${description}</p></body></html>`;
+
+        if (query.error) {
+          return new Response(html("Spotify link failed", `Spotify returned: ${query.error}`), {
+            status: 400,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+
+        if (!query.code || !query.state) {
+          return new Response(html("Spotify link failed", "Missing code or state in callback URL."), {
+            status: 400,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+
+        try {
+          await spotify.completeAuthorizationFromCallback(query.code, query.state);
+
+          return new Response(html("Spotify linked", "You can return to Clipify in your terminal."), {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        } catch (error) {
+          if (error instanceof Response) {
+            const message = await error.text();
+            return new Response(html("Spotify link failed", message || "OAuth callback failed."), {
+              status: error.status,
+              headers: { "content-type": "text/html; charset=utf-8" }
+            });
+          }
+
+          return new Response(html("Spotify link failed", "Unexpected callback error."), {
+            status: 500,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Public Spotify OAuth callback endpoint"
+        },
+        query: t.Object({
+          code: t.Optional(t.String()),
+          state: t.Optional(t.String()),
+          error: t.Optional(t.String())
         })
       }
     )
