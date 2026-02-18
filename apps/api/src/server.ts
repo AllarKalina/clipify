@@ -9,7 +9,7 @@ const env = readEnv();
 const logger = createLogger(env);
 const { db, sql } = createDb(env);
 const auth = createAuth(env, db);
-const spotify = createSpotifyService(env);
+const spotify = createSpotifyService(env, { db });
 
 async function checkReadiness(): Promise<boolean> {
   try {

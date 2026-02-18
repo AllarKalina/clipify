@@ -50,9 +50,26 @@ export const verifications = pgTable("verification", {
   updatedAt: timestamp("updated_at", { mode: "date" })
 });
 
+export const spotifyConnections = pgTable("spotify_connection", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: "cascade" }),
+  spotifyUserId: text("spotify_user_id").notNull().unique(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  scope: text("scope"),
+  tokenType: text("token_type"),
+  expiresAt: timestamp("expires_at", { mode: "date" }),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull()
+});
+
 export const authSchema = {
   user: users,
   session: sessions,
   account: accounts,
-  verification: verifications
+  verification: verifications,
+  spotifyConnection: spotifyConnections
 };

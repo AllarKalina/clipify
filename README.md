@@ -21,6 +21,7 @@ bun run test
 
 ```bash
 cp apps/api/.env.example apps/api/.env
+bun run --cwd apps/api db:migrate
 bun --cwd apps/api run dev
 ```
 
@@ -41,6 +42,12 @@ bun --cwd apps/cli run start -- doctor --api http://localhost:3000
 - `GET /v1/spotify/auth/callback`
 - `GET /v1/spotify/me/player/currently-playing`
 - `ALL /api/auth/*`
+
+## Spotify OAuth Notes
+
+- API exchanges OAuth code for access/refresh token at Spotify Accounts API.
+- Linked tokens are stored in `spotify_connection` table.
+- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` are required for Spotify routes.
 
 ## Release + Deploy
 
