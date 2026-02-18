@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
-import { createApiClient } from "@clipify/api-client";
+import { ApiClientError, createApiClient } from "@clipify/api-client";
+import { clearSessionCookie, loadSessionCookie, saveSessionCookie } from "./config";
 
 export type CliCommand =
   | "help"
@@ -9,7 +10,10 @@ export type CliCommand =
   | "spotify-login"
   | "spotify-auth-start"
   | "spotify-auth-callback"
-  | "spotify-now-playing";
+  | "spotify-now-playing"
+  | "spotify-status"
+  | "auth-set-cookie"
+  | "auth-clear-cookie";
 
 export type CliOptions = {
   apiBaseUrl: string;
@@ -23,7 +27,7 @@ export type CliOptions = {
 export function parseOptions(args: string[]): { command: CliCommand; options: CliOptions } {
   const positionals: string[] = [];
   let apiBaseUrl = process.env.CLIPIFY_API_URL || "http://localhost:3000";
-  let sessionCookie = process.env.CLIPIFY_SESSION_COOKIE;
+  let sessionCookie = process.env.CLIPIFY_SESSION_COOKIE || loadSessionCookie();
   let code: string | undefined;
   let state: string | undefined;
   let completeUrl: string | undefined;
@@ -79,7 +83,10 @@ export function parseOptions(args: string[]): { command: CliCommand; options: Cl
     "spotify-login",
     "spotify-auth-start",
     "spotify-auth-callback",
-    "spotify-now-playing"
+    "spotify-now-playing",
+    "spotify-status",
+    "auth-set-cookie",
+    "auth-clear-cookie"
   ]);
   const command: CliCommand = supportedCommands.has(commandArg as CliCommand) ? (commandArg as CliCommand) : "help";
 
@@ -139,10 +146,13 @@ Usage:
   clipify spotify-auth-start [--api <url>] [--cookie <cookie>]
   clipify spotify-auth-callback --code <code> --state <state> [--api <url>] [--cookie <cookie>]
   clipify spotify-now-playing [--api <url>] [--cookie <cookie>]
+  clipify spotify-status [--api <url>] [--cookie <cookie>]
+  clipify auth-set-cookie --cookie <cookie>
+  clipify auth-clear-cookie
 
 Options:
   --api <url>   Override API base URL (default: CLIPIFY_API_URL or http://localhost:3000)
-  --cookie      Raw Cookie header (default: CLIPIFY_SESSION_COOKIE)
+  --cookie      Raw Cookie header (default: CLIPIFY_SESSION_COOKIE, then persisted config)
   --code        Spotify callback authorization code
   --state       Spotify callback state
   --complete-url Full redirect URL containing ?code=...&state=...
@@ -152,10 +162,23 @@ Options:
 
 async function run() {
   const { command, options } = parseOptions(Bun.argv.slice(2));
-  const client = createApiClient({
-    baseUrl: options.apiBaseUrl,
-    sessionCookie: options.sessionCookie
-  });
+  if (command === "auth-set-cookie") {
+    if (!options.sessionCookie) {
+      throw new Error("auth-set-cookie requires --cookie");
+    }
+
+    saveSessionCookie(options.sessionCookie);
+    console.log("cookie=saved");
+    return;
+  }
+
+  if (command === "auth-clear-cookie") {
+    clearSessionCookie();
+    console.log("cookie=cleared");
+    return;
+  }
+
+  const client = createApiClient({ baseUrl: options.apiBaseUrl, sessionCookie: options.sessionCookie });
 
   if (command === "help") {
     printHelp();
@@ -223,6 +246,27 @@ async function run() {
 
     console.log(`linked=${result.linked} userId=${result.userId}`);
     return;
+  }
+
+  if (command === "spotify-status") {
+    await client.getMe();
+    try {
+      const current = await client.getSpotifyCurrentlyPlaying();
+      if (!current.isPlaying) {
+        console.log("spotify=linked playback=idle");
+        return;
+      }
+
+      console.log(`spotify=linked playback=playing track="${current.trackName}" artist="${current.artistName}"`);
+      return;
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 409) {
+        console.log("spotify=not-linked");
+        return;
+      }
+
+      throw error;
+    }
   }
 
   const current = await client.getSpotifyCurrentlyPlaying();

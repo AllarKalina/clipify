@@ -19,6 +19,14 @@ const publicExampleSchema = z.object({
   category: z.string()
 });
 
+const meSchema = z.object({
+  user: z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string()
+  })
+});
+
 const spotifyStartAuthSchema = z.object({
   authorizeUrl: z.string().url(),
   state: z.string()
@@ -51,6 +59,7 @@ export class ApiClientError extends Error {
 export type ApiClient = {
   getVersion: () => Promise<PublicVersionResponse>;
   getPublicExample: () => Promise<PublicExampleResponse>;
+  getMe: () => Promise<{ user: { id: string; email: string; name: string } }>;
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
@@ -116,6 +125,12 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     },
     getPublicExample() {
       return request("/v1/public/example", { schema: publicExampleSchema });
+    },
+    getMe() {
+      return request("/v1/me", {
+        schema: meSchema,
+        requireSession: true
+      });
     },
     startSpotifyAuthorization() {
       return request("/v1/spotify/auth/start", {

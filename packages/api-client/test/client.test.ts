@@ -48,6 +48,24 @@ describe("api client", () => {
     expect(cookieHeader).toBe("better-auth.session_token=abc123");
   });
 
+  test("returns current user profile for protected me route", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async () =>
+        Response.json({
+          user: {
+            id: "user-1",
+            email: "allar@example.com",
+            name: "Allar"
+          }
+        })
+    });
+
+    const payload = await client.getMe();
+    expect(payload.user.id).toBe("user-1");
+  });
+
   test("builds callback query parameters", async () => {
     let requestedUrl = "";
     const client = createApiClient({

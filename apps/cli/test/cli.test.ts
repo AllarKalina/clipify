@@ -59,4 +59,20 @@ describe("cli commands", () => {
   test("throws for complete url missing state", () => {
     expect(() => parseSpotifyCallbackUrl("http://localhost/cb?code=code-1")).toThrow();
   });
+
+  test("parses spotify-status command", () => {
+    const parsed = parseOptions(["spotify-status"]);
+    expect(parsed.command).toBe("spotify-status");
+  });
+
+  test("parses auth-set-cookie command", () => {
+    const parsed = parseOptions(["auth-set-cookie", "--cookie", "better-auth.session_token=abc"]);
+    expect(parsed.command).toBe("auth-set-cookie");
+    expect(parsed.options.sessionCookie).toBe("better-auth.session_token=abc");
+  });
+
+  test("parses auth-clear-cookie command", () => {
+    const parsed = parseOptions(["auth-clear-cookie"]);
+    expect(parsed.command).toBe("auth-clear-cookie");
+  });
 });
