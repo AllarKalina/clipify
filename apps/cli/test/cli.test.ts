@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseOptions } from "../src/index";
+import { parseOptions, parseSpotifyCallbackUrl } from "../src/index";
 
 describe("cli commands", () => {
   test("parses doctor command and custom api url", () => {
@@ -42,5 +42,21 @@ describe("cli commands", () => {
     const parsed = parseOptions(["spotify-login", "--no-open"]);
     expect(parsed.command).toBe("spotify-login");
     expect(parsed.options.openBrowser).toBe(false);
+  });
+
+  test("parses --complete-url for spotify-login", () => {
+    const parsed = parseOptions(["spotify-login", "--complete-url", "http://localhost/cb?code=a&state=b"]);
+    expect(parsed.command).toBe("spotify-login");
+    expect(parsed.options.completeUrl).toBe("http://localhost/cb?code=a&state=b");
+  });
+
+  test("extracts code and state from complete url", () => {
+    const parsed = parseSpotifyCallbackUrl("http://localhost/cb?code=code-1&state=state-1");
+    expect(parsed.code).toBe("code-1");
+    expect(parsed.state).toBe("state-1");
+  });
+
+  test("throws for complete url missing state", () => {
+    expect(() => parseSpotifyCallbackUrl("http://localhost/cb?code=code-1")).toThrow();
   });
 });

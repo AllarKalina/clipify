@@ -16,6 +16,7 @@ export type CliOptions = {
   sessionCookie?: string;
   code?: string;
   state?: string;
+  completeUrl?: string;
   openBrowser: boolean;
 };
 
@@ -25,6 +26,7 @@ export function parseOptions(args: string[]): { command: CliCommand; options: Cl
   let sessionCookie = process.env.CLIPIFY_SESSION_COOKIE;
   let code: string | undefined;
   let state: string | undefined;
+  let completeUrl: string | undefined;
   let openBrowser = true;
 
   for (let index = 0; index < args.length; index += 1) {
@@ -50,6 +52,12 @@ export function parseOptions(args: string[]): { command: CliCommand; options: Cl
 
     if (arg === "--state" && args[index + 1]) {
       state = args[index + 1]!;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--complete-url" && args[index + 1]) {
+      completeUrl = args[index + 1]!;
       index += 1;
       continue;
     }
@@ -82,9 +90,22 @@ export function parseOptions(args: string[]): { command: CliCommand; options: Cl
       sessionCookie,
       code,
       state,
+      completeUrl,
       openBrowser
     }
   };
+}
+
+export function parseSpotifyCallbackUrl(redirectUrl: string): { code: string; state: string } {
+  const url = new URL(redirectUrl);
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+
+  if (!code || !state) {
+    throw new Error("complete-url must include both code and state query parameters");
+  }
+
+  return { code, state };
 }
 
 function openUrl(url: string): boolean {
@@ -114,7 +135,7 @@ function printHelp() {
 Usage:
   clipify doctor [--api <url>]
   clipify public-example [--api <url>]
-  clipify spotify-login [--api <url>] [--cookie <cookie>] [--no-open]
+  clipify spotify-login [--api <url>] [--cookie <cookie>] [--no-open] [--complete-url <url>]
   clipify spotify-auth-start [--api <url>] [--cookie <cookie>]
   clipify spotify-auth-callback --code <code> --state <state> [--api <url>] [--cookie <cookie>]
   clipify spotify-now-playing [--api <url>] [--cookie <cookie>]
@@ -124,6 +145,7 @@ Options:
   --cookie      Raw Cookie header (default: CLIPIFY_SESSION_COOKIE)
   --code        Spotify callback authorization code
   --state       Spotify callback state
+  --complete-url Full redirect URL containing ?code=...&state=...
   --no-open     Do not auto-open Spotify authorization URL
 `);
 }
@@ -167,6 +189,13 @@ async function run() {
   }
 
   if (command === "spotify-login") {
+    if (options.completeUrl) {
+      const parsed = parseSpotifyCallbackUrl(options.completeUrl);
+      const result = await client.completeSpotifyAuthorization(parsed);
+      console.log(`linked=${result.linked} userId=${result.userId}`);
+      return;
+    }
+
     const result = await client.startSpotifyAuthorization();
     const opened = options.openBrowser ? openUrl(result.authorizeUrl) : false;
     console.log(`authorizeUrl=${result.authorizeUrl}`);
