@@ -1,12 +1,12 @@
 # clipify
 
-Spotify CLI + hosted backend monorepo, built on Bun.
+Spotify terminal app + hosted backend monorepo, built on Bun.
 
 ## Workspace
 
 - `apps/api`: Elysia backend, auth, DB, Spotify integration layer
-- `apps/cli`: user-facing terminal binary
-- `packages/api-client`: typed HTTP client used by CLI
+- `apps/cli`: user-facing terminal app
+- `packages/api-client`: typed HTTP client used by terminal app
 - `packages/tsconfig`: shared TypeScript base config
 
 ## Commands
@@ -25,21 +25,19 @@ bun run --cwd apps/api db:migrate
 bun --cwd apps/api run dev
 ```
 
-### CLI
+### Terminal App
 
 ```bash
-bun --cwd apps/cli run start -- doctor --api http://localhost:3000
-bun --cwd apps/cli run start -- spotify-login --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- spotify-login --complete-url "http://localhost:3000/v1/spotify/auth/callback?code=<code>&state=<state>" --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- spotify-auth-start --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- spotify-auth-callback --code "<code>" --state "<state>" --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- spotify-now-playing --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- spotify-status --cookie "better-auth.session_token=<token>"
+# Launch interactive terminal app
+bun --cwd apps/cli run start -- --api http://localhost:3000
+
+# Optional cookie management helpers
 bun --cwd apps/cli run start -- auth-set-cookie --cookie "better-auth.session_token=<token>"
 bun --cwd apps/cli run start -- auth-clear-cookie
 ```
 
-Protected CLI routes require an authenticated session cookie in `--cookie` or `CLIPIFY_SESSION_COOKIE`.
+The terminal app connects to backend APIs for user/session and Spotify status.
+Protected backend routes require an authenticated session cookie in `--cookie` or `CLIPIFY_SESSION_COOKIE`.
 You can persist a session cookie locally with `auth-set-cookie` (stored in `~/.config/clipify/config.json` by default, or `$XDG_CONFIG_HOME/clipify/config.json`).
 
 ## API Routes (current)
