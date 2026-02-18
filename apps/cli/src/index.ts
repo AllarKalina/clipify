@@ -2,28 +2,110 @@
 
 import { createApiClient } from "@clipify/api-client";
 
-export type CliCommand = "help" | "doctor" | "public-example";
+export type CliCommand =
+  | "help"
+  | "doctor"
+  | "public-example"
+  | "spotify-login"
+  | "spotify-auth-start"
+  | "spotify-auth-callback"
+  | "spotify-now-playing";
 
 export type CliOptions = {
   apiBaseUrl: string;
+  sessionCookie?: string;
+  code?: string;
+  state?: string;
+  openBrowser: boolean;
 };
 
 export function parseOptions(args: string[]): { command: CliCommand; options: CliOptions } {
-  const apiIndex = args.findIndex((value) => value === "--api");
-  const apiBaseUrl =
-    apiIndex >= 0 && args[apiIndex + 1] ? args[apiIndex + 1]! : process.env.CLIPIFY_API_URL || "http://localhost:3000";
+  const positionals: string[] = [];
+  let apiBaseUrl = process.env.CLIPIFY_API_URL || "http://localhost:3000";
+  let sessionCookie = process.env.CLIPIFY_SESSION_COOKIE;
+  let code: string | undefined;
+  let state: string | undefined;
+  let openBrowser = true;
 
-  const commandArg = args.find((value) => !value.startsWith("--")) ?? "help";
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
 
-  const command: CliCommand =
-    commandArg === "doctor" || commandArg === "public-example" ? commandArg : "help";
+    if (arg === "--api" && args[index + 1]) {
+      apiBaseUrl = args[index + 1]!;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--cookie" && args[index + 1]) {
+      sessionCookie = args[index + 1]!;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--code" && args[index + 1]) {
+      code = args[index + 1]!;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--state" && args[index + 1]) {
+      state = args[index + 1]!;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--no-open") {
+      openBrowser = false;
+      continue;
+    }
+
+    if (!arg.startsWith("--")) {
+      positionals.push(arg);
+    }
+  }
+
+  const commandArg = positionals[0] ?? "help";
+  const supportedCommands = new Set<CliCommand>([
+    "doctor",
+    "public-example",
+    "spotify-login",
+    "spotify-auth-start",
+    "spotify-auth-callback",
+    "spotify-now-playing"
+  ]);
+  const command: CliCommand = supportedCommands.has(commandArg as CliCommand) ? (commandArg as CliCommand) : "help";
 
   return {
     command,
     options: {
-      apiBaseUrl
+      apiBaseUrl,
+      sessionCookie,
+      code,
+      state,
+      openBrowser
     }
   };
+}
+
+function openUrl(url: string): boolean {
+  const platform = process.platform;
+  const command =
+    platform === "darwin"
+      ? ["open", url]
+      : platform === "win32"
+        ? ["cmd", "/c", "start", "", url]
+        : ["xdg-open", url];
+
+  try {
+    const processResult = Bun.spawnSync(command, {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore"
+    });
+    return processResult.exitCode === 0;
+  } catch {
+    return false;
+  }
 }
 
 function printHelp() {
@@ -32,15 +114,26 @@ function printHelp() {
 Usage:
   clipify doctor [--api <url>]
   clipify public-example [--api <url>]
+  clipify spotify-login [--api <url>] [--cookie <cookie>] [--no-open]
+  clipify spotify-auth-start [--api <url>] [--cookie <cookie>]
+  clipify spotify-auth-callback --code <code> --state <state> [--api <url>] [--cookie <cookie>]
+  clipify spotify-now-playing [--api <url>] [--cookie <cookie>]
 
 Options:
   --api <url>   Override API base URL (default: CLIPIFY_API_URL or http://localhost:3000)
+  --cookie      Raw Cookie header (default: CLIPIFY_SESSION_COOKIE)
+  --code        Spotify callback authorization code
+  --state       Spotify callback state
+  --no-open     Do not auto-open Spotify authorization URL
 `);
 }
 
 async function run() {
   const { command, options } = parseOptions(Bun.argv.slice(2));
-  const client = createApiClient({ baseUrl: options.apiBaseUrl });
+  const client = createApiClient({
+    baseUrl: options.apiBaseUrl,
+    sessionCookie: options.sessionCookie
+  });
 
   if (command === "help") {
     printHelp();
@@ -60,8 +153,55 @@ async function run() {
     return;
   }
 
-  const example = await client.getPublicExample();
-  console.log(JSON.stringify(example));
+  if (command === "public-example") {
+    const example = await client.getPublicExample();
+    console.log(JSON.stringify(example));
+    return;
+  }
+
+  if (command === "spotify-auth-start") {
+    const result = await client.startSpotifyAuthorization();
+    console.log(`authorizeUrl=${result.authorizeUrl}`);
+    console.log(`state=${result.state}`);
+    return;
+  }
+
+  if (command === "spotify-login") {
+    const result = await client.startSpotifyAuthorization();
+    const opened = options.openBrowser ? openUrl(result.authorizeUrl) : false;
+    console.log(`authorizeUrl=${result.authorizeUrl}`);
+    console.log(`state=${result.state}`);
+    console.log(
+      `next: clipify spotify-auth-callback --code "<code>" --state "${result.state}" --cookie "<your-session-cookie>" --api ${options.apiBaseUrl}`
+    );
+
+    if (options.openBrowser) {
+      console.log(opened ? "browser=open" : "browser=failed-to-open");
+    }
+
+    return;
+  }
+
+  if (command === "spotify-auth-callback") {
+    if (!options.code || !options.state) {
+      throw new Error("spotify-auth-callback requires --code and --state");
+    }
+
+    const result = await client.completeSpotifyAuthorization({
+      code: options.code,
+      state: options.state
+    });
+
+    console.log(`linked=${result.linked} userId=${result.userId}`);
+    return;
+  }
+
+  const current = await client.getSpotifyCurrentlyPlaying();
+  if (!current.isPlaying) {
+    console.log("nothing-playing");
+    return;
+  }
+  console.log(`${current.trackName} - ${current.artistName} (${current.albumName})`);
 }
 
 if (import.meta.main) {

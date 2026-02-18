@@ -29,7 +29,13 @@ bun --cwd apps/api run dev
 
 ```bash
 bun --cwd apps/cli run start -- doctor --api http://localhost:3000
+bun --cwd apps/cli run start -- spotify-login --cookie "better-auth.session_token=<token>"
+bun --cwd apps/cli run start -- spotify-auth-start --cookie "better-auth.session_token=<token>"
+bun --cwd apps/cli run start -- spotify-auth-callback --code "<code>" --state "<state>" --cookie "better-auth.session_token=<token>"
+bun --cwd apps/cli run start -- spotify-now-playing --cookie "better-auth.session_token=<token>"
 ```
+
+Protected CLI routes require an authenticated session cookie in `--cookie` or `CLIPIFY_SESSION_COOKIE`.
 
 ## API Routes (current)
 
