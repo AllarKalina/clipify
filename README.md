@@ -46,8 +46,9 @@ bun --cwd apps/cli run start -- doctor --api http://localhost:3000
 ## Spotify OAuth Notes
 
 - API exchanges OAuth code for access/refresh token at Spotify Accounts API.
-- Linked tokens are stored in `spotify_connection` table.
-- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI` are required for Spotify routes.
+- OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
+- Linked tokens are stored encrypted in `spotify_connection`.
+- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
 
 ## Release + Deploy
 

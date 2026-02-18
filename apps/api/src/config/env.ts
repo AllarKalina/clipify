@@ -15,6 +15,7 @@ const envSchema = z.object({
   SPOTIFY_CLIENT_ID: z.string().min(1).optional(),
   SPOTIFY_CLIENT_SECRET: z.string().min(1).optional(),
   SPOTIFY_REDIRECT_URI: z.url().optional(),
+  SPOTIFY_TOKEN_ENCRYPTION_KEY: z.string().min(1).optional(),
   OTEL_ENABLED: z
     .string()
     .optional()

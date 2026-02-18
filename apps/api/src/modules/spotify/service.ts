@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
 import type { AppEnv } from "../../config/env";
 import type { AppDb } from "../../db/client";
-import { spotifyConnections } from "../../db/schema";
+import { spotifyConnections, spotifyOauthStates } from "../../db/schema";
+import { createStateHash, createTokenCipher } from "./crypto";
 
 export type SpotifyStartAuthResponse = {
   authorizeUrl: string;
@@ -22,7 +23,7 @@ export type SpotifyCurrentlyPlayingResponse = {
 
 export type SpotifyService = {
   isConfigured: () => boolean;
-  startAuthorization: (userId: string) => SpotifyStartAuthResponse;
+  startAuthorization: (userId: string) => Promise<SpotifyStartAuthResponse>;
   completeAuthorization: (userId: string, code: string, state: string) => Promise<SpotifyCallbackResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
 };
@@ -42,10 +43,20 @@ type SpotifyConnection = {
   updatedAt: Date;
 };
 
+type SpotifyOAuthState = {
+  id: string;
+  userId: string;
+  stateHash: string;
+  expiresAt: Date;
+  createdAt: Date;
+};
+
 type SpotifyConnectionStore = {
   findByUserId: (userId: string) => Promise<SpotifyConnection | null>;
   findBySpotifyUserId: (spotifyUserId: string) => Promise<SpotifyConnection | null>;
-  upsert: (connection: SpotifyConnection) => Promise<void>;
+  upsertConnection: (connection: SpotifyConnection) => Promise<void>;
+  createOauthState: (oauthState: SpotifyOAuthState) => Promise<void>;
+  consumeOauthState: (userId: string, stateHash: string, now: Date) => Promise<boolean>;
 };
 
 type SpotifyServiceDeps = {
@@ -65,14 +76,6 @@ type SpotifyTokenResponse = {
 };
 
 const REQUIRED_SCOPE = "user-read-email user-read-playback-state";
-
-function encodeState(payload: string): string {
-  return Buffer.from(payload, "utf-8").toString("base64url");
-}
-
-function decodeState(value: string): string {
-  return Buffer.from(value, "base64url").toString("utf-8");
-}
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
   if (!expiresAt) {
@@ -96,7 +99,7 @@ function createDrizzleStore(db: AppDb): SpotifyConnectionStore {
         .limit(1);
       return row || null;
     },
-    async upsert(connection) {
+    async upsertConnection(connection) {
       await db
         .insert(spotifyConnections)
         .values(connection)
@@ -112,6 +115,23 @@ function createDrizzleStore(db: AppDb): SpotifyConnectionStore {
             updatedAt: connection.updatedAt
           }
         });
+    },
+    async createOauthState(oauthState) {
+      await db.insert(spotifyOauthStates).values(oauthState);
+    },
+    async consumeOauthState(userId, stateHash, now) {
+      const [row] = await db
+        .select()
+        .from(spotifyOauthStates)
+        .where(eq(spotifyOauthStates.stateHash, stateHash))
+        .limit(1);
+
+      if (!row || row.userId !== userId || row.expiresAt.getTime() <= now.getTime()) {
+        return false;
+      }
+
+      await db.delete(spotifyOauthStates).where(eq(spotifyOauthStates.id, row.id));
+      return true;
     }
   };
 }
@@ -143,13 +163,23 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
   const { fetchImpl = fetch, now = () => new Date(), randomUUID = () => crypto.randomUUID() } = deps;
   const store = deps.store ?? (deps.db ? createDrizzleStore(deps.db) : null);
 
-  const isConfigured = () =>
-    Boolean(env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET && env.SPOTIFY_REDIRECT_URI);
-
   if (!store) {
     throw new Error("Spotify service requires a database or custom store");
   }
   const connectionStore = store;
+
+  const isConfigured = () =>
+    Boolean(
+      env.SPOTIFY_CLIENT_ID && env.SPOTIFY_CLIENT_SECRET && env.SPOTIFY_REDIRECT_URI && env.SPOTIFY_TOKEN_ENCRYPTION_KEY
+    );
+
+  function requireCipher() {
+    if (!env.SPOTIFY_TOKEN_ENCRYPTION_KEY) {
+      throw new Response("Spotify token encryption key is missing", { status: 503 });
+    }
+
+    return createTokenCipher(env.SPOTIFY_TOKEN_ENCRYPTION_KEY);
+  }
 
   async function exchangeCodeForToken(code: string): Promise<SpotifyTokenResponse> {
     const body = new URLSearchParams({
@@ -168,35 +198,6 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     });
 
     return parseTokenResponse(response);
-  }
-
-  async function refreshAccessToken(connection: SpotifyConnection): Promise<SpotifyConnection> {
-    const response = await fetchImpl("https://accounts.spotify.com/api/token", {
-      method: "POST",
-      headers: {
-        authorization: `Basic ${Buffer.from(`${env.SPOTIFY_CLIENT_ID!}:${env.SPOTIFY_CLIENT_SECRET!}`).toString("base64")}`,
-        "content-type": "application/x-www-form-urlencoded"
-      },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: connection.refreshToken
-      })
-    });
-
-    const token = await parseTokenResponse(response);
-    const at = now();
-    const updated: SpotifyConnection = {
-      ...connection,
-      accessToken: token.access_token,
-      refreshToken: token.refresh_token ?? connection.refreshToken,
-      tokenType: token.token_type,
-      scope: token.scope ?? connection.scope,
-      expiresAt: toExpiresAt(token.expires_in, at),
-      updatedAt: at
-    };
-
-      await connectionStore.upsert(updated);
-      return updated;
   }
 
   async function fetchSpotifyProfile(accessToken: string): Promise<{ id: string }> {
@@ -218,6 +219,38 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     return { id: payload.id };
   }
 
+  async function refreshAccessToken(connection: SpotifyConnection): Promise<SpotifyConnection> {
+    const cipher = requireCipher();
+    const refreshToken = cipher.decrypt(connection.refreshToken);
+
+    const response = await fetchImpl("https://accounts.spotify.com/api/token", {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(`${env.SPOTIFY_CLIENT_ID!}:${env.SPOTIFY_CLIENT_SECRET!}`).toString("base64")}`,
+        "content-type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refreshToken
+      })
+    });
+
+    const token = await parseTokenResponse(response);
+    const at = now();
+    const updated: SpotifyConnection = {
+      ...connection,
+      accessToken: cipher.encrypt(token.access_token),
+      refreshToken: cipher.encrypt(token.refresh_token ?? refreshToken),
+      tokenType: token.token_type,
+      scope: token.scope ?? connection.scope,
+      expiresAt: toExpiresAt(token.expires_in, at),
+      updatedAt: at
+    };
+
+      await connectionStore.upsertConnection(updated);
+      return updated;
+  }
+
   async function ensureConnection(userId: string): Promise<SpotifyConnection> {
     const connection = await connectionStore.findByUserId(userId);
     if (!connection) {
@@ -233,14 +266,21 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
 
   return {
     isConfigured,
-    startAuthorization(userId: string) {
+    async startAuthorization(userId: string) {
       if (!isConfigured()) {
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const issuedAt = now().getTime().toString();
-      const nonce = randomUUID();
-      const state = encodeState(`${userId}:${nonce}:${issuedAt}`);
+      const state = `${randomUUID()}.${randomUUID()}`;
+      const at = now();
+      await connectionStore.createOauthState({
+        id: randomUUID(),
+        userId,
+        stateHash: createStateHash(state),
+        expiresAt: new Date(at.getTime() + 10 * 60 * 1000),
+        createdAt: at
+      });
+
       const params = new URLSearchParams({
         client_id: env.SPOTIFY_CLIENT_ID!,
         response_type: "code",
@@ -263,16 +303,9 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Missing code or state", { status: 400 });
       }
 
-      let stateUserId = "";
-      try {
-        const decoded = decodeState(state);
-        [stateUserId] = decoded.split(":");
-      } catch {
-        throw new Response("Invalid Spotify state", { status: 400 });
-      }
-
-      if (stateUserId !== userId) {
-        throw new Response("Invalid Spotify state", { status: 400 });
+      const isValidState = await connectionStore.consumeOauthState(userId, createStateHash(state), now());
+      if (!isValidState) {
+        throw new Response("Invalid or expired Spotify state", { status: 400 });
       }
 
       const token = await exchangeCodeForToken(code);
@@ -283,14 +316,14 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Spotify account already linked to another user", { status: 409 });
       }
 
+      const cipher = requireCipher();
       const at = now();
-
       const connection: SpotifyConnection = {
         id: existing?.id ?? randomUUID(),
         userId,
         spotifyUserId: profile.id,
-        accessToken: token.access_token,
-        refreshToken: token.refresh_token ?? existing?.refreshToken ?? "",
+        accessToken: cipher.encrypt(token.access_token),
+        refreshToken: cipher.encrypt(token.refresh_token ?? ""),
         tokenType: token.token_type,
         scope: token.scope ?? REQUIRED_SCOPE,
         expiresAt: toExpiresAt(token.expires_in, at),
@@ -298,11 +331,15 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         updatedAt: at
       };
 
-      if (!connection.refreshToken) {
+      if (!token.refresh_token && !existing?.refreshToken) {
         throw new Response("Spotify refresh token missing", { status: 502 });
       }
 
-      await connectionStore.upsert(connection);
+      if (!token.refresh_token && existing?.refreshToken) {
+        connection.refreshToken = existing.refreshToken;
+      }
+
+      await connectionStore.upsertConnection(connection);
 
       return {
         linked: true,
@@ -314,18 +351,22 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
+      const cipher = requireCipher();
       let connection = await ensureConnection(userId);
+      let accessToken = cipher.decrypt(connection.accessToken);
+
       let response = await fetchImpl("https://api.spotify.com/v1/me/player/currently-playing", {
         headers: {
-          authorization: `Bearer ${connection.accessToken}`
+          authorization: `Bearer ${accessToken}`
         }
       });
 
       if (response.status === 401) {
         connection = await refreshAccessToken(connection);
+        accessToken = cipher.decrypt(connection.accessToken);
         response = await fetchImpl("https://api.spotify.com/v1/me/player/currently-playing", {
           headers: {
-            authorization: `Bearer ${connection.accessToken}`
+            authorization: `Bearer ${accessToken}`
           }
         });
       }

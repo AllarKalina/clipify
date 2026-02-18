@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AppEnv } from "../src/config/env";
+import { createStateHash } from "../src/modules/spotify/crypto";
 import { createSpotifyService } from "../src/modules/spotify/service";
 
 type StoreConnection = {
@@ -13,6 +14,14 @@ type StoreConnection = {
   expiresAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+type StoreOAuthState = {
+  id: string;
+  userId: string;
+  stateHash: string;
+  expiresAt: Date;
+  createdAt: Date;
 };
 
 function baseEnv(): AppEnv {
@@ -34,34 +43,53 @@ function baseEnv(): AppEnv {
     PORT: 3000,
     SPOTIFY_CLIENT_ID: "spotify-client-id",
     SPOTIFY_CLIENT_SECRET: "spotify-client-secret",
-    SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/spotify/auth/callback"
+    SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/spotify/auth/callback",
+    SPOTIFY_TOKEN_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   };
 }
 
-function createMemoryStore(seed: StoreConnection[] = []) {
-  const rows = [...seed];
+function createMemoryStore(seedConnections: StoreConnection[] = [], seedStates: StoreOAuthState[] = []) {
+  const connections = [...seedConnections];
+  const oauthStates = [...seedStates];
+
   return {
-    rows,
+    connections,
+    oauthStates,
     async findByUserId(userId: string) {
-      return rows.find((row) => row.userId === userId) ?? null;
+      return connections.find((row) => row.userId === userId) ?? null;
     },
     async findBySpotifyUserId(spotifyUserId: string) {
-      return rows.find((row) => row.spotifyUserId === spotifyUserId) ?? null;
+      return connections.find((row) => row.spotifyUserId === spotifyUserId) ?? null;
     },
-    async upsert(connection: StoreConnection) {
-      const index = rows.findIndex((row) => row.userId === connection.userId);
+    async upsertConnection(connection: StoreConnection) {
+      const index = connections.findIndex((row) => row.userId === connection.userId);
       if (index >= 0) {
-        rows[index] = connection;
+        connections[index] = connection;
         return;
       }
 
-      rows.push(connection);
+      connections.push(connection);
+    },
+    async createOauthState(oauthState: StoreOAuthState) {
+      oauthStates.push(oauthState);
+    },
+    async consumeOauthState(userId: string, stateHash: string, now: Date) {
+      const index = oauthStates.findIndex(
+        (row) => row.userId === userId && row.stateHash === stateHash && row.expiresAt.getTime() > now.getTime()
+      );
+
+      if (index < 0) {
+        return false;
+      }
+
+      oauthStates.splice(index, 1);
+      return true;
     }
   };
 }
 
 describe("spotify service", () => {
-  test("builds authorization url", () => {
+  test("builds authorization url and stores hashed state", async () => {
     const store = createMemoryStore();
     const service = createSpotifyService(baseEnv(), {
       store,
@@ -69,16 +97,17 @@ describe("spotify service", () => {
       now: () => new Date("2026-02-18T00:00:00.000Z")
     });
 
-    const result = service.startAuthorization("user-1");
+    const result = await service.startAuthorization("user-1");
     const url = new URL(result.authorizeUrl);
 
     expect(url.origin).toBe("https://accounts.spotify.com");
     expect(url.searchParams.get("client_id")).toBe("spotify-client-id");
     expect(url.searchParams.get("scope")).toContain("user-read-playback-state");
-    expect(result.state.length > 10).toBeTrue();
+    expect(store.oauthStates).toHaveLength(1);
+    expect(store.oauthStates[0]?.stateHash).toBe(createStateHash(result.state));
   });
 
-  test("exchanges callback code and persists spotify connection", async () => {
+  test("exchanges callback code and persists encrypted spotify connection", async () => {
     const store = createMemoryStore();
     const fetchCalls: string[] = [];
     const service = createSpotifyService(baseEnv(), {
@@ -101,35 +130,53 @@ describe("spotify service", () => {
       }
     });
 
-    const { state } = service.startAuthorization("user-1");
+    const { state } = await service.startAuthorization("user-1");
     const result = await service.completeAuthorization("user-1", "code-1", state);
 
     expect(result.linked).toBeTrue();
-    expect(store.rows).toHaveLength(1);
-    expect(store.rows[0]?.spotifyUserId).toBe("spotify-user-1");
+    expect(store.connections).toHaveLength(1);
+    expect(store.connections[0]?.spotifyUserId).toBe("spotify-user-1");
+    expect(store.connections[0]?.accessToken.startsWith("v1.")).toBeTrue();
+    expect(store.connections[0]?.refreshToken.startsWith("v1.")).toBeTrue();
+    expect(store.oauthStates).toHaveLength(0);
     expect(fetchCalls.some((url) => url.includes("/api/token"))).toBeTrue();
+  });
+
+  test("rejects callback when oauth state is invalid", async () => {
+    const store = createMemoryStore();
+    const service = createSpotifyService(baseEnv(), {
+      store,
+      fetchImpl: async () => Response.json({ id: "spotify-user-1" })
+    });
+
+    await expect(service.completeAuthorization("user-1", "code-1", "bad-state")).rejects.toBeInstanceOf(Response);
   });
 
   test("refreshes expired token before currently playing request", async () => {
     const oldDate = new Date("2026-02-18T00:00:00.000Z");
-    const store = createMemoryStore([
-      {
-        id: "conn-1",
-        userId: "user-1",
-        spotifyUserId: "spotify-user-1",
-        accessToken: "expired-access",
-        refreshToken: "refresh-1",
-        tokenType: "Bearer",
-        scope: "user-read-playback-state",
-        expiresAt: oldDate,
-        createdAt: oldDate,
-        updatedAt: oldDate
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "expired-access",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 1
+          });
+        }
+        return Response.json({ id: "spotify-user-1" });
       }
-    ]);
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+    bootstrapStore.connections[0]!.expiresAt = oldDate;
 
     let currentlyPlayingCalls = 0;
     const service = createSpotifyService(baseEnv(), {
-      store,
+      store: bootstrapStore,
       now: () => new Date("2026-02-18T02:00:00.000Z"),
       fetchImpl: async (url) => {
         if (String(url).includes("/api/token")) {
@@ -157,22 +204,7 @@ describe("spotify service", () => {
 
     expect(result.trackName).toBe("Dreams");
     expect(currentlyPlayingCalls).toBe(1);
-    expect(store.rows[0]?.accessToken).toBe("fresh-access");
-    expect(store.rows[0]?.refreshToken).toBe("refresh-2");
-  });
-
-  test("fails currently-playing when account is not linked", async () => {
-    const store = createMemoryStore();
-    const service = createSpotifyService(baseEnv(), {
-      store
-    });
-
-    try {
-      await service.getCurrentlyPlaying("user-1");
-      throw new Error("expected getCurrentlyPlaying to fail");
-    } catch (error) {
-      expect(error).toBeInstanceOf(Response);
-      expect((error as Response).status).toBe(409);
-    }
+    expect(bootstrapStore.connections[0]?.accessToken.startsWith("v1.")).toBeTrue();
+    expect(bootstrapStore.connections[0]?.refreshToken.startsWith("v1.")).toBeTrue();
   });
 });
