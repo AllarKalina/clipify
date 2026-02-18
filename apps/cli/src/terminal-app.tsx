@@ -22,7 +22,6 @@ type InputMode = "none" | "cookie";
 
 type LinkFlow = {
   authorizeUrl: string;
-  state: string;
 };
 
 function maskCookie(cookie?: string): string {
@@ -61,6 +60,18 @@ function openUrl(url: string): boolean {
 
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function statusColor(state: Snapshot["backend"] | Snapshot["spotify"]): "green" | "yellow" | "red" {
+  if (state === "connected" || state === "linked") {
+    return "green";
+  }
+
+  if (state === "not-linked") {
+    return "yellow";
+  }
+
+  return "red";
 }
 
 async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
@@ -277,28 +288,48 @@ function App(props: AppDeps) {
   return (
     <Box flexDirection="column" padding={1}>
       <Text color="green">clipify terminal app</Text>
-      <Text dimColor>api: {props.apiBaseUrl}</Text>
-      <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
-      <Box marginTop={1} flexDirection="column" borderStyle="round" padding={1}>
-        <Text>backend: {snapshot.backend}</Text>
+      <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
+        <Text>
+          backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
+        </Text>
+        <Text>
+          spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
+        </Text>
         <Text>user: {snapshot.user}</Text>
-        <Text>spotify: {snapshot.spotify}</Text>
         <Text>now playing: {snapshot.nowPlaying}</Text>
         {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
       </Box>
 
+      {!linkFlow && snapshot.backend === "offline" ? (
+        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
+          <Text color="yellow">Session needed</Text>
+          <Text dimColor>Press [c] to set your backend session cookie.</Text>
+        </Box>
+      ) : null}
+
+      {!linkFlow && snapshot.backend === "connected" && snapshot.spotify === "not-linked" ? (
+        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
+          <Text color="yellow">Spotify not linked</Text>
+          <Text dimColor>Press [l] to start browser auth. Terminal will auto-detect completion.</Text>
+        </Box>
+      ) : null}
+
       {linkFlow ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="single" padding={1}>
-          <Text>Spotify authorize URL:</Text>
+        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="green" padding={1}>
+          <Text color="green">Linking Spotify</Text>
+          <Text dimColor>1) Open this URL in browser and approve access:</Text>
           <Text>{linkFlow.authorizeUrl}</Text>
-          <Text dimColor>Waiting for browser callback to backend...</Text>
+          <Text dimColor>2) Keep this terminal open. Waiting for callback...</Text>
         </Box>
       ) : null}
 
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>keys: [r] refresh  [l] link spotify  [n] now playing  [c] set cookie  [x] clear cookie  [q] quit</Text>
+        <Text dimColor>keys: [l] link  [n] now playing  [r] refresh</Text>
+        <Text dimColor>      [c] set cookie  [x] clear cookie  [q] quit</Text>
         {inputMode === "cookie" ? <Text color="yellow">cookie&gt; {inputValue}</Text> : null}
         <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
+        <Text dimColor>api: {props.apiBaseUrl}</Text>
+        <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
       </Box>
     </Box>
   );
