@@ -66,6 +66,33 @@ describe("api client", () => {
     expect(payload.user.id).toBe("user-1");
   });
 
+  test("signs in with email/password and returns persisted session cookie value", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            redirect: false,
+            token: "token-1",
+            user: { id: "user-1", email: "allar@example.com", name: "Allar" }
+          }),
+          {
+            status: 200,
+            headers: {
+              "set-cookie": "better-auth.session_token=signed-token-123; Path=/; HttpOnly"
+            }
+          }
+        )
+    });
+
+    const payload = await client.signInWithEmailPassword({
+      email: "allar@example.com",
+      password: "super-secret"
+    });
+
+    expect(payload.sessionCookie).toBe("better-auth.session_token=signed-token-123");
+  });
+
   test("builds callback query parameters", async () => {
     let requestedUrl = "";
     const client = createApiClient({
@@ -120,5 +147,23 @@ describe("api client", () => {
     });
 
     expect(client.getSpotifyCurrentlyPlaying()).rejects.toBeInstanceOf(ApiClientError);
+  });
+
+  test("throws when sign-in response does not include session cookie", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      fetchImpl: async () =>
+        Response.json({
+          redirect: false,
+          token: "token-1"
+        })
+    });
+
+    await expect(
+      client.signInWithEmailPassword({
+        email: "allar@example.com",
+        password: "super-secret"
+      })
+    ).rejects.toBeInstanceOf(ApiClientError);
   });
 });

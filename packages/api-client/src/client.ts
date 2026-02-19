@@ -64,6 +64,11 @@ export type ApiClient = {
   getVersion: () => Promise<PublicVersionResponse>;
   getPublicExample: () => Promise<PublicExampleResponse>;
   getMe: () => Promise<{ user: { id: string; email: string; name: string } }>;
+  signInWithEmailPassword: (input: {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+  }) => Promise<{ sessionCookie: string }>;
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
   getSpotifyAuthorizationStatus: () => Promise<{ linked: boolean }>;
@@ -124,6 +129,46 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     return parsed.data;
   }
 
+  async function signInWithEmailPassword(input: {
+    email: string;
+    password: string;
+    rememberMe?: boolean;
+  }): Promise<{ sessionCookie: string }> {
+    const url = new URL("/api/auth/sign-in/email", baseUrl);
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        email: input.email,
+        password: input.password,
+        rememberMe: input.rememberMe ?? true
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(`Request failed for /api/auth/sign-in/email: ${response.status} ${text}`, response.status, "/api/auth/sign-in/email");
+    }
+
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    const match = setCookie.match(/(?:^|,\s*)better-auth\.session_token=([^;,\s]+)/);
+
+    if (!match?.[1]) {
+      throw new ApiClientError(
+        "Sign-in succeeded but session cookie was missing in response",
+        502,
+        "/api/auth/sign-in/email"
+      );
+    }
+
+    return {
+      sessionCookie: `better-auth.session_token=${match[1]}`
+    };
+  }
+
   return {
     getVersion() {
       return request("/v1/public/meta/version", { schema: versionSchema });
@@ -137,6 +182,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
+    signInWithEmailPassword,
     startSpotifyAuthorization() {
       return request("/v1/spotify/auth/start", {
         schema: spotifyStartAuthSchema,

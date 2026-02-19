@@ -1,7 +1,7 @@
 import type { ApiClient, ApiClientError } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
-import { clearSessionCookie, saveSessionCookie } from "./config";
+import { saveSessionCookie } from "./config";
 
 type AppDeps = {
   apiBaseUrl: string;
@@ -18,7 +18,7 @@ type Snapshot = {
   error?: string;
 };
 
-type InputMode = "none" | "cookie";
+type InputMode = "none" | "login-email" | "login-password";
 
 type LinkFlow = {
   authorizeUrl: string;
@@ -125,19 +125,23 @@ function App(props: AppDeps) {
   });
   const [inputMode, setInputMode] = useState<InputMode>("none");
   const [inputValue, setInputValue] = useState("");
+  const [pendingEmail, setPendingEmail] = useState("");
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
   const [statusLine, setStatusLine] = useState("Loading...");
   const [busy, setBusy] = useState(false);
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
+  const isAuthenticated = snapshot.backend === "connected";
 
-  const refresh = async () => {
+  const refreshWithClient = async (targetClient: ApiClient) => {
     setBusy(true);
-    const next = await computeSnapshot(client);
+    const next = await computeSnapshot(targetClient);
     setSnapshot(next);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? "Refreshed" : "Backend unreachable or unauthorized");
   };
+
+  const refresh = async () => refreshWithClient(client);
 
   useEffect(() => {
     void refresh();
@@ -182,15 +186,49 @@ function App(props: AppDeps) {
       if (key.return) {
         const value = inputValue.trim();
 
-        if (inputMode === "cookie") {
+        if (inputMode === "login-email") {
           if (!value) {
-            setStatusLine("Cookie unchanged");
-          } else {
-            setSessionCookie(value);
-            saveSessionCookie(value);
-            setStatusLine("Cookie saved");
-            void refresh();
+            setStatusLine("Email is required");
+            return;
           }
+
+          setPendingEmail(value);
+          setInputMode("login-password");
+          setInputValue("");
+          setStatusLine("Enter password");
+          return;
+        }
+
+        if (inputMode === "login-password") {
+          if (!pendingEmail || !value) {
+            setStatusLine("Email and password are required");
+            return;
+          }
+
+          setBusy(true);
+          void (async () => {
+            try {
+              const result = await client.signInWithEmailPassword({
+                email: pendingEmail,
+                password: value
+              });
+              saveSessionCookie(result.sessionCookie);
+              setSessionCookie(result.sessionCookie);
+              setInputMode("none");
+              setInputValue("");
+              setPendingEmail("");
+              setStatusLine("Login successful");
+              await refreshWithClient(props.makeClient(result.sessionCookie));
+            } catch (error) {
+              setStatusLine(`Login failed: ${toMessage(error)}`);
+              setInputMode("none");
+              setInputValue("");
+              setPendingEmail("");
+            } finally {
+              setBusy(false);
+            }
+          })();
+          return;
         }
 
         setInputMode("none");
@@ -201,6 +239,7 @@ function App(props: AppDeps) {
       if (key.escape) {
         setInputMode("none");
         setInputValue("");
+        setPendingEmail("");
         setStatusLine("Canceled");
         return;
       }
@@ -221,23 +260,18 @@ function App(props: AppDeps) {
       return;
     }
 
+    if (!isAuthenticated) {
+      if (input === "l") {
+        setInputMode("login-email");
+        setInputValue("");
+        setPendingEmail("");
+        setStatusLine("Enter email");
+      }
+      return;
+    }
+
     if (input === "r") {
       void refresh();
-      return;
-    }
-
-    if (input === "x") {
-      clearSessionCookie();
-      setSessionCookie(undefined);
-      setStatusLine("Cookie cleared");
-      void refresh();
-      return;
-    }
-
-    if (input === "c") {
-      setInputMode("cookie");
-      setInputValue("");
-      setStatusLine("Enter cookie, press Enter to save, Esc to cancel");
       return;
     }
 
@@ -288,26 +322,30 @@ function App(props: AppDeps) {
   return (
     <Box flexDirection="column" padding={1}>
       <Text color="green">clipify terminal app</Text>
-      <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
-        <Text>
-          backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
-        </Text>
-        <Text>
-          spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
-        </Text>
-        <Text>user: {snapshot.user}</Text>
-        <Text>now playing: {snapshot.nowPlaying}</Text>
-        {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
-      </Box>
-
-      {!linkFlow && snapshot.backend === "offline" ? (
+      {!isAuthenticated ? (
         <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
-          <Text color="yellow">Session needed</Text>
-          <Text dimColor>Press [c] to set your backend session cookie.</Text>
+          <Text color="yellow">Login required</Text>
+          <Text dimColor>Press [l] to login with email and password.</Text>
+          <Text dimColor>Press [q] to quit.</Text>
+          {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
         </Box>
       ) : null}
 
-      {!linkFlow && snapshot.backend === "connected" && snapshot.spotify === "not-linked" ? (
+      {isAuthenticated ? (
+        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
+          <Text>
+            backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
+          </Text>
+          <Text>
+            spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
+          </Text>
+          <Text>user: {snapshot.user}</Text>
+          <Text>now playing: {snapshot.nowPlaying}</Text>
+          {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
+        </Box>
+      ) : null}
+
+      {isAuthenticated && !linkFlow && snapshot.spotify === "not-linked" ? (
         <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
           <Text color="yellow">Spotify not linked</Text>
           <Text dimColor>Press [l] to start browser auth. Terminal will auto-detect completion.</Text>
@@ -324,12 +362,12 @@ function App(props: AppDeps) {
       ) : null}
 
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>keys: [l] link  [n] now playing  [r] refresh</Text>
-        <Text dimColor>      [c] set cookie  [x] clear cookie  [q] quit</Text>
-        {inputMode === "cookie" ? <Text color="yellow">cookie&gt; {inputValue}</Text> : null}
+        {isAuthenticated ? <Text dimColor>keys: [l] link  [n] now playing  [r] refresh  [q] quit</Text> : null}
+        {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
+        {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
-        <Text dimColor>api: {props.apiBaseUrl}</Text>
-        <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
+        {isAuthenticated ? <Text dimColor>api: {props.apiBaseUrl}</Text> : null}
+        {isAuthenticated ? <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text> : null}
       </Box>
     </Box>
   );
