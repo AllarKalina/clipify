@@ -1,5 +1,5 @@
 import type { ApiClient, ApiClientError } from "@clipify/api-client";
-import { Box, Text, render, useApp, useInput } from "ink";
+import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
 import { saveSessionCookie } from "./config";
 
@@ -19,10 +19,116 @@ type Snapshot = {
 };
 
 type InputMode = "none" | "login-email" | "login-password";
+type UnauthMenuAction = "login" | "exit";
 
 type LinkFlow = {
   authorizeUrl: string;
 };
+
+function buildSpotifyLogo(width: number, height: number): string[] {
+  const rows: string[] = [];
+  const xRadius = (width - 1) / 2;
+  const yRadius = (height - 1) / 2;
+
+  const inArc = (
+    x: number,
+    y: number,
+    baseY: number,
+    curve: number,
+    tilt: number,
+    thickness: number,
+    minX: number,
+    maxX: number
+  ): boolean => {
+    if (x < minX || x > maxX) {
+      return false;
+    }
+
+    const curveY = baseY + curve * x * x + tilt * x;
+    return Math.abs(y - curveY) <= thickness;
+  };
+
+  for (let y = 0; y < height; y += 1) {
+    let row = "";
+    const ny = (y - yRadius) / yRadius;
+
+    for (let x = 0; x < width; x += 1) {
+      const nx = (x - xRadius) / xRadius;
+      const insideCircle = nx * nx + ny * ny <= 1;
+
+      if (!insideCircle) {
+        row += ".";
+        continue;
+      }
+
+      const isWave =
+        inArc(nx, ny, -0.40, 0.22, 0.06, 0.05, -0.72, 0.66) ||
+        inArc(nx, ny, -0.20, 0.20, 0.05, 0.05, -0.66, 0.57) ||
+        inArc(nx, ny, -0.01, 0.18, 0.04, 0.05, -0.58, 0.49);
+
+      row += isWave ? "b" : "g";
+    }
+
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+const spotifyHeroLogo = buildSpotifyLogo(55, 17);
+const spotifyHeroWidth = spotifyHeroLogo[0]?.length ?? 39;
+const unauthMenuWidth = 20;
+
+function centerText(content: string, width: number): string {
+  if (content.length >= width) {
+    return content;
+  }
+
+  const totalPadding = width - content.length;
+  const leftPadding = Math.floor(totalPadding / 2);
+  const rightPadding = totalPadding - leftPadding;
+  return `${" ".repeat(leftPadding)}${content}${" ".repeat(rightPadding)}`;
+}
+
+function formatUnauthMenuItem(label: string, selected: boolean): string {
+  const content = selected ? `> ${label} <` : `  ${label}  `;
+  return centerText(content, unauthMenuWidth);
+}
+
+function SpotifyHero() {
+  return (
+    <Box flexDirection="column" alignItems="center">
+      {spotifyHeroLogo.map((line, lineIndex) => (
+        <Text key={`spotify-logo-line-${lineIndex}`}>
+          {Array.from(line).map((pixel, pixelIndex) => {
+            if (pixel === "g") {
+              return (
+                <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`} backgroundColor="green">
+                  {" "}
+                </Text>
+              );
+            }
+
+            if (pixel === "b") {
+              return (
+                <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`} backgroundColor="black">
+                  {" "}
+                </Text>
+              );
+            }
+
+            return <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`}>{" "}</Text>;
+          })}
+        </Text>
+      ))}
+      <Box width={spotifyHeroWidth} flexDirection="column" alignItems="center">
+        <Text color="green" bold>
+          C L I p i f y
+        </Text>
+      </Box>
+    </Box>
+  );
+}
 
 function maskCookie(cookie?: string): string {
   if (!cookie) {
@@ -116,6 +222,9 @@ async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
 
 function App(props: AppDeps) {
   const { exit } = useApp();
+  const { stdout } = useStdout();
+  const stdoutWidth = stdout.columns ?? 120;
+  const stdoutHeight = stdout.rows ?? 40;
   const [sessionCookie, setSessionCookie] = useState<string | undefined>(props.initialSessionCookie);
   const [snapshot, setSnapshot] = useState<Snapshot>({
     backend: "offline",
@@ -129,6 +238,7 @@ function App(props: AppDeps) {
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
   const [statusLine, setStatusLine] = useState("Loading...");
   const [busy, setBusy] = useState(false);
+  const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("login");
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = snapshot.backend === "connected";
@@ -144,8 +254,12 @@ function App(props: AppDeps) {
   const refresh = async () => refreshWithClient(client);
 
   useEffect(() => {
+    if (!sessionCookie) {
+      return;
+    }
+
     void refresh();
-  }, [client]);
+  }, [client, sessionCookie]);
 
   useEffect(() => {
     if (!linkFlow) {
@@ -261,12 +375,29 @@ function App(props: AppDeps) {
     }
 
     if (!isAuthenticated) {
-      if (input === "l") {
+      if (key.upArrow || key.leftArrow) {
+        setUnauthSelection("login");
+        return;
+      }
+
+      if (key.downArrow || key.rightArrow) {
+        setUnauthSelection("exit");
+        return;
+      }
+
+      if (key.return) {
+        if (unauthSelection === "exit") {
+          exit();
+          return;
+        }
+
         setInputMode("login-email");
         setInputValue("");
         setPendingEmail("");
         setStatusLine("Enter email");
+        return;
       }
+
       return;
     }
 
@@ -319,33 +450,41 @@ function App(props: AppDeps) {
     }
   });
 
+  if (!isAuthenticated) {
+    return (
+      <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} justifyContent="center" alignItems="center">
+        <SpotifyHero />
+        <Box marginTop={1} flexDirection="column" alignItems="center">
+          <Text color={unauthSelection === "login" ? "green" : "gray"}>
+            {formatUnauthMenuItem("Login", unauthSelection === "login")}
+          </Text>
+          <Text color={unauthSelection === "exit" ? "green" : "gray"}>
+            {formatUnauthMenuItem("Exit", unauthSelection === "exit")}
+          </Text>
+          <Text dimColor>Use up/down arrows and Enter</Text>
+        </Box>
+        {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
+        {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
+      </Box>
+    );
+  }
+
   return (
     <Box flexDirection="column" padding={1}>
       <Text color="green">clipify terminal app</Text>
-      {!isAuthenticated ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
-          <Text color="yellow">Login required</Text>
-          <Text dimColor>Press [l] to login with email and password.</Text>
-          <Text dimColor>Press [q] to quit.</Text>
-          {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
-        </Box>
-      ) : null}
+      <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
+        <Text>
+          backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
+        </Text>
+        <Text>
+          spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
+        </Text>
+        <Text>user: {snapshot.user}</Text>
+        <Text>now playing: {snapshot.nowPlaying}</Text>
+        {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
+      </Box>
 
-      {isAuthenticated ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
-          <Text>
-            backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
-          </Text>
-          <Text>
-            spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
-          </Text>
-          <Text>user: {snapshot.user}</Text>
-          <Text>now playing: {snapshot.nowPlaying}</Text>
-          {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
-        </Box>
-      ) : null}
-
-      {isAuthenticated && !linkFlow && snapshot.spotify === "not-linked" ? (
+      {!linkFlow && snapshot.spotify === "not-linked" ? (
         <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
           <Text color="yellow">Spotify not linked</Text>
           <Text dimColor>Press [l] to start browser auth. Terminal will auto-detect completion.</Text>
@@ -362,12 +501,12 @@ function App(props: AppDeps) {
       ) : null}
 
       <Box marginTop={1} flexDirection="column">
-        {isAuthenticated ? <Text dimColor>keys: [l] link  [n] now playing  [r] refresh  [q] quit</Text> : null}
+        <Text dimColor>keys: [l] link  [n] now playing  [r] refresh  [q] quit</Text>
         {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
         {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
-        {isAuthenticated ? <Text dimColor>api: {props.apiBaseUrl}</Text> : null}
-        {isAuthenticated ? <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text> : null}
+        <Text dimColor>api: {props.apiBaseUrl}</Text>
+        <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
       </Box>
     </Box>
   );
