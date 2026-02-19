@@ -9,9 +9,15 @@
   ],
   "scripts": {
     "setup:backend": "bash scripts/setup-backend.sh",
+    "dev:deps": "docker compose up -d postgres",
+    "dev:up": "bash scripts/dev-up.sh",
+    "dev:down": "bash scripts/dev-down.sh",
+    "dev:smoke": "bash scripts/smoke-api.sh",
+    "dev:check": "bun run typecheck && bun run test && bun run dev:smoke",
     "dev:api": "bun run --cwd apps/api dev",
     "start:api": "bun run --cwd apps/api start",
     "typecheck": "bun run --cwd apps/api typecheck && bun run --cwd packages/api-client typecheck && bun run --cwd apps/cli typecheck",
-    "test": "bun run --cwd apps/api test && bun run --cwd packages/api-client test && bun run --cwd apps/cli test"
+    "test": "bun run --cwd apps/api test && bun run --cwd packages/api-client test && bun run --cwd apps/cli test",
+    "build:cli": "bun run --cwd apps/cli build:binary"
   }
 }

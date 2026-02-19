@@ -3,5 +3,5 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-echo "setup:backend is now powered by scripts/dev-up.sh"
-bash "$ROOT_DIR/scripts/dev-up.sh"
+docker compose -f "$ROOT_DIR/docker-compose.yml" down
+echo "Local dependencies stopped."

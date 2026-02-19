@@ -13,16 +13,30 @@ Spotify terminal app + hosted backend monorepo, built on Bun.
 
 ```bash
 bun install
-bun run setup:backend
-bun run typecheck
-bun run test
+bun run dev:up
+bun run dev:api
 ```
 
-### API
+```bash
+bun run typecheck
+bun run test
+bun run build:cli
+```
+
+### Local Development
 
 ```bash
-bun run setup:backend
-bun --cwd apps/api run dev
+# Start local Postgres + install deps + run migrations
+bun run dev:up
+
+# Start backend API
+bun run dev:api
+
+# Run smoke checks (health + readiness + version metadata)
+bun run dev:smoke
+
+# Stop local dependencies
+bun run dev:down
 ```
 
 ### Terminal App
@@ -31,15 +45,10 @@ bun --cwd apps/api run dev
 # Launch interactive terminal app
 bun --cwd apps/cli run start -- --api http://localhost:3000
 
-# Optional cookie management helpers
-bun --cwd apps/cli run start -- auth-set-cookie --cookie "better-auth.session_token=<token>"
-bun --cwd apps/cli run start -- auth-clear-cookie
 ```
 
 The terminal app connects to backend APIs for user/session and Spotify status.
-Protected backend routes require an authenticated session cookie in `--cookie` or `CLIPIFY_SESSION_COOKIE`.
-You can persist a session cookie locally with `auth-set-cookie` (stored in `~/.config/clipify/config.json` by default, or `$XDG_CONFIG_HOME/clipify/config.json`).
-Press `l` in the terminal app to start Spotify linking. Browser callback completion is detected automatically.
+On first launch, press `l` to login with email/password. After login, press `l` again to start Spotify linking (browser callback completion is detected automatically).
 
 ## API Routes (current)
 
@@ -66,7 +75,9 @@ Press `l` in the terminal app to start Spotify linking. Browser callback complet
 ## Release + Deploy
 
 - CLI release workflow: `.github/workflows/release-cli.yml`
-- API deploy workflow: `.github/workflows/deploy-api.yml` (Railway)
+- API dev deploy workflow: `.github/workflows/deploy-api-dev.yml` (Railway)
+- API preview deploy workflow: `.github/workflows/deploy-api-preview.yml` (Railway)
+- API production deploy workflow: `.github/workflows/deploy-api-prod.yml` (Railway, manual approval)
 - CI workflow: `.github/workflows/ci.yml`
 
 ## Architecture
