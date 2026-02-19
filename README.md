@@ -48,8 +48,22 @@ bun --cwd apps/cli run start -- --api http://localhost:3000
 ```
 
 The terminal app connects to backend APIs for user/session and Spotify status.
-On first launch, press `l` to login with email/password. After login, press `l` again to start Spotify linking (browser callback completion is detected automatically).
+On first launch, use up/down arrows and Enter to choose `Sign up`, `Login`, or `Exit`.
+After successful sign up/login, Spotify linking starts automatically (browser callback completion is detected in terminal).
 After Spotify is linked, the terminal app displays your Spotify profile and now-playing state.
+
+### Database Tools
+
+```bash
+# Generate migration SQL from schema changes
+bun run --cwd apps/api db:generate
+
+# Apply migrations to local DB
+bun run --cwd apps/api db:migrate
+
+# Open Drizzle Studio for local DB data browsing
+bun run --cwd apps/api db:studio
+```
 
 ## API Routes (current)
 
@@ -75,6 +89,17 @@ After Spotify is linked, the terminal app displays your Spotify profile and now-
 - Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`).
 - Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
+- `SPOTIFY_TOKEN_ENCRYPTION_KEY` must be base64-encoded 32 bytes (`openssl rand -base64 32`).
+
+### Spotify Troubleshooting
+
+- `INVALID_CLIENT: Invalid redirect URI`
+  - Ensure Spotify dashboard redirect URI and `SPOTIFY_REDIRECT_URI` match exactly.
+  - Recommended local value: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`.
+- `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
+  - Regenerate key and restart API.
+- `GET /v1/spotify/me` returns `503`
+  - One or more Spotify env vars are missing/empty.
 
 ## Release + Deploy
 

@@ -3,6 +3,7 @@ read_when:
   - creating railway environments
   - configuring deploy secrets
   - investigating failed deployments
+  - debugging local spotify auth/login issues
 ---
 
 # Operations Runbook
@@ -89,3 +90,27 @@ bash scripts/smoke-api.sh <base-url>
    - `railway variable --service clipify-api --environment <env>`
 4. Re-run migrations manually if needed:
    - `railway run --service clipify-api --environment <env> -- bun run --cwd apps/api db:migrate`
+
+## Local Spotify Auth Checklist
+
+1. Confirm local API env contains:
+   - `SPOTIFY_CLIENT_ID`
+   - `SPOTIFY_CLIENT_SECRET`
+   - `SPOTIFY_REDIRECT_URI`
+   - `SPOTIFY_TOKEN_ENCRYPTION_KEY`
+2. Use loopback IP literal redirect URI locally:
+   - `http://127.0.0.1:3000/v1/spotify/auth/callback/public`
+3. Set the same exact redirect URI in Spotify Developer Dashboard app settings.
+4. Generate valid token encryption key:
+   - `openssl rand -base64 32`
+5. Restart local API after env changes:
+   - `bun run dev:api`
+
+## Local Spotify Error Map
+
+1. `INVALID_CLIENT: Invalid redirect URI`
+   - Dashboard URI and `SPOTIFY_REDIRECT_URI` do not match exactly.
+2. `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
+   - Invalid key format/length.
+3. `GET /v1/spotify/me` returns `503`
+   - Spotify env is incomplete.
