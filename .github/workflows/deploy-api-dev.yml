@@ -20,6 +20,7 @@ jobs:
     environment: dev
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
       RAILWAY_PROJECT_ID: ${{ vars.RAILWAY_PROJECT_ID }}
       RAILWAY_SERVICE_NAME: ${{ vars.RAILWAY_SERVICE_NAME }}
       RAILWAY_ENVIRONMENT_NAME: ${{ vars.RAILWAY_ENVIRONMENT_NAME }}
@@ -50,15 +51,11 @@ jobs:
           : "${RAILWAY_PROJECT_ID:?Missing RAILWAY_PROJECT_ID variable}"
           : "${RAILWAY_SERVICE_NAME:?Missing RAILWAY_SERVICE_NAME variable}"
           : "${RAILWAY_ENVIRONMENT_NAME:?Missing RAILWAY_ENVIRONMENT_NAME variable}"
+          : "${MIGRATION_DATABASE_URL:?Missing MIGRATION_DATABASE_URL secret}"
           : "${API_BASE_URL:?Missing API_BASE_URL variable}"
 
       - name: Run migrations
-        run: >
-          railway run
-          --project "$RAILWAY_PROJECT_ID"
-          --environment "$RAILWAY_ENVIRONMENT_NAME"
-          --service "$RAILWAY_SERVICE_NAME"
-          -- bun run --cwd apps/api db:migrate
+        run: DATABASE_URL="$MIGRATION_DATABASE_URL" bun run --cwd apps/api db:migrate
 
       - name: Deploy API service
         run: >
