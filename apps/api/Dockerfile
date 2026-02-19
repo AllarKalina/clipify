@@ -6,6 +6,7 @@ COPY package.json ./
 RUN bun install --production
 
 FROM base AS runner
+COPY package.json ./package.json
 COPY --from=deps /app/node_modules ./node_modules
 COPY src ./src
 
