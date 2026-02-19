@@ -88,5 +88,29 @@ When behavior/contracts change, update all impacted docs in same PR:
 - `README.md`
 - `docs/backend-architecture-standard.md` (if rule/policy changed)
 - `docs/bun-ecosystem-plan.md` (if stack decision changed)
+- `docs/INDEX.md` (if docs map/read order changed)
 
 No doc drift between implementation and docs.
+
+## Agent Docs Routing
+
+Read in this order at session start:
+
+1. `docs/INDEX.md`
+2. `docs/architecture.md`
+3. `docs/backend-architecture-standard.md`
+4. `docs/cicd-railway-github-setup.md` (for CI/CD, Railway, GitHub work)
+5. `docs/release.md` and `docs/operations.md` (for runbooks)
+
+Use `read_when` hints in each doc to decide deeper reads.
+If adding/changing major behavior, update `docs/INDEX.md` in the same change.
+
+## Runbook Skills (Thin Wrappers)
+
+Skill entrypoints live in `.codex/skills/`:
+
+1. `.codex/skills/deploy-api/SKILL.md`
+2. `.codex/skills/rollback-api/SKILL.md`
+3. `.codex/skills/release-cli/SKILL.md`
+
+These are procedural wrappers and must reference canonical docs instead of duplicating policy text.
