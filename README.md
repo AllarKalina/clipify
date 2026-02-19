@@ -49,6 +49,7 @@ bun --cwd apps/cli run start -- --api http://localhost:3000
 
 The terminal app connects to backend APIs for user/session and Spotify status.
 On first launch, press `l` to login with email/password. After login, press `l` again to start Spotify linking (browser callback completion is detected automatically).
+After Spotify is linked, the terminal app displays your Spotify profile and now-playing state.
 
 ## API Routes (current)
 
@@ -61,6 +62,7 @@ On first launch, press `l` to login with email/password. After login, press `l` 
 - `GET /v1/spotify/auth/status`
 - `GET /v1/spotify/auth/callback`
 - `GET /v1/spotify/auth/callback/public`
+- `GET /v1/spotify/me`
 - `GET /v1/spotify/me/player/currently-playing`
 - `ALL /api/auth/*`
 
@@ -69,7 +71,9 @@ On first launch, press `l` to login with email/password. After login, press `l` 
 - API exchanges OAuth code for access/refresh token at Spotify Accounts API.
 - OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
 - Linked tokens are stored encrypted in `spotify_connection`.
-- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://localhost:3000/v1/spotify/auth/callback/public`).
+- OAuth scopes requested: `user-read-private user-read-email user-read-playback-state`.
+- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`).
+- Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
 
 ## Release + Deploy

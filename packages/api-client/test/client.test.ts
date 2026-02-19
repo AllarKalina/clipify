@@ -93,6 +93,32 @@ describe("api client", () => {
     expect(payload.sessionCookie).toBe("better-auth.session_token=signed-token-123");
   });
 
+  test("signs up with email/password and returns persisted session cookie value", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            user: { id: "user-1", email: "allar@example.com", name: "Allar" }
+          }),
+          {
+            status: 200,
+            headers: {
+              "set-cookie": "better-auth.session_token=signed-up-token-123; Path=/; HttpOnly"
+            }
+          }
+        )
+    });
+
+    const payload = await client.signUpWithEmailPassword({
+      name: "Allar",
+      email: "allar@example.com",
+      password: "super-secret"
+    });
+
+    expect(payload.sessionCookie).toBe("better-auth.session_token=signed-up-token-123");
+  });
+
   test("builds callback query parameters", async () => {
     let requestedUrl = "";
     const client = createApiClient({
@@ -137,6 +163,33 @@ describe("api client", () => {
 
     expect(payload.linked).toBeTrue();
     expect(requestedUrl).toContain("/v1/spotify/auth/status");
+    expect(cookieHeader).toBe("better-auth.session_token=abc123");
+  });
+
+  test("returns spotify profile for authenticated user", async () => {
+    let requestedUrl = "";
+    let cookieHeader = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url, init) => {
+        requestedUrl = String(url);
+        cookieHeader = new Headers(init?.headers).get("cookie") ?? "";
+        return Response.json({
+          id: "spotify-user-1",
+          displayName: "Allar",
+          email: "allar@spotify.test",
+          profileUrl: "https://open.spotify.com/user/allar",
+          imageUrl: "https://i.scdn.co/image/avatar-1"
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyProfile();
+
+    expect(payload.id).toBe("spotify-user-1");
+    expect(payload.displayName).toBe("Allar");
+    expect(requestedUrl).toContain("/v1/spotify/me");
     expect(cookieHeader).toBe("better-auth.session_token=abc123");
   });
 

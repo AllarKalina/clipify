@@ -10,6 +10,39 @@ const optionalUrl = z.preprocess(
   z.url().optional()
 );
 
+const optionalSpotifyRedirectUrl = optionalUrl.superRefine((value, context) => {
+  if (!value) {
+    return;
+  }
+
+  const redirectUrl = new URL(value);
+  const hostname = redirectUrl.hostname.toLowerCase();
+  const isLoopbackLiteral = hostname === "127.0.0.1" || hostname === "::1";
+
+  if (hostname === "localhost") {
+    context.addIssue({
+      code: "custom",
+      message: "SPOTIFY_REDIRECT_URI must use a loopback IP literal (127.0.0.1 or ::1), not localhost"
+    });
+    return;
+  }
+
+  if (redirectUrl.protocol === "http:" && !isLoopbackLiteral) {
+    context.addIssue({
+      code: "custom",
+      message: "SPOTIFY_REDIRECT_URI may use http only for loopback IP literals (127.0.0.1 or ::1)"
+    });
+    return;
+  }
+
+  if (redirectUrl.protocol !== "https:" && redirectUrl.protocol !== "http:") {
+    context.addIssue({
+      code: "custom",
+      message: "SPOTIFY_REDIRECT_URI must use https (or http for loopback IP literals)"
+    });
+  }
+});
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   APP_NAME: z.string().min(1).default("clipify-api"),
@@ -24,7 +57,7 @@ const envSchema = z.object({
   BETTER_AUTH_URL: z.url(),
   SPOTIFY_CLIENT_ID: optionalNonEmptyString,
   SPOTIFY_CLIENT_SECRET: optionalNonEmptyString,
-  SPOTIFY_REDIRECT_URI: optionalUrl,
+  SPOTIFY_REDIRECT_URI: optionalSpotifyRedirectUrl,
   SPOTIFY_TOKEN_ENCRYPTION_KEY: optionalNonEmptyString,
   OTEL_ENABLED: z
     .string()

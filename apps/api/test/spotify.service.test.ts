@@ -43,7 +43,7 @@ function baseEnv(): AppEnv {
     PORT: 3000,
     SPOTIFY_CLIENT_ID: "spotify-client-id",
     SPOTIFY_CLIENT_SECRET: "spotify-client-secret",
-    SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/spotify/auth/callback/public",
+    SPOTIFY_REDIRECT_URI: "http://127.0.0.1:3000/v1/spotify/auth/callback/public",
     SPOTIFY_TOKEN_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
   };
 }
@@ -100,6 +100,7 @@ describe("spotify service", () => {
 
     expect(url.origin).toBe("https://accounts.spotify.com");
     expect(url.searchParams.get("client_id")).toBe("spotify-client-id");
+    expect(url.searchParams.get("scope")).toContain("user-read-private");
     expect(url.searchParams.get("scope")).toContain("user-read-playback-state");
     expect(url.searchParams.get("show_dialog")).toBe("true");
     expect(store.oauthStates).toHaveLength(1);
@@ -234,5 +235,111 @@ describe("spotify service", () => {
     expect(currentlyPlayingCalls).toBe(1);
     expect(bootstrapStore.connections[0]?.accessToken.startsWith("v1.")).toBeTrue();
     expect(bootstrapStore.connections[0]?.refreshToken.startsWith("v1.")).toBeTrue();
+  });
+
+  test("returns spotify profile for linked user", async () => {
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({
+          id: "spotify-user-1",
+          display_name: "Allar",
+          email: "allar@spotify.test",
+          external_urls: { spotify: "https://open.spotify.com/user/allar" },
+          images: [{ url: "https://i.scdn.co/image/avatar-1" }]
+        });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async () =>
+        Response.json({
+          id: "spotify-user-1",
+          display_name: "Allar",
+          email: "allar@spotify.test",
+          external_urls: { spotify: "https://open.spotify.com/user/allar" },
+          images: [{ url: "https://i.scdn.co/image/avatar-1" }]
+        })
+    });
+
+    const profile = await service.getProfile("user-1");
+
+    expect(profile.id).toBe("spotify-user-1");
+    expect(profile.displayName).toBe("Allar");
+    expect(profile.email).toBe("allar@spotify.test");
+    expect(profile.profileUrl).toBe("https://open.spotify.com/user/allar");
+    expect(profile.imageUrl).toBe("https://i.scdn.co/image/avatar-1");
+  });
+
+  test("refreshes token and retries spotify profile after 401", async () => {
+    const oldDate = new Date("2026-02-18T00:00:00.000Z");
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "expired-access",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 1
+          });
+        }
+        return Response.json({
+          id: "spotify-user-1",
+          display_name: "Allar"
+        });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+    bootstrapStore.connections[0]!.expiresAt = oldDate;
+
+    let profileCallCount = 0;
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      now: () => new Date("2026-02-18T02:00:00.000Z"),
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "fresh-access",
+            refresh_token: "refresh-2",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        profileCallCount += 1;
+        if (profileCallCount === 1) {
+          return new Response("unauthorized", { status: 401 });
+        }
+
+        return Response.json({
+          id: "spotify-user-1",
+          display_name: "Allar"
+        });
+      }
+    });
+
+    const profile = await service.getProfile("user-1");
+
+    expect(profile.id).toBe("spotify-user-1");
+    expect(profile.displayName).toBe("Allar");
+    expect(profileCallCount).toBe(2);
   });
 });

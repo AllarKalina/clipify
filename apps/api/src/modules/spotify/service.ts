@@ -25,6 +25,14 @@ export type SpotifyCurrentlyPlayingResponse = {
   albumName: string;
 };
 
+export type SpotifyProfileResponse = {
+  id: string;
+  displayName: string;
+  email: string;
+  profileUrl: string;
+  imageUrl: string;
+};
+
 export type SpotifyService = {
   isConfigured: () => boolean;
   startAuthorization: (userId: string) => Promise<SpotifyStartAuthResponse>;
@@ -32,6 +40,7 @@ export type SpotifyService = {
   completeAuthorizationFromCallback: (code: string, state: string) => Promise<SpotifyCallbackResponse>;
   getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
+  getProfile: (userId: string) => Promise<SpotifyProfileResponse>;
 };
 
 type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -81,7 +90,7 @@ type SpotifyTokenResponse = {
   refresh_token?: string;
 };
 
-const REQUIRED_SCOPE = "user-read-email user-read-playback-state";
+const REQUIRED_SCOPE = "user-read-private user-read-email user-read-playback-state";
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
   if (!expiresAt) {
@@ -152,10 +161,19 @@ function toExpiresAt(expiresIn: number | undefined, now: Date): Date | null {
 
 async function parseTokenResponse(response: Response): Promise<SpotifyTokenResponse> {
   const text = await response.text();
-  const payload = text ? (JSON.parse(text) as Partial<SpotifyTokenResponse>) : {};
+  let payload: Partial<SpotifyTokenResponse> = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text) as Partial<SpotifyTokenResponse>;
+    } catch {
+      payload = {};
+    }
+  }
 
   if (!response.ok) {
-    throw new Response("Spotify token exchange failed", { status: 502 });
+    throw new Response(`Spotify token exchange failed (${response.status}): ${text || "empty response"}`, {
+      status: 502
+    });
   }
 
   if (!payload.access_token || !payload.token_type) {
@@ -206,7 +224,7 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     return parseTokenResponse(response);
   }
 
-  async function fetchSpotifyProfile(accessToken: string): Promise<{ id: string }> {
+  async function fetchSpotifyProfile(accessToken: string): Promise<SpotifyProfileResponse> {
     const response = await fetchImpl("https://api.spotify.com/v1/me", {
       headers: {
         authorization: `Bearer ${accessToken}`
@@ -214,15 +232,30 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     });
 
     if (!response.ok) {
-      throw new Response("Spotify profile fetch failed", { status: 502 });
+      const text = await response.text();
+      throw new Response(`Spotify profile fetch failed (${response.status}): ${text || "empty response"}`, {
+        status: response.status === 401 ? 401 : 502
+      });
     }
 
-    const payload = (await response.json()) as { id?: string };
+    const payload = (await response.json()) as {
+      id?: string;
+      display_name?: string | null;
+      email?: string | null;
+      external_urls?: { spotify?: string };
+      images?: Array<{ url?: string }>;
+    };
     if (!payload.id) {
       throw new Response("Spotify profile payload missing id", { status: 502 });
     }
 
-    return { id: payload.id };
+    return {
+      id: payload.id,
+      displayName: payload.display_name ?? payload.id,
+      email: payload.email ?? "",
+      profileUrl: payload.external_urls?.spotify ?? "",
+      imageUrl: payload.images?.[0]?.url ?? ""
+    };
   }
 
   async function refreshAccessToken(connection: SpotifyConnection): Promise<SpotifyConnection> {
@@ -414,7 +447,10 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
       }
 
       if (!response.ok) {
-        throw new Response("Spotify currently-playing request failed", { status: 502 });
+        const text = await response.text();
+        throw new Response(`Spotify currently-playing request failed (${response.status}): ${text || "empty response"}`, {
+          status: 502
+        });
       }
 
       const payload = (await response.json()) as {
@@ -428,6 +464,27 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         artistName: payload.item?.artists?.[0]?.name ?? "",
         albumName: payload.item?.album?.name ?? ""
       };
+    },
+    async getProfile(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const cipher = requireCipher();
+      let connection = await ensureConnection(userId);
+      let accessToken = cipher.decrypt(connection.accessToken);
+
+      try {
+        return await fetchSpotifyProfile(accessToken);
+      } catch (error) {
+        if (!(error instanceof Response) || error.status !== 401) {
+          throw error;
+        }
+      }
+
+      connection = await refreshAccessToken(connection);
+      accessToken = cipher.decrypt(connection.accessToken);
+      return fetchSpotifyProfile(accessToken);
     }
   };
 }

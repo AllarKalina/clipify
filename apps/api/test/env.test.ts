@@ -31,4 +31,25 @@ describe("readEnv", () => {
       })
     ).toThrow();
   });
+
+  test("throws when spotify redirect uri uses localhost alias", () => {
+    expect(() =>
+      readEnv({
+        API_VERSION: "v1",
+        APP_NAME: "clipify-api",
+        BETTER_AUTH_SECRET: "super-secret-value-123",
+        BETTER_AUTH_URL: "http://localhost:3000",
+        DATABASE_URL: "https://example.com/db",
+        HOST: "127.0.0.1",
+        LATEST_CLI_VERSION: "0.1.0",
+        LOG_LEVEL: "debug",
+        MIN_CLI_VERSION: "0.1.0",
+        NODE_ENV: "test",
+        OTEL_ENABLED: "true",
+        OTEL_EXPORTER_OTLP_ENDPOINT: "https://otel.example.com/v1/traces",
+        PORT: "4000",
+        SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/spotify/auth/callback/public"
+      })
+    ).toThrow("SPOTIFY_REDIRECT_URI must use a loopback IP literal");
+  });
 });

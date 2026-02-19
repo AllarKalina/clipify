@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { PublicExampleResponse, PublicVersionResponse } from "../../../apps/api/src/modules/public/contracts";
 import type {
   SpotifyCallbackResponse,
+  SpotifyProfileResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyStartAuthResponse
 } from "../../../apps/api/src/modules/spotify/service";
@@ -48,6 +49,14 @@ const spotifyCurrentlyPlayingSchema = z.object({
   albumName: z.string()
 });
 
+const spotifyProfileSchema = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  email: z.string(),
+  profileUrl: z.string(),
+  imageUrl: z.string()
+});
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly path: string;
@@ -64,6 +73,11 @@ export type ApiClient = {
   getVersion: () => Promise<PublicVersionResponse>;
   getPublicExample: () => Promise<PublicExampleResponse>;
   getMe: () => Promise<{ user: { id: string; email: string; name: string } }>;
+  signUpWithEmailPassword: (input: {
+    name: string;
+    email: string;
+    password: string;
+  }) => Promise<{ sessionCookie: string }>;
   signInWithEmailPassword: (input: {
     email: string;
     password: string;
@@ -72,6 +86,7 @@ export type ApiClient = {
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
   getSpotifyAuthorizationStatus: () => Promise<{ linked: boolean }>;
+  getSpotifyProfile: () => Promise<SpotifyProfileResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
 };
 
@@ -90,6 +105,18 @@ type RequestOptions<T> = {
 };
 
 export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: ClientDeps): ApiClient {
+  function parseSessionCookie(setCookie: string, path: string): { sessionCookie: string } {
+    const match = setCookie.match(/(?:^|,\s*)better-auth\.session_token=([^;,\s]+)/);
+
+    if (!match?.[1]) {
+      throw new ApiClientError("Auth succeeded but session cookie was missing in response", 502, path);
+    }
+
+    return {
+      sessionCookie: `better-auth.session_token=${match[1]}`
+    };
+  }
+
   async function request<T>(path: string, options: RequestOptions<T>): Promise<T> {
     const url = new URL(path, baseUrl);
     if (options.query) {
@@ -153,20 +180,36 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       throw new ApiClientError(`Request failed for /api/auth/sign-in/email: ${response.status} ${text}`, response.status, "/api/auth/sign-in/email");
     }
 
-    const setCookie = response.headers.get("set-cookie") ?? "";
-    const match = setCookie.match(/(?:^|,\s*)better-auth\.session_token=([^;,\s]+)/);
+    return parseSessionCookie(response.headers.get("set-cookie") ?? "", "/api/auth/sign-in/email");
+  }
 
-    if (!match?.[1]) {
+  async function signUpWithEmailPassword(input: { name: string; email: string; password: string }): Promise<{
+    sessionCookie: string;
+  }> {
+    const url = new URL("/api/auth/sign-up/email", baseUrl);
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        name: input.name,
+        email: input.email,
+        password: input.password
+      })
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
       throw new ApiClientError(
-        "Sign-in succeeded but session cookie was missing in response",
-        502,
-        "/api/auth/sign-in/email"
+        `Request failed for /api/auth/sign-up/email: ${response.status} ${text}`,
+        response.status,
+        "/api/auth/sign-up/email"
       );
     }
 
-    return {
-      sessionCookie: `better-auth.session_token=${match[1]}`
-    };
+    return parseSessionCookie(response.headers.get("set-cookie") ?? "", "/api/auth/sign-up/email");
   }
 
   return {
@@ -182,6 +225,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
+    signUpWithEmailPassword,
     signInWithEmailPassword,
     startSpotifyAuthorization() {
       return request("/v1/spotify/auth/start", {
@@ -202,6 +246,12 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     getSpotifyAuthorizationStatus() {
       return request("/v1/spotify/auth/status", {
         schema: spotifyAuthStatusSchema,
+        requireSession: true
+      });
+    },
+    getSpotifyProfile() {
+      return request("/v1/spotify/me", {
+        schema: spotifyProfileSchema,
         requireSession: true
       });
     },

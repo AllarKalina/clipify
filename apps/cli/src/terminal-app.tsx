@@ -14,12 +14,13 @@ type Snapshot = {
   backend: "connected" | "offline";
   user: string;
   spotify: "linked" | "not-linked" | "unknown";
+  spotifyProfile: string;
   nowPlaying: string;
   error?: string;
 };
 
-type InputMode = "none" | "login-email" | "login-password";
-type UnauthMenuAction = "login" | "exit";
+type InputMode = "none" | "signup-name" | "signup-email" | "signup-password" | "login-email" | "login-password";
+type UnauthMenuAction = "signup" | "login" | "exit";
 
 type LinkFlow = {
   authorizeUrl: string;
@@ -78,6 +79,7 @@ function buildSpotifyLogo(width: number, height: number): string[] {
 const spotifyHeroLogo = buildSpotifyLogo(55, 17);
 const spotifyHeroWidth = spotifyHeroLogo[0]?.length ?? 39;
 const unauthMenuWidth = 20;
+const unauthMenuActions: UnauthMenuAction[] = ["signup", "login", "exit"];
 
 function centerText(content: string, width: number): string {
   if (content.length >= width) {
@@ -93,6 +95,19 @@ function centerText(content: string, width: number): string {
 function formatUnauthMenuItem(label: string, selected: boolean): string {
   const content = selected ? `> ${label} <` : `  ${label}  `;
   return centerText(content, unauthMenuWidth);
+}
+
+function nextUnauthSelection(current: UnauthMenuAction, direction: "up" | "down"): UnauthMenuAction {
+  const index = unauthMenuActions.indexOf(current);
+  if (index < 0) {
+    return "signup";
+  }
+
+  if (direction === "up") {
+    return unauthMenuActions[(index - 1 + unauthMenuActions.length) % unauthMenuActions.length] ?? "signup";
+  }
+
+  return unauthMenuActions[(index + 1) % unauthMenuActions.length] ?? "signup";
 }
 
 function SpotifyHero() {
@@ -183,6 +198,25 @@ function statusColor(state: Snapshot["backend"] | Snapshot["spotify"]): "green" 
 async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
   try {
     const me = await client.getMe();
+    let spotifyProfileLine = "n/a";
+
+    try {
+      const spotifyProfile = await client.getSpotifyProfile();
+      spotifyProfileLine = `${spotifyProfile.displayName} (${spotifyProfile.id})`;
+    } catch (error) {
+      const apiError = error as ApiClientError;
+      if (!(apiError?.name === "ApiClientError" && apiError.status === 409)) {
+        throw error;
+      }
+
+      return {
+        backend: "connected",
+        user: `${me.user.name} <${me.user.email}>`,
+        spotify: "not-linked",
+        spotifyProfile: "n/a",
+        nowPlaying: "n/a"
+      };
+    }
 
     try {
       const current = await client.getSpotifyCurrentlyPlaying();
@@ -194,6 +228,7 @@ async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
         backend: "connected",
         user: `${me.user.name} <${me.user.email}>`,
         spotify: "linked",
+        spotifyProfile: spotifyProfileLine,
         nowPlaying
       };
     } catch (error) {
@@ -203,6 +238,7 @@ async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
           backend: "connected",
           user: `${me.user.name} <${me.user.email}>`,
           spotify: "not-linked",
+          spotifyProfile: "n/a",
           nowPlaying: "n/a"
         };
       }
@@ -214,6 +250,7 @@ async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
       backend: "offline",
       user: "unknown",
       spotify: "unknown",
+      spotifyProfile: "unknown",
       nowPlaying: "unknown",
       error: toMessage(error)
     };
@@ -230,28 +267,68 @@ function App(props: AppDeps) {
     backend: "offline",
     user: "loading",
     spotify: "unknown",
+    spotifyProfile: "loading",
     nowPlaying: "loading"
   });
   const [inputMode, setInputMode] = useState<InputMode>("none");
   const [inputValue, setInputValue] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
+  const [pendingName, setPendingName] = useState("");
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
   const [statusLine, setStatusLine] = useState("Loading...");
   const [busy, setBusy] = useState(false);
-  const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("login");
+  const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("signup");
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = snapshot.backend === "connected";
 
-  const refreshWithClient = async (targetClient: ApiClient) => {
+  const refreshWithClient = async (targetClient: ApiClient): Promise<Snapshot> => {
     setBusy(true);
     const next = await computeSnapshot(targetClient);
     setSnapshot(next);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? "Refreshed" : "Backend unreachable or unauthorized");
+    return next;
   };
 
   const refresh = async () => refreshWithClient(client);
+
+  const startSpotifyLinkFlow = async (targetClient: ApiClient) => {
+    try {
+      const start = await targetClient.startSpotifyAuthorization();
+      setLinkFlow(start);
+
+      if (props.openBrowser) {
+        const opened = openUrl(start.authorizeUrl);
+        setStatusLine(
+          opened
+            ? "Opened Spotify auth in browser. Waiting for callback..."
+            : "Could not open browser. Open authorize URL manually."
+        );
+      } else {
+        setStatusLine("Open authorize URL in a browser. Waiting for callback...");
+      }
+    } catch (error) {
+      setStatusLine(`Link start failed: ${toMessage(error)}`);
+    }
+  };
+
+  const completeAuthenticatedOnboarding = async (nextSessionCookie: string, successLine: string) => {
+    saveSessionCookie(nextSessionCookie);
+    setSessionCookie(nextSessionCookie);
+    setInputMode("none");
+    setInputValue("");
+    setPendingEmail("");
+    setPendingName("");
+    setStatusLine(successLine);
+
+    const authenticatedClient = props.makeClient(nextSessionCookie);
+    const refreshedSnapshot = await refreshWithClient(authenticatedClient);
+    if (refreshedSnapshot.spotify === "not-linked") {
+      setStatusLine(`${successLine}. Starting Spotify link...`);
+      await startSpotifyLinkFlow(authenticatedClient);
+    }
+  };
 
   useEffect(() => {
     if (!sessionCookie) {
@@ -313,6 +390,60 @@ function App(props: AppDeps) {
           return;
         }
 
+        if (inputMode === "signup-name") {
+          if (!value) {
+            setStatusLine("Name is required");
+            return;
+          }
+
+          setPendingName(value);
+          setInputMode("signup-email");
+          setInputValue("");
+          setStatusLine("Enter email");
+          return;
+        }
+
+        if (inputMode === "signup-email") {
+          if (!value) {
+            setStatusLine("Email is required");
+            return;
+          }
+
+          setPendingEmail(value);
+          setInputMode("signup-password");
+          setInputValue("");
+          setStatusLine("Enter password");
+          return;
+        }
+
+        if (inputMode === "signup-password") {
+          if (!pendingName || !pendingEmail || !value) {
+            setStatusLine("Name, email, and password are required");
+            return;
+          }
+
+          setBusy(true);
+          void (async () => {
+            try {
+              const result = await client.signUpWithEmailPassword({
+                name: pendingName,
+                email: pendingEmail,
+                password: value
+              });
+              await completeAuthenticatedOnboarding(result.sessionCookie, "Sign up successful");
+            } catch (error) {
+              setStatusLine(`Sign up failed: ${toMessage(error)}`);
+              setInputMode("none");
+              setInputValue("");
+              setPendingEmail("");
+              setPendingName("");
+            } finally {
+              setBusy(false);
+            }
+          })();
+          return;
+        }
+
         if (inputMode === "login-password") {
           if (!pendingEmail || !value) {
             setStatusLine("Email and password are required");
@@ -326,18 +457,13 @@ function App(props: AppDeps) {
                 email: pendingEmail,
                 password: value
               });
-              saveSessionCookie(result.sessionCookie);
-              setSessionCookie(result.sessionCookie);
-              setInputMode("none");
-              setInputValue("");
-              setPendingEmail("");
-              setStatusLine("Login successful");
-              await refreshWithClient(props.makeClient(result.sessionCookie));
+              await completeAuthenticatedOnboarding(result.sessionCookie, "Login successful");
             } catch (error) {
               setStatusLine(`Login failed: ${toMessage(error)}`);
               setInputMode("none");
               setInputValue("");
               setPendingEmail("");
+              setPendingName("");
             } finally {
               setBusy(false);
             }
@@ -347,6 +473,8 @@ function App(props: AppDeps) {
 
         setInputMode("none");
         setInputValue("");
+        setPendingEmail("");
+        setPendingName("");
         return;
       }
 
@@ -354,6 +482,7 @@ function App(props: AppDeps) {
         setInputMode("none");
         setInputValue("");
         setPendingEmail("");
+        setPendingName("");
         setStatusLine("Canceled");
         return;
       }
@@ -376,12 +505,12 @@ function App(props: AppDeps) {
 
     if (!isAuthenticated) {
       if (key.upArrow || key.leftArrow) {
-        setUnauthSelection("login");
+        setUnauthSelection((current) => nextUnauthSelection(current, "up"));
         return;
       }
 
       if (key.downArrow || key.rightArrow) {
-        setUnauthSelection("exit");
+        setUnauthSelection((current) => nextUnauthSelection(current, "down"));
         return;
       }
 
@@ -391,10 +520,11 @@ function App(props: AppDeps) {
           return;
         }
 
-        setInputMode("login-email");
+        setInputMode(unauthSelection === "signup" ? "signup-name" : "login-email");
         setInputValue("");
         setPendingEmail("");
-        setStatusLine("Enter email");
+        setPendingName("");
+        setStatusLine(unauthSelection === "signup" ? "Enter name" : "Enter email");
         return;
       }
 
@@ -428,21 +558,7 @@ function App(props: AppDeps) {
       setBusy(true);
       void (async () => {
         try {
-          const start = await client.startSpotifyAuthorization();
-          setLinkFlow(start);
-
-          if (props.openBrowser) {
-            const opened = openUrl(start.authorizeUrl);
-            setStatusLine(
-              opened
-                ? "Opened Spotify auth in browser. Waiting for callback..."
-                : "Could not open browser. Open authorize URL manually."
-            );
-          } else {
-            setStatusLine("Open authorize URL in a browser. Waiting for callback...");
-          }
-        } catch (error) {
-          setStatusLine(`Link start failed: ${toMessage(error)}`);
+          await startSpotifyLinkFlow(client);
         } finally {
           setBusy(false);
         }
@@ -455,6 +571,9 @@ function App(props: AppDeps) {
       <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} justifyContent="center" alignItems="center">
         <SpotifyHero />
         <Box marginTop={1} flexDirection="column" alignItems="center">
+          <Text color={unauthSelection === "signup" ? "green" : "gray"}>
+            {formatUnauthMenuItem("Sign up", unauthSelection === "signup")}
+          </Text>
           <Text color={unauthSelection === "login" ? "green" : "gray"}>
             {formatUnauthMenuItem("Login", unauthSelection === "login")}
           </Text>
@@ -463,6 +582,9 @@ function App(props: AppDeps) {
           </Text>
           <Text dimColor>Use up/down arrows and Enter</Text>
         </Box>
+        {inputMode === "signup-name" ? <Text color="yellow">name&gt; {inputValue}</Text> : null}
+        {inputMode === "signup-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
+        {inputMode === "signup-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
         {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
       </Box>
@@ -480,6 +602,7 @@ function App(props: AppDeps) {
           spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
         </Text>
         <Text>user: {snapshot.user}</Text>
+        <Text>spotify profile: {snapshot.spotifyProfile}</Text>
         <Text>now playing: {snapshot.nowPlaying}</Text>
         {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
       </Box>

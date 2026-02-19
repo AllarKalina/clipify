@@ -9,7 +9,8 @@
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts"
+    "db:migrate": "drizzle-kit migrate --config drizzle.config.ts",
+    "db:studio": "drizzle-kit studio --config drizzle.config.ts"
   },
   "dependencies": {
     "@elysiajs/openapi": "^1.4.8",

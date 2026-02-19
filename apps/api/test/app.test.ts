@@ -75,6 +75,15 @@ function createSpotifyMock() {
         artistName: "Fleetwood Mac",
         albumName: "Rumours"
       };
+    },
+    async getProfile() {
+      return {
+        id: "spotify-user-1",
+        displayName: "Allar",
+        email: "allar@spotify.test",
+        profileUrl: "https://open.spotify.com/user/allar",
+        imageUrl: "https://i.scdn.co/image/avatar-1"
+      };
     }
   };
 }
@@ -273,6 +282,28 @@ describe("app routes", () => {
     expect(body.trackName).toBe("Dreams");
   });
 
+  test("returns spotify profile when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { displayName: string };
+    expect(body.displayName).toBe("Allar");
+  });
+
   test("allows spotify public callback route without session", async () => {
     const env = baseEnv();
 
@@ -303,5 +334,47 @@ describe("app routes", () => {
 
     const response = await app.handle(new Request("http://localhost/v1/spotify/auth/status"));
     expect(response.status).toBe(401);
+  });
+
+  test("forwards auth post body to auth handler", async () => {
+    const env = baseEnv();
+    let receivedEmail = "";
+
+    const auth = {
+      handler: async (request: Request) => {
+        const body = (await request.json()) as { email?: string };
+        receivedEmail = body.email ?? "";
+        return Response.json({ ok: true });
+      },
+      api: {
+        async getSession() {
+          return null;
+        }
+      }
+    };
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: auth as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/api/auth/sign-in/email", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          email: "allar@example.com",
+          password: "secret"
+        })
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(receivedEmail).toBe("allar@example.com");
   });
 });
