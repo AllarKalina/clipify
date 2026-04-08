@@ -99,6 +99,7 @@ function HeroPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number 
         </Text>
         <Text color="white">{clipLine("No active playback right now.", contentWidth)}</Text>
         <Text color="white">{clipLine("Start something in Spotify, then press [r] to refresh.", contentWidth)}</Text>
+        <Text color="white">{clipLine("[space] play/pause  [,] previous  [.] next", contentWidth)}</Text>
       </Box>
     );
   }
@@ -116,6 +117,7 @@ function HeroPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number 
       </Text>
       <Text color="white">{clipLine(`${snapshot.artistName} · ${snapshot.albumName}`, contentWidth)}</Text>
       <Text color="white">{clipLine(formatProgress(snapshot.progressMs, snapshot.durationMs), contentWidth)}</Text>
+      <Text color="white">{clipLine("[space] play/pause  [,] previous  [.] next", contentWidth)}</Text>
     </Box>
   );
 }
@@ -220,7 +222,7 @@ export function AuthenticatedHome({ snapshot, width, busy, statusLine, linkFlow 
         </Box>
       )}
       <Box marginTop={1} flexDirection="column" width={panelWidth}>
-        <Text color="white">[r] refresh  [l] link  [o] logout  [q] quit</Text>
+        <Text color="white">[space] play/pause  [,] previous  [.] next  [r] refresh  [l] link  [o] logout  [q] quit</Text>
         <Text color={busy ? "yellow" : snapshot.error ? "red" : "cyan"}>{busy ? "working..." : statusLine}</Text>
       </Box>
     </Box>

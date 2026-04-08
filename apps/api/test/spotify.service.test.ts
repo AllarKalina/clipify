@@ -102,6 +102,7 @@ describe("spotify service", () => {
     expect(url.searchParams.get("client_id")).toBe("spotify-client-id");
     expect(url.searchParams.get("scope")).toContain("user-read-private");
     expect(url.searchParams.get("scope")).toContain("user-read-playback-state");
+    expect(url.searchParams.get("scope")).toContain("user-modify-playback-state");
     expect(url.searchParams.get("show_dialog")).toBe("true");
     expect(store.oauthStates).toHaveLength(1);
     expect(store.oauthStates[0]?.stateHash).toBe(createStateHash(result.state));
@@ -302,6 +303,56 @@ describe("spotify service", () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]?.trackName).toBe("Dreams");
     expect(result.items[0]?.playedAt).toBe("2026-04-08T10:00:00.000Z");
+  });
+
+  test("runs player actions for linked user", async () => {
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+
+    const calls: string[] = [];
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url, init) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        calls.push(`${init?.method ?? "GET"} ${String(url)}`);
+        return new Response(null, { status: 204 });
+      }
+    });
+
+    await expect(service.play("user-1")).resolves.toEqual({ ok: true, action: "play" });
+    await expect(service.pause("user-1")).resolves.toEqual({ ok: true, action: "pause" });
+    await expect(service.next("user-1")).resolves.toEqual({ ok: true, action: "next" });
+    await expect(service.previous("user-1")).resolves.toEqual({ ok: true, action: "previous" });
+
+    expect(calls).toContain("PUT https://api.spotify.com/v1/me/player/play");
+    expect(calls).toContain("PUT https://api.spotify.com/v1/me/player/pause");
+    expect(calls).toContain("POST https://api.spotify.com/v1/me/player/next");
+    expect(calls).toContain("POST https://api.spotify.com/v1/me/player/previous");
   });
 
   test("returns spotify profile for linked user", async () => {

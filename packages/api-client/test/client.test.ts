@@ -273,6 +273,48 @@ describe("api client", () => {
     expect(requestedUrl).toContain("/v1/spotify/me/player/recently-played");
   });
 
+  test("posts spotify playback actions for authenticated user", async () => {
+    const calls: Array<{ url: string; method: string; cookie: string }> = [];
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url, init) => {
+        calls.push({
+          url: String(url),
+          method: init?.method ?? "GET",
+          cookie: new Headers(init?.headers).get("cookie") ?? ""
+        });
+
+        if (String(url).endsWith("/play")) {
+          return Response.json({ ok: true, action: "play" });
+        }
+
+        if (String(url).endsWith("/pause")) {
+          return Response.json({ ok: true, action: "pause" });
+        }
+
+        if (String(url).endsWith("/next")) {
+          return Response.json({ ok: true, action: "next" });
+        }
+
+        return Response.json({ ok: true, action: "previous" });
+      }
+    });
+
+    await client.playSpotify();
+    await client.pauseSpotify();
+    await client.nextSpotify();
+    await client.previousSpotify();
+
+    expect(calls).toHaveLength(4);
+    expect(calls[0]?.method).toBe("POST");
+    expect(calls[0]?.cookie).toBe("better-auth.session_token=abc123");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/pause");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/next");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/previous");
+  });
+
   test("throws when protected route is called without session cookie", async () => {
     const client = createApiClient({
       baseUrl: "https://example.com",

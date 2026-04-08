@@ -1,4 +1,4 @@
-import type { ApiClient } from "@clipify/api-client";
+import { ApiClientError, type ApiClient } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -284,6 +284,10 @@ function App(props: AppDeps) {
   const isAuthenticated = Boolean(sessionCookie);
 
   const refreshWithClient = async (targetClient: ApiClient): Promise<HomeSnapshot> => {
+    return refreshWithClientMessage(targetClient, "Refreshed");
+  };
+
+  const refreshWithClientMessage = async (targetClient: ApiClient, successLine: string): Promise<HomeSnapshot> => {
     setBusy(true);
     const next = await computeHomeSnapshot(targetClient);
     if (next.failureReason === "unauthorized") {
@@ -293,7 +297,7 @@ function App(props: AppDeps) {
 
     setHomeSnapshot(next);
     setBusy(false);
-    setStatusLine(next.backend === "connected" ? "Refreshed" : "Backend unreachable or unauthorized");
+    setStatusLine(next.backend === "connected" ? successLine : "Backend unreachable or unauthorized");
     return next;
   };
 
@@ -342,6 +346,25 @@ function App(props: AppDeps) {
       setStatusLine(`${successLine}. Starting Spotify link...`);
       await startSpotifyLinkFlow(authenticatedClient);
     }
+  };
+
+  const runPlaybackAction = (label: string, action: (targetClient: ApiClient) => Promise<unknown>) => {
+    setBusy(true);
+    void (async () => {
+      try {
+        await action(client);
+        await refreshWithClientMessage(client, label);
+      } catch (error) {
+        setBusy(false);
+        const apiError = error as ApiClientError;
+        if (apiError?.name === "ApiClientError" && (apiError.status === 401 || apiError.status === 403)) {
+          setStatusLine("Playback control needs a fresh Spotify re-link. Press [l].");
+          return;
+        }
+
+        setStatusLine(`${label} failed: ${toMessage(error)}`);
+      }
+    })();
   };
 
   useEffect(() => {
@@ -507,6 +530,24 @@ function App(props: AppDeps) {
 
     if (input === "r") {
       void refresh();
+      return;
+    }
+
+    if (input === " ") {
+      runPlaybackAction(
+        homeSnapshot.playbackState === "playing" ? "Paused playback" : "Started playback",
+        (targetClient) => (homeSnapshot.playbackState === "playing" ? targetClient.pauseSpotify() : targetClient.playSpotify())
+      );
+      return;
+    }
+
+    if (input === ",") {
+      runPlaybackAction("Moved to previous track", (targetClient) => targetClient.previousSpotify());
+      return;
+    }
+
+    if (input === ".") {
+      runPlaybackAction("Moved to next track", (targetClient) => targetClient.nextSpotify());
       return;
     }
 

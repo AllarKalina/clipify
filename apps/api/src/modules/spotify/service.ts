@@ -5,6 +5,8 @@ import { spotifyConnections, spotifyOauthStates } from "../../db/schema";
 import type {
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
+  SpotifyPlayerAction,
+  SpotifyPlayerActionResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyProfileResponse,
   SpotifyRecentlyPlayedResponse,
@@ -20,6 +22,10 @@ export type SpotifyService = {
   getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
   getRecentlyPlayed: (userId: string) => Promise<SpotifyRecentlyPlayedResponse>;
+  play: (userId: string) => Promise<SpotifyPlayerActionResponse>;
+  pause: (userId: string) => Promise<SpotifyPlayerActionResponse>;
+  next: (userId: string) => Promise<SpotifyPlayerActionResponse>;
+  previous: (userId: string) => Promise<SpotifyPlayerActionResponse>;
   getProfile: (userId: string) => Promise<SpotifyProfileResponse>;
 };
 
@@ -70,7 +76,8 @@ type SpotifyTokenResponse = {
   refresh_token?: string;
 };
 
-const REQUIRED_SCOPE = "user-read-private user-read-email user-read-playback-state user-read-recently-played";
+const REQUIRED_SCOPE =
+  "user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state";
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
   if (!expiresAt) {
@@ -163,6 +170,11 @@ async function parseTokenResponse(response: Response): Promise<SpotifyTokenRespo
   return payload as SpotifyTokenResponse;
 }
 
+async function readSpotifyError(response: Response): Promise<string> {
+  const text = await response.text();
+  return text || "empty response";
+}
+
 export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): SpotifyService {
   const { fetchImpl = fetch, now = () => new Date(), randomUUID = () => crypto.randomUUID() } = deps;
   const store = deps.store ?? (deps.db ? createDrizzleStore(deps.db) : null);
@@ -235,6 +247,55 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
       email: payload.email ?? "",
       profileUrl: payload.external_urls?.spotify ?? "",
       imageUrl: payload.images?.[0]?.url ?? ""
+    };
+  }
+
+  async function runPlayerAction(userId: string, action: SpotifyPlayerAction): Promise<SpotifyPlayerActionResponse> {
+    if (!isConfigured()) {
+      throw new Response("Spotify is not configured", { status: 503 });
+    }
+
+    const path =
+      action === "play"
+        ? "play"
+        : action === "pause"
+          ? "pause"
+          : action === "next"
+          ? "next"
+            : "previous";
+    const method = action === "play" || action === "pause" ? "PUT" : "POST";
+
+    const cipher = requireCipher();
+    let connection = await ensureConnection(userId);
+    let accessToken = cipher.decrypt(connection.accessToken);
+
+    let response = await fetchImpl(`https://api.spotify.com/v1/me/player/${path}`, {
+      method,
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (response.status === 401) {
+      connection = await refreshAccessToken(connection);
+      accessToken = cipher.decrypt(connection.accessToken);
+      response = await fetchImpl(`https://api.spotify.com/v1/me/player/${path}`, {
+        method,
+        headers: {
+          authorization: `Bearer ${accessToken}`
+        }
+      });
+    }
+
+    if (!response.ok) {
+      throw new Response(`Spotify player ${action} failed (${response.status}): ${await readSpotifyError(response)}`, {
+        status: response.status
+      });
+    }
+
+    return {
+      ok: true,
+      action
     };
   }
 
@@ -515,6 +576,18 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
           playedAt: item.played_at ?? ""
         }))
       };
+    },
+    async play(userId: string) {
+      return runPlayerAction(userId, "play");
+    },
+    async pause(userId: string) {
+      return runPlayerAction(userId, "pause");
+    },
+    async next(userId: string) {
+      return runPlayerAction(userId, "next");
+    },
+    async previous(userId: string) {
+      return runPlayerAction(userId, "previous");
     },
     async getProfile(userId: string) {
       if (!isConfigured()) {

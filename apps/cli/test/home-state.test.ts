@@ -43,6 +43,10 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
         }
       ]
     }),
+    playSpotify: async () => ({ ok: true, action: "play" }),
+    pauseSpotify: async () => ({ ok: true, action: "pause" }),
+    nextSpotify: async () => ({ ok: true, action: "next" }),
+    previousSpotify: async () => ({ ok: true, action: "previous" }),
     ...overrides
   };
 }

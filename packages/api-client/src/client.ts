@@ -3,6 +3,7 @@ import type { PublicExampleResponse, PublicVersionResponse } from "../../../apps
 import type {
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
+  SpotifyPlayerActionResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyProfileResponse,
   SpotifyRecentlyPlayedResponse,
@@ -76,6 +77,11 @@ const spotifyProfileSchema = z.object({
   imageUrl: z.string()
 });
 
+const spotifyPlayerActionSchema = z.object({
+  ok: z.literal(true),
+  action: z.enum(["play", "pause", "next", "previous"])
+});
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly path: string;
@@ -109,6 +115,10 @@ export type ApiClient = {
   getSpotifyProfile: () => Promise<SpotifyProfileResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
   getSpotifyRecentlyPlayed: () => Promise<SpotifyRecentlyPlayedResponse>;
+  playSpotify: () => Promise<SpotifyPlayerActionResponse>;
+  pauseSpotify: () => Promise<SpotifyPlayerActionResponse>;
+  nextSpotify: () => Promise<SpotifyPlayerActionResponse>;
+  previousSpotify: () => Promise<SpotifyPlayerActionResponse>;
 };
 
 type FetchLike = (input: URL | Request | string, init?: RequestInit) => Promise<Response>;
@@ -172,6 +182,38 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     const body = await response.json();
     const parsed = options.schema.safeParse(body);
 
+    if (!parsed.success) {
+      throw new ApiClientError(`Invalid response for ${path}`, 502, path);
+    }
+
+    return parsed.data;
+  }
+
+  async function post<T>(path: string, schema: z.ZodType<T>, requireSession = true): Promise<T> {
+    const url = new URL(path, baseUrl);
+    const headers = new Headers({
+      accept: "application/json"
+    });
+
+    if (requireSession) {
+      if (!sessionCookie) {
+        throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
+      }
+      headers.set("cookie", sessionCookie);
+    }
+
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
+    }
+
+    const body = await response.json();
+    const parsed = schema.safeParse(body);
     if (!parsed.success) {
       throw new ApiClientError(`Invalid response for ${path}`, 502, path);
     }
@@ -313,6 +355,18 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         schema: spotifyRecentlyPlayedSchema,
         requireSession: true
       });
+    },
+    playSpotify() {
+      return post("/v1/spotify/me/player/play", spotifyPlayerActionSchema);
+    },
+    pauseSpotify() {
+      return post("/v1/spotify/me/player/pause", spotifyPlayerActionSchema);
+    },
+    nextSpotify() {
+      return post("/v1/spotify/me/player/next", spotifyPlayerActionSchema);
+    },
+    previousSpotify() {
+      return post("/v1/spotify/me/player/previous", spotifyPlayerActionSchema);
     }
   };
 }

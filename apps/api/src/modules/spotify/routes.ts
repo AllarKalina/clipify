@@ -182,5 +182,89 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
           )
         })
       }
+    )
+    .post(
+      "/me/player/play",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        await spotify.play(session.user.id);
+        return {
+          ok: true as const,
+          action: "play" as const
+        };
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Start or resume Spotify playback for authenticated user"
+        },
+        response: t.Object({
+          ok: t.Literal(true),
+          action: t.Literal("play")
+        })
+      }
+    )
+    .post(
+      "/me/player/pause",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        await spotify.pause(session.user.id);
+        return {
+          ok: true as const,
+          action: "pause" as const
+        };
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Pause Spotify playback for authenticated user"
+        },
+        response: t.Object({
+          ok: t.Literal(true),
+          action: t.Literal("pause")
+        })
+      }
+    )
+    .post(
+      "/me/player/next",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        await spotify.next(session.user.id);
+        return {
+          ok: true as const,
+          action: "next" as const
+        };
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Skip to next Spotify item for authenticated user"
+        },
+        response: t.Object({
+          ok: t.Literal(true),
+          action: t.Literal("next")
+        })
+      }
+    )
+    .post(
+      "/me/player/previous",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        await spotify.previous(session.user.id);
+        return {
+          ok: true as const,
+          action: "previous" as const
+        };
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Skip to previous Spotify item for authenticated user"
+        },
+        response: t.Object({
+          ok: t.Literal(true),
+          action: t.Literal("previous")
+        })
+      }
     );
 }

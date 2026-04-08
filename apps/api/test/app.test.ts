@@ -94,6 +94,18 @@ function createSpotifyMock() {
         ]
       };
     },
+    async play() {
+      return { ok: true, action: "play" as const };
+    },
+    async pause() {
+      return { ok: true, action: "pause" as const };
+    },
+    async next() {
+      return { ok: true, action: "next" as const };
+    },
+    async previous() {
+      return { ok: true, action: "previous" as const };
+    },
     async getProfile() {
       return {
         id: "spotify-user-1",
@@ -321,6 +333,28 @@ describe("app routes", () => {
 
     const body = (await response.json()) as { items: Array<{ trackName: string }> };
     expect(body.items[0]?.trackName).toBe("Dreams");
+  });
+
+  test("runs spotify play action when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/play", { method: "POST" }));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { action: string };
+    expect(body.action).toBe("play");
   });
 
   test("returns spotify profile when session is present", async () => {

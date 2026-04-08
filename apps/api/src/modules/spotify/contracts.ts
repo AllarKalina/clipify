@@ -38,6 +38,13 @@ export type SpotifyRecentlyPlayedResponse = {
   items: SpotifyRecentlyPlayedItem[];
 };
 
+export type SpotifyPlayerAction = "play" | "pause" | "next" | "previous";
+
+export type SpotifyPlayerActionResponse = {
+  ok: true;
+  action: SpotifyPlayerAction;
+};
+
 export type SpotifyProfileResponse = {
   id: string;
   displayName: string;
