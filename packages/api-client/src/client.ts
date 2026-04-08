@@ -83,6 +83,7 @@ export type ApiClient = {
     password: string;
     rememberMe?: boolean;
   }) => Promise<{ sessionCookie: string }>;
+  signOut: () => Promise<void>;
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
   getSpotifyAuthorizationStatus: () => Promise<{ linked: boolean }>;
@@ -105,6 +106,8 @@ type RequestOptions<T> = {
 };
 
 export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: ClientDeps): ApiClient {
+  const authOrigin = new URL(baseUrl).origin;
+
   function parseSessionCookie(setCookie: string, path: string): { sessionCookie: string } {
     const match = setCookie.match(/(?:^|,\s*)better-auth\.session_token=([^;,\s]+)/);
 
@@ -166,7 +169,8 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       method: "POST",
       headers: {
         accept: "application/json",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        origin: authOrigin
       },
       body: JSON.stringify({
         email: input.email,
@@ -191,7 +195,8 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       method: "POST",
       headers: {
         accept: "application/json",
-        "content-type": "application/json"
+        "content-type": "application/json",
+        origin: authOrigin
       },
       body: JSON.stringify({
         name: input.name,
@@ -212,6 +217,27 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     return parseSessionCookie(response.headers.get("set-cookie") ?? "", "/api/auth/sign-up/email");
   }
 
+  async function signOut(): Promise<void> {
+    if (!sessionCookie) {
+      throw new ApiClientError("Missing session cookie for /api/auth/sign-out", 401, "/api/auth/sign-out");
+    }
+
+    const url = new URL("/api/auth/sign-out", baseUrl);
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        cookie: sessionCookie,
+        origin: authOrigin
+      }
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(`Request failed for /api/auth/sign-out: ${response.status} ${text}`, response.status, "/api/auth/sign-out");
+    }
+  }
+
   return {
     getVersion() {
       return request("/v1/public/meta/version", { schema: versionSchema });
@@ -227,6 +253,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     },
     signUpWithEmailPassword,
     signInWithEmailPassword,
+    signOut,
     startSpotifyAuthorization() {
       return request("/v1/spotify/auth/start", {
         schema: spotifyStartAuthSchema,

@@ -1,7 +1,7 @@
 import type { ApiClient, ApiClientError } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
-import { saveSessionCookie } from "./config";
+import { clearSessionCookie, saveSessionCookie } from "./config";
 
 type AppDeps = {
   apiBaseUrl: string;
@@ -25,6 +25,16 @@ type UnauthMenuAction = "signup" | "login" | "exit";
 type LinkFlow = {
   authorizeUrl: string;
 };
+
+function createInitialSnapshot(): Snapshot {
+  return {
+    backend: "offline",
+    user: "loading",
+    spotify: "unknown",
+    spotifyProfile: "loading",
+    nowPlaying: "loading"
+  };
+}
 
 function buildSpotifyLogo(width: number, height: number): string[] {
   const rows: string[] = [];
@@ -263,13 +273,7 @@ function App(props: AppDeps) {
   const stdoutWidth = stdout.columns ?? 120;
   const stdoutHeight = stdout.rows ?? 40;
   const [sessionCookie, setSessionCookie] = useState<string | undefined>(props.initialSessionCookie);
-  const [snapshot, setSnapshot] = useState<Snapshot>({
-    backend: "offline",
-    user: "loading",
-    spotify: "unknown",
-    spotifyProfile: "loading",
-    nowPlaying: "loading"
-  });
+  const [snapshot, setSnapshot] = useState<Snapshot>(createInitialSnapshot);
   const [inputMode, setInputMode] = useState<InputMode>("none");
   const [inputValue, setInputValue] = useState("");
   const [pendingEmail, setPendingEmail] = useState("");
@@ -292,6 +296,20 @@ function App(props: AppDeps) {
   };
 
   const refresh = async () => refreshWithClient(client);
+
+  const completeLocalLogout = (successLine: string) => {
+    clearSessionCookie();
+    setSessionCookie(undefined);
+    setSnapshot(createInitialSnapshot());
+    setInputMode("none");
+    setInputValue("");
+    setPendingEmail("");
+    setPendingName("");
+    setLinkFlow(null);
+    setBusy(false);
+    setUnauthSelection("login");
+    setStatusLine(successLine);
+  };
 
   const startSpotifyLinkFlow = async (targetClient: ApiClient) => {
     try {
@@ -531,6 +549,20 @@ function App(props: AppDeps) {
       return;
     }
 
+    if (input === "o") {
+      setBusy(true);
+      void (async () => {
+        try {
+          await client.signOut();
+          completeLocalLogout("Logged out");
+        } catch (error) {
+          setBusy(false);
+          setStatusLine(`Logout failed: ${toMessage(error)}`);
+        }
+      })();
+      return;
+    }
+
     if (input === "r") {
       void refresh();
       return;
@@ -587,6 +619,7 @@ function App(props: AppDeps) {
         {inputMode === "signup-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
         {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
+        <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
       </Box>
     );
   }
@@ -624,7 +657,7 @@ function App(props: AppDeps) {
       ) : null}
 
       <Box marginTop={1} flexDirection="column">
-        <Text dimColor>keys: [l] link  [n] now playing  [r] refresh  [q] quit</Text>
+        <Text dimColor>keys: [l] link  [n] now playing  [o] logout  [r] refresh  [q] quit</Text>
         {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
         {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>

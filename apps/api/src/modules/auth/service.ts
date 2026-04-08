@@ -4,6 +4,27 @@ import type { AppEnv } from "../../config/env";
 import type { AppDb } from "../../db/client";
 import { authSchema } from "../../db/schema";
 
+export function buildTrustedOrigins(baseUrl: string): string[] {
+  const url = new URL(baseUrl);
+  const origins = new Set([url.origin]);
+  const hostname = url.hostname;
+
+  const loopbackAliases =
+    hostname === "localhost"
+      ? ["127.0.0.1", "[::1]"]
+      : hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1"
+        ? ["localhost", "127.0.0.1", "[::1]"]
+        : [];
+
+  for (const alias of loopbackAliases) {
+    const aliasUrl = new URL(url.toString());
+    aliasUrl.hostname = alias;
+    origins.add(aliasUrl.origin);
+  }
+
+  return [...origins];
+}
+
 export function createAuth(env: AppEnv, db: AppDb) {
   const options: BetterAuthOptions = {
     secret: env.BETTER_AUTH_SECRET,
@@ -15,7 +36,7 @@ export function createAuth(env: AppEnv, db: AppDb) {
     emailAndPassword: {
       enabled: true
     },
-    trustedOrigins: [env.BETTER_AUTH_URL]
+    trustedOrigins: buildTrustedOrigins(env.BETTER_AUTH_URL)
   };
 
   return betterAuth(options);

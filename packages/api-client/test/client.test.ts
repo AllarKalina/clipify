@@ -119,6 +119,31 @@ describe("api client", () => {
     expect(payload.sessionCookie).toBe("better-auth.session_token=signed-up-token-123");
   });
 
+  test("signs out with the persisted session cookie", async () => {
+    let requestedUrl = "";
+    let method = "";
+    let cookieHeader = "";
+    let originHeader = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url, init) => {
+        requestedUrl = String(url);
+        method = init?.method ?? "GET";
+        cookieHeader = new Headers(init?.headers).get("cookie") ?? "";
+        originHeader = new Headers(init?.headers).get("origin") ?? "";
+        return Response.json({ success: true });
+      }
+    });
+
+    await client.signOut();
+
+    expect(requestedUrl).toContain("/api/auth/sign-out");
+    expect(method).toBe("POST");
+    expect(cookieHeader).toBe("better-auth.session_token=abc123");
+    expect(originHeader).toBe("https://example.com");
+  });
+
   test("builds callback query parameters", async () => {
     let requestedUrl = "";
     const client = createApiClient({
@@ -202,6 +227,15 @@ describe("api client", () => {
     expect(client.getSpotifyCurrentlyPlaying()).rejects.toBeInstanceOf(ApiClientError);
   });
 
+  test("throws when sign-out is called without session cookie", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      fetchImpl: async () => Response.json({ success: true })
+    });
+
+    await expect(client.signOut()).rejects.toBeInstanceOf(ApiClientError);
+  });
+
   test("throws when sign-in response does not include session cookie", async () => {
     const client = createApiClient({
       baseUrl: "https://example.com",
@@ -218,5 +252,15 @@ describe("api client", () => {
         password: "super-secret"
       })
     ).rejects.toBeInstanceOf(ApiClientError);
+  });
+
+  test("throws on sign-out failure response", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async () => new Response("nope", { status: 500 })
+    });
+
+    await expect(client.signOut()).rejects.toBeInstanceOf(ApiClientError);
   });
 });
