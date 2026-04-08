@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   advanceAuthForm,
   createAuthFormState,
-  focusFirstInvalidField,
   getAuthActionOrder,
   getAuthFieldLabel,
   getAuthFieldOrder,
@@ -14,11 +13,11 @@ import {
   moveAuthFocus,
   switchAuthMode,
   updateFocusedValue,
-  validateAuthForm,
   type AuthActionKey,
   type AuthFieldKey,
   type AuthFormState
 } from "./auth-form";
+import { getAuthLauncherSelection, submitAuthForm } from "./auth-controller";
 import { clearSessionCookie, saveSessionCookie } from "./config";
 
 type AppDeps = {
@@ -34,6 +33,7 @@ type Snapshot = {
   spotify: "linked" | "not-linked" | "unknown";
   spotifyProfile: string;
   nowPlaying: string;
+  failureReason?: "unauthorized";
   error?: string;
 };
 
@@ -46,6 +46,16 @@ type LinkFlow = {
 function createInitialSnapshot(): Snapshot {
   return {
     backend: "offline",
+    user: "loading",
+    spotify: "unknown",
+    spotifyProfile: "loading",
+    nowPlaying: "loading"
+  };
+}
+
+function createPendingAuthenticatedSnapshot(): Snapshot {
+  return {
+    backend: "connected",
     user: "loading",
     spotify: "unknown",
     spotifyProfile: "loading",
@@ -111,14 +121,23 @@ function maskFieldValue(field: AuthFieldKey, value: string, active: boolean): st
   return value;
 }
 
+function formatPanelRow(content: string): string {
+  const width = controlsPanelWidth - 4;
+  if (content.length <= width) {
+    return content.padEnd(width, " ");
+  }
+
+  return `${content.slice(0, Math.max(0, width - 1))}…`;
+}
+
 function formatAuthFieldRow(field: AuthFieldKey, value: string, active: boolean): string {
   const label = `${getAuthFieldLabel(field)}:`;
   const renderedValue = maskFieldValue(field, value, active) || (active ? "…" : "");
-  return `${label.padEnd(11, " ")}${renderedValue}`;
+  return formatPanelRow(`${label.padEnd(11, " ")}${renderedValue}`);
 }
 
 function formatAuthActionRow(label: string): string {
-  return `> ${label}`.padEnd(controlsPanelWidth - 4, " ");
+  return formatPanelRow(`> ${label}`);
 }
 
 function renderFocusableRow(content: string, selected: boolean) {
@@ -342,12 +361,14 @@ async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
       throw error;
     }
   } catch (error) {
+    const apiError = error as ApiClientError;
     return {
       backend: "offline",
       user: "unknown",
       spotify: "unknown",
       spotifyProfile: "unknown",
       nowPlaying: "unknown",
+      failureReason: apiError?.name === "ApiClientError" && apiError.status === 401 ? "unauthorized" : undefined,
       error: toMessage(error)
     };
   }
@@ -361,19 +382,26 @@ function App(props: AppDeps) {
   const showSubtitle = stdoutHeight >= 20;
   const helperLine = stdoutHeight >= 22 ? "[↑↓] navigate  [enter] select" : "[↑↓] move  [enter] select";
   const [sessionCookie, setSessionCookie] = useState<string | undefined>(props.initialSessionCookie);
-  const [snapshot, setSnapshot] = useState<Snapshot>(createInitialSnapshot);
+  const [snapshot, setSnapshot] = useState<Snapshot>(() =>
+    props.initialSessionCookie ? createPendingAuthenticatedSnapshot() : createInitialSnapshot()
+  );
   const [authForm, setAuthForm] = useState<AuthFormState | null>(null);
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
-  const [statusLine, setStatusLine] = useState("Loading...");
+  const [statusLine, setStatusLine] = useState(() => (props.initialSessionCookie ? "Restoring session..." : "Loading..."));
   const [busy, setBusy] = useState(false);
   const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("signup");
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
-  const isAuthenticated = snapshot.backend === "connected";
+  const isAuthenticated = Boolean(sessionCookie);
 
   const refreshWithClient = async (targetClient: ApiClient): Promise<Snapshot> => {
     setBusy(true);
     const next = await computeSnapshot(targetClient);
+    if (next.failureReason === "unauthorized") {
+      completeLocalLogout("Session expired");
+      return next;
+    }
+
     setSnapshot(next);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? "Refreshed" : "Backend unreachable or unauthorized");
@@ -414,8 +442,8 @@ function App(props: AppDeps) {
   };
 
   const completeAuthenticatedOnboarding = async (nextSessionCookie: string, successLine: string) => {
-    saveSessionCookie(nextSessionCookie);
     setSessionCookie(nextSessionCookie);
+    setSnapshot(createPendingAuthenticatedSnapshot());
     setAuthForm(null);
     setStatusLine(successLine);
 
@@ -474,7 +502,7 @@ function App(props: AppDeps) {
       if (key.escape) {
         setAuthForm(null);
         setStatusLine("Loading...");
-        setUnauthSelection(authForm.mode === "signup" ? "signup" : "login");
+        setUnauthSelection(getAuthLauncherSelection(authForm.mode));
         return;
       }
 
@@ -513,45 +541,24 @@ function App(props: AppDeps) {
         if (authForm.focus.action === "back") {
           setAuthForm(null);
           setStatusLine("Loading...");
-          setUnauthSelection(authForm.mode === "signup" ? "signup" : "login");
-          return;
-        }
-
-        const validationError = validateAuthForm(authForm);
-        if (validationError) {
-          setAuthForm((current) => (current ? focusFirstInvalidField(current) : current));
+          setUnauthSelection(getAuthLauncherSelection(authForm.mode));
           return;
         }
 
         setBusy(true);
         void (async () => {
           try {
-            if (authForm.mode === "signup") {
-              const result = await client.signUpWithEmailPassword({
-                name: authForm.values.name.trim(),
-                email: authForm.values.email.trim(),
-                password: authForm.values.password
-              });
-              await completeAuthenticatedOnboarding(result.sessionCookie, "Sign up successful");
-            } else {
-              const result = await client.signInWithEmailPassword({
-                email: authForm.values.email.trim(),
-                password: authForm.values.password
-              });
-              await completeAuthenticatedOnboarding(result.sessionCookie, "Login successful");
+            const result = await submitAuthForm(authForm, {
+              client,
+              persistSession: saveSessionCookie
+            });
+
+            if (result.kind === "error") {
+              setAuthForm(result.form);
+              return;
             }
-          } catch (error) {
-            setAuthForm((current) =>
-              current
-                ? {
-                    ...current,
-                    message: {
-                      tone: "error",
-                      text: authForm.mode === "signup" ? `Sign up failed: ${toMessage(error)}` : `Login failed: ${toMessage(error)}`
-                    }
-                  }
-                : current
-            );
+
+            await completeAuthenticatedOnboarding(result.sessionCookie, result.successLine);
           } finally {
             setBusy(false);
           }

@@ -7,7 +7,8 @@
     "clipify": "src/index.ts"
   },
   "scripts": {
-    "dev": "bun --hot src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "dev:hot": "bun --hot src/index.ts",
     "start": "bun src/index.ts",
     "build:binary": "bun build src/index.ts --compile --outfile dist/clipify",
     "test": "bun test",
