@@ -1,6 +1,6 @@
 import { ApiClientError, type ApiClient } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   advanceAuthForm,
   createAuthFormState,
@@ -21,9 +21,12 @@ import { getAuthLauncherSelection, submitAuthForm } from "./auth-controller";
 import { clearSessionCookie, saveSessionCookie } from "./config";
 import { AuthenticatedHome } from "./home";
 import {
+  applyProgressTick,
   computeHomeSnapshot,
   createInitialHomeSnapshot,
   createPendingAuthenticatedHomeSnapshot,
+  shouldBackgroundRefresh,
+  shouldTickPlayback,
   type HomeSnapshot
 } from "./home-state";
 
@@ -279,9 +282,12 @@ function App(props: AppDeps) {
   const [statusLine, setStatusLine] = useState(() => (props.initialSessionCookie ? "Restoring session..." : ""));
   const [busy, setBusy] = useState(false);
   const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("signup");
+  const [progressTickMs, setProgressTickMs] = useState(0);
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = Boolean(sessionCookie);
+  const backgroundRefreshInFlight = useRef(false);
+  const displayedHomeSnapshot = useMemo(() => applyProgressTick(homeSnapshot, progressTickMs), [homeSnapshot, progressTickMs]);
 
   const refreshWithClient = async (targetClient: ApiClient): Promise<HomeSnapshot> => {
     return refreshWithClientMessage(targetClient, "Refreshed");
@@ -296,12 +302,28 @@ function App(props: AppDeps) {
     }
 
     setHomeSnapshot(next);
+    setProgressTickMs(0);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? successLine : "Backend unreachable or unauthorized");
     return next;
   };
 
   const refresh = async () => refreshWithClient(client);
+
+  const refreshSilentlyWithClient = async (targetClient: ApiClient): Promise<void> => {
+    const next = await computeHomeSnapshot(targetClient);
+    if (next.failureReason === "unauthorized") {
+      completeLocalLogout("Session expired");
+      return;
+    }
+
+    if (next.backend !== "connected") {
+      return;
+    }
+
+    setHomeSnapshot(next);
+    setProgressTickMs(0);
+  };
 
   const completeLocalLogout = (successLine: string) => {
     clearSessionCookie();
@@ -310,6 +332,7 @@ function App(props: AppDeps) {
     setAuthForm(null);
     setLinkFlow(null);
     setBusy(false);
+    setProgressTickMs(0);
     setUnauthSelection("login");
     setStatusLine(successLine);
   };
@@ -374,6 +397,48 @@ function App(props: AppDeps) {
 
     void refresh();
   }, [client, sessionCookie]);
+
+  useEffect(() => {
+    setProgressTickMs(0);
+  }, [
+    homeSnapshot.trackName,
+    homeSnapshot.artistName,
+    homeSnapshot.albumName,
+    homeSnapshot.progressMs,
+    homeSnapshot.durationMs,
+    homeSnapshot.playbackState
+  ]);
+
+  useEffect(() => {
+    if (!shouldTickPlayback(homeSnapshot)) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setProgressTickMs((current) => Math.min(homeSnapshot.durationMs, current + 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [homeSnapshot]);
+
+  useEffect(() => {
+    if (!isAuthenticated || linkFlow || busy || !shouldBackgroundRefresh(homeSnapshot)) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      if (backgroundRefreshInFlight.current) {
+        return;
+      }
+
+      backgroundRefreshInFlight.current = true;
+      void refreshSilentlyWithClient(client).finally(() => {
+        backgroundRefreshInFlight.current = false;
+      });
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [busy, client, homeSnapshot, isAuthenticated, linkFlow]);
 
   useEffect(() => {
     if (!linkFlow) {
@@ -580,7 +645,15 @@ function App(props: AppDeps) {
     );
   }
 
-  return <AuthenticatedHome snapshot={homeSnapshot} width={stdoutWidth} busy={busy} statusLine={statusLine} linkFlow={linkFlow} />;
+  return (
+    <AuthenticatedHome
+      snapshot={displayedHomeSnapshot}
+      width={stdoutWidth}
+      busy={busy}
+      statusLine={statusLine}
+      linkFlow={linkFlow}
+    />
+  );
 }
 
 export async function runTerminalApp(deps: AppDeps): Promise<void> {

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ApiClient } from "@clipify/api-client";
 import { ApiClientError } from "@clipify/api-client";
-import { computeHomeSnapshot } from "../src/home-state";
+import { applyProgressTick, computeHomeSnapshot, shouldBackgroundRefresh, shouldTickPlayback } from "../src/home-state";
 
 function createClient(overrides: Partial<ApiClient>): ApiClient {
   return {
@@ -88,5 +88,35 @@ describe("home state", () => {
     expect(snapshot.spotify).toBe("linked");
     expect(snapshot.recent).toHaveLength(0);
     expect(snapshot.recentUnavailable).toBeTrue();
+  });
+
+  test("ticks progress while playing and clamps at duration", async () => {
+    const snapshot = await computeHomeSnapshot(createClient({}));
+    const ticked = applyProgressTick(snapshot, 5_000);
+    const clamped = applyProgressTick(snapshot, 300_000);
+
+    expect(ticked.progressMs).toBe(125000);
+    expect(clamped.progressMs).toBe(snapshot.durationMs);
+  });
+
+  test("does not tick progress while paused or idle", async () => {
+    const playing = await computeHomeSnapshot(createClient({}));
+    const paused = { ...playing, playbackState: "paused" as const };
+    const idle = { ...playing, playbackState: "idle" as const };
+
+    expect(applyProgressTick(paused, 5000).progressMs).toBe(paused.progressMs);
+    expect(applyProgressTick(idle, 5000).progressMs).toBe(idle.progressMs);
+    expect(shouldTickPlayback(paused)).toBeFalse();
+    expect(shouldTickPlayback(idle)).toBeFalse();
+  });
+
+  test("only background refreshes while linked and playing", async () => {
+    const playing = await computeHomeSnapshot(createClient({}));
+    const paused = { ...playing, playbackState: "paused" as const };
+    const unlinked = { ...playing, spotify: "not-linked" as const };
+
+    expect(shouldBackgroundRefresh(playing)).toBeTrue();
+    expect(shouldBackgroundRefresh(paused)).toBeFalse();
+    expect(shouldBackgroundRefresh(unlinked)).toBeFalse();
   });
 });

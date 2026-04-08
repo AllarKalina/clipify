@@ -52,6 +52,25 @@ export function createPendingAuthenticatedHomeSnapshot(): HomeSnapshot {
   };
 }
 
+export function shouldTickPlayback(snapshot: HomeSnapshot): boolean {
+  return snapshot.backend === "connected" && snapshot.spotify === "linked" && snapshot.playbackState === "playing" && snapshot.durationMs > 0;
+}
+
+export function applyProgressTick(snapshot: HomeSnapshot, elapsedMs: number): HomeSnapshot {
+  if (!shouldTickPlayback(snapshot) || elapsedMs <= 0) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    progressMs: Math.min(snapshot.durationMs, snapshot.progressMs + elapsedMs)
+  };
+}
+
+export function shouldBackgroundRefresh(snapshot: HomeSnapshot): boolean {
+  return snapshot.backend === "connected" && snapshot.spotify === "linked" && snapshot.playbackState === "playing";
+}
+
 function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
