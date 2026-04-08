@@ -70,10 +70,28 @@ function createSpotifyMock() {
     },
     async getCurrentlyPlaying() {
       return {
+        playbackState: "playing",
         isPlaying: true,
         trackName: "Dreams",
         artistName: "Fleetwood Mac",
-        albumName: "Rumours"
+        albumName: "Rumours",
+        albumImageUrl: "https://i.scdn.co/image/rumours",
+        deviceName: "MacBook Pro",
+        deviceType: "Computer",
+        progressMs: 120000,
+        durationMs: 257000
+      };
+    },
+    async getRecentlyPlayed() {
+      return {
+        items: [
+          {
+            trackName: "Dreams",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            playedAt: "2026-04-08T10:00:00.000Z"
+          }
+        ]
       };
     },
     async getProfile() {
@@ -278,8 +296,31 @@ describe("app routes", () => {
     const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/currently-playing"));
     expect(response.status).toBe(200);
 
-    const body = (await response.json()) as { trackName: string };
+    const body = (await response.json()) as { trackName: string; deviceName: string };
     expect(body.trackName).toBe("Dreams");
+    expect(body.deviceName).toBe("MacBook Pro");
+  });
+
+  test("returns spotify recently played when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/recently-played"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { items: Array<{ trackName: string }> };
+    expect(body.items[0]?.trackName).toBe("Dreams");
   });
 
   test("returns spotify profile when session is present", async () => {

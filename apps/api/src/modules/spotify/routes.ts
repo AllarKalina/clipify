@@ -147,10 +147,39 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
           summary: "Get currently playing Spotify item for authenticated user"
         },
         response: t.Object({
+          playbackState: t.Union([t.Literal("playing"), t.Literal("paused"), t.Literal("idle")]),
           isPlaying: t.Boolean(),
           trackName: t.String(),
           artistName: t.String(),
-          albumName: t.String()
+          albumName: t.String(),
+          albumImageUrl: t.String(),
+          deviceName: t.String(),
+          deviceType: t.String(),
+          progressMs: t.Number(),
+          durationMs: t.Number()
+        })
+      }
+    )
+    .get(
+      "/me/player/recently-played",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        return spotify.getRecentlyPlayed(session.user.id);
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Get recent Spotify playback history for authenticated user"
+        },
+        response: t.Object({
+          items: t.Array(
+            t.Object({
+              trackName: t.String(),
+              artistName: t.String(),
+              albumName: t.String(),
+              playedAt: t.String()
+            })
+          )
         })
       }
     );

@@ -220,10 +220,19 @@ describe("spotify service", () => {
         currentlyPlayingCalls += 1;
         return Response.json({
           is_playing: true,
+          progress_ms: 120000,
+          device: {
+            name: "MacBook Pro",
+            type: "Computer"
+          },
           item: {
             name: "Dreams",
+            duration_ms: 257000,
             artists: [{ name: "Fleetwood Mac" }],
-            album: { name: "Rumours" }
+            album: {
+              name: "Rumours",
+              images: [{ url: "https://i.scdn.co/image/rumours" }]
+            }
           }
         });
       }
@@ -232,9 +241,67 @@ describe("spotify service", () => {
     const result = await service.getCurrentlyPlaying("user-1");
 
     expect(result.trackName).toBe("Dreams");
+    expect(result.playbackState).toBe("playing");
+    expect(result.deviceName).toBe("MacBook Pro");
+    expect(result.durationMs).toBe(257000);
     expect(currentlyPlayingCalls).toBe(1);
     expect(bootstrapStore.connections[0]?.accessToken.startsWith("v1.")).toBeTrue();
     expect(bootstrapStore.connections[0]?.refreshToken.startsWith("v1.")).toBeTrue();
+  });
+
+  test("returns recently played items for linked user", async () => {
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({
+          items: [
+            {
+              played_at: "2026-04-08T10:00:00.000Z",
+              track: {
+                name: "Dreams",
+                artists: [{ name: "Fleetwood Mac" }],
+                album: { name: "Rumours" }
+              }
+            }
+          ]
+        });
+      }
+    });
+
+    const result = await service.getRecentlyPlayed("user-1");
+
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.trackName).toBe("Dreams");
+    expect(result.items[0]?.playedAt).toBe("2026-04-08T10:00:00.000Z");
   });
 
   test("returns spotify profile for linked user", async () => {

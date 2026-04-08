@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { PublicExampleResponse, PublicVersionResponse } from "../../../apps/api/src/modules/public/contracts";
 import type {
+  SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
-  SpotifyProfileResponse,
   SpotifyCurrentlyPlayingResponse,
+  SpotifyProfileResponse,
+  SpotifyRecentlyPlayedResponse,
   SpotifyStartAuthResponse
-} from "../../../apps/api/src/modules/spotify/service";
+} from "../../../apps/api/src/modules/spotify/contracts";
 
 const versionSchema = z.object({
   appName: z.string(),
@@ -43,10 +45,27 @@ const spotifyAuthStatusSchema = z.object({
 });
 
 const spotifyCurrentlyPlayingSchema = z.object({
+  playbackState: z.enum(["playing", "paused", "idle"]),
   isPlaying: z.boolean(),
   trackName: z.string(),
   artistName: z.string(),
-  albumName: z.string()
+  albumName: z.string(),
+  albumImageUrl: z.string(),
+  deviceName: z.string(),
+  deviceType: z.string(),
+  progressMs: z.number(),
+  durationMs: z.number()
+});
+
+const spotifyRecentlyPlayedSchema = z.object({
+  items: z.array(
+    z.object({
+      trackName: z.string(),
+      artistName: z.string(),
+      albumName: z.string(),
+      playedAt: z.string()
+    })
+  )
 });
 
 const spotifyProfileSchema = z.object({
@@ -86,9 +105,10 @@ export type ApiClient = {
   signOut: () => Promise<void>;
   startSpotifyAuthorization: () => Promise<SpotifyStartAuthResponse>;
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
-  getSpotifyAuthorizationStatus: () => Promise<{ linked: boolean }>;
+  getSpotifyAuthorizationStatus: () => Promise<SpotifyAuthStatusResponse>;
   getSpotifyProfile: () => Promise<SpotifyProfileResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
+  getSpotifyRecentlyPlayed: () => Promise<SpotifyRecentlyPlayedResponse>;
 };
 
 type FetchLike = (input: URL | Request | string, init?: RequestInit) => Promise<Response>;
@@ -285,6 +305,12 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     getSpotifyCurrentlyPlaying() {
       return request("/v1/spotify/me/player/currently-playing", {
         schema: spotifyCurrentlyPlayingSchema,
+        requireSession: true
+      });
+    },
+    getSpotifyRecentlyPlayed() {
+      return request("/v1/spotify/me/player/recently-played", {
+        schema: spotifyRecentlyPlayedSchema,
         requireSession: true
       });
     }

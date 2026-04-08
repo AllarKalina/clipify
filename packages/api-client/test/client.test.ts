@@ -218,6 +218,61 @@ describe("api client", () => {
     expect(cookieHeader).toBe("better-auth.session_token=abc123");
   });
 
+  test("returns rich currently playing payload for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          playbackState: "playing",
+          isPlaying: true,
+          trackName: "Dreams",
+          artistName: "Fleetwood Mac",
+          albumName: "Rumours",
+          albumImageUrl: "https://i.scdn.co/image/rumours",
+          deviceName: "MacBook Pro",
+          deviceType: "Computer",
+          progressMs: 120000,
+          durationMs: 257000
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyCurrentlyPlaying();
+
+    expect(payload.playbackState).toBe("playing");
+    expect(payload.deviceName).toBe("MacBook Pro");
+    expect(requestedUrl).toContain("/v1/spotify/me/player/currently-playing");
+  });
+
+  test("returns recently played items for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          items: [
+            {
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              playedAt: "2026-04-08T10:00:00.000Z"
+            }
+          ]
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyRecentlyPlayed();
+
+    expect(payload.items[0]?.trackName).toBe("Dreams");
+    expect(requestedUrl).toContain("/v1/spotify/me/player/recently-played");
+  });
+
   test("throws when protected route is called without session cookie", async () => {
     const client = createApiClient({
       baseUrl: "https://example.com",

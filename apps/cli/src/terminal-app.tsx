@@ -1,4 +1,4 @@
-import type { ApiClient, ApiClientError } from "@clipify/api-client";
+import type { ApiClient } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
 import {
@@ -19,6 +19,13 @@ import {
 } from "./auth-form";
 import { getAuthLauncherSelection, submitAuthForm } from "./auth-controller";
 import { clearSessionCookie, saveSessionCookie } from "./config";
+import { AuthenticatedHome } from "./home";
+import {
+  computeHomeSnapshot,
+  createInitialHomeSnapshot,
+  createPendingAuthenticatedHomeSnapshot,
+  type HomeSnapshot
+} from "./home-state";
 
 type AppDeps = {
   apiBaseUrl: string;
@@ -27,41 +34,11 @@ type AppDeps = {
   makeClient: (sessionCookie?: string) => ApiClient;
 };
 
-type Snapshot = {
-  backend: "connected" | "offline";
-  user: string;
-  spotify: "linked" | "not-linked" | "unknown";
-  spotifyProfile: string;
-  nowPlaying: string;
-  failureReason?: "unauthorized";
-  error?: string;
-};
-
 type UnauthMenuAction = "signup" | "login" | "exit";
 
 type LinkFlow = {
   authorizeUrl: string;
 };
-
-function createInitialSnapshot(): Snapshot {
-  return {
-    backend: "offline",
-    user: "loading",
-    spotify: "unknown",
-    spotifyProfile: "loading",
-    nowPlaying: "loading"
-  };
-}
-
-function createPendingAuthenticatedSnapshot(): Snapshot {
-  return {
-    backend: "connected",
-    user: "loading",
-    spotify: "unknown",
-    spotifyProfile: "loading",
-    nowPlaying: "loading"
-  };
-}
 
 const spotifyAccentMark = [" ▄██▄ ", "██  ██", " ████ ", "  ▀▀  "] as const;
 const controlsPanelWidth = 46;
@@ -217,7 +194,7 @@ function ControlsPanel({
   statusLine: string;
   authForm: AuthFormState | null;
 }) {
-  const showStatus = busy || statusLine !== "Loading...";
+  const showStatus = busy || Boolean(statusLine);
 
   if (authForm) {
     return <AuthPanel authForm={authForm} busy={busy} />;
@@ -260,18 +237,6 @@ function ControlsPanel({
   );
 }
 
-function maskCookie(cookie?: string): string {
-  if (!cookie) {
-    return "none";
-  }
-
-  if (cookie.length < 12) {
-    return "********";
-  }
-
-  return `${cookie.slice(0, 6)}...${cookie.slice(-4)}`;
-}
-
 function openUrl(url: string): boolean {
   const platform = process.platform;
   const command =
@@ -298,82 +263,6 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function statusColor(state: Snapshot["backend"] | Snapshot["spotify"]): "green" | "yellow" | "red" {
-  if (state === "connected" || state === "linked") {
-    return "green";
-  }
-
-  if (state === "not-linked") {
-    return "yellow";
-  }
-
-  return "red";
-}
-
-async function computeSnapshot(client: ApiClient): Promise<Snapshot> {
-  try {
-    const me = await client.getMe();
-    let spotifyProfileLine = "n/a";
-
-    try {
-      const spotifyProfile = await client.getSpotifyProfile();
-      spotifyProfileLine = `${spotifyProfile.displayName} (${spotifyProfile.id})`;
-    } catch (error) {
-      const apiError = error as ApiClientError;
-      if (!(apiError?.name === "ApiClientError" && apiError.status === 409)) {
-        throw error;
-      }
-
-      return {
-        backend: "connected",
-        user: `${me.user.name} <${me.user.email}>`,
-        spotify: "not-linked",
-        spotifyProfile: "n/a",
-        nowPlaying: "n/a"
-      };
-    }
-
-    try {
-      const current = await client.getSpotifyCurrentlyPlaying();
-      const nowPlaying = current.isPlaying
-        ? `${current.trackName} - ${current.artistName} (${current.albumName})`
-        : "idle";
-
-      return {
-        backend: "connected",
-        user: `${me.user.name} <${me.user.email}>`,
-        spotify: "linked",
-        spotifyProfile: spotifyProfileLine,
-        nowPlaying
-      };
-    } catch (error) {
-      const apiError = error as ApiClientError;
-      if (apiError?.name === "ApiClientError" && apiError.status === 409) {
-        return {
-          backend: "connected",
-          user: `${me.user.name} <${me.user.email}>`,
-          spotify: "not-linked",
-          spotifyProfile: "n/a",
-          nowPlaying: "n/a"
-        };
-      }
-
-      throw error;
-    }
-  } catch (error) {
-    const apiError = error as ApiClientError;
-    return {
-      backend: "offline",
-      user: "unknown",
-      spotify: "unknown",
-      spotifyProfile: "unknown",
-      nowPlaying: "unknown",
-      failureReason: apiError?.name === "ApiClientError" && apiError.status === 401 ? "unauthorized" : undefined,
-      error: toMessage(error)
-    };
-  }
-}
-
 function App(props: AppDeps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -382,27 +271,27 @@ function App(props: AppDeps) {
   const showSubtitle = stdoutHeight >= 20;
   const helperLine = stdoutHeight >= 22 ? "[↑↓] navigate  [enter] select" : "[↑↓] move  [enter] select";
   const [sessionCookie, setSessionCookie] = useState<string | undefined>(props.initialSessionCookie);
-  const [snapshot, setSnapshot] = useState<Snapshot>(() =>
-    props.initialSessionCookie ? createPendingAuthenticatedSnapshot() : createInitialSnapshot()
+  const [homeSnapshot, setHomeSnapshot] = useState<HomeSnapshot>(() =>
+    props.initialSessionCookie ? createPendingAuthenticatedHomeSnapshot() : createInitialHomeSnapshot()
   );
   const [authForm, setAuthForm] = useState<AuthFormState | null>(null);
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
-  const [statusLine, setStatusLine] = useState(() => (props.initialSessionCookie ? "Restoring session..." : "Loading..."));
+  const [statusLine, setStatusLine] = useState(() => (props.initialSessionCookie ? "Restoring session..." : ""));
   const [busy, setBusy] = useState(false);
   const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("signup");
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = Boolean(sessionCookie);
 
-  const refreshWithClient = async (targetClient: ApiClient): Promise<Snapshot> => {
+  const refreshWithClient = async (targetClient: ApiClient): Promise<HomeSnapshot> => {
     setBusy(true);
-    const next = await computeSnapshot(targetClient);
+    const next = await computeHomeSnapshot(targetClient);
     if (next.failureReason === "unauthorized") {
       completeLocalLogout("Session expired");
       return next;
     }
 
-    setSnapshot(next);
+    setHomeSnapshot(next);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? "Refreshed" : "Backend unreachable or unauthorized");
     return next;
@@ -413,7 +302,7 @@ function App(props: AppDeps) {
   const completeLocalLogout = (successLine: string) => {
     clearSessionCookie();
     setSessionCookie(undefined);
-    setSnapshot(createInitialSnapshot());
+    setHomeSnapshot(createInitialHomeSnapshot());
     setAuthForm(null);
     setLinkFlow(null);
     setBusy(false);
@@ -443,13 +332,13 @@ function App(props: AppDeps) {
 
   const completeAuthenticatedOnboarding = async (nextSessionCookie: string, successLine: string) => {
     setSessionCookie(nextSessionCookie);
-    setSnapshot(createPendingAuthenticatedSnapshot());
+    setHomeSnapshot(createPendingAuthenticatedHomeSnapshot());
     setAuthForm(null);
     setStatusLine(successLine);
 
     const authenticatedClient = props.makeClient(nextSessionCookie);
-    const refreshedSnapshot = await refreshWithClient(authenticatedClient);
-    if (refreshedSnapshot.spotify === "not-linked") {
+    const refreshedHomeSnapshot = await refreshWithClient(authenticatedClient);
+    if (refreshedHomeSnapshot.spotify === "not-linked") {
       setStatusLine(`${successLine}. Starting Spotify link...`);
       await startSpotifyLinkFlow(authenticatedClient);
     }
@@ -501,7 +390,7 @@ function App(props: AppDeps) {
     if (authForm) {
       if (key.escape) {
         setAuthForm(null);
-        setStatusLine("Loading...");
+        setStatusLine("");
         setUnauthSelection(getAuthLauncherSelection(authForm.mode));
         return;
       }
@@ -540,7 +429,7 @@ function App(props: AppDeps) {
 
         if (authForm.focus.action === "back") {
           setAuthForm(null);
-          setStatusLine("Loading...");
+          setStatusLine("");
           setUnauthSelection(getAuthLauncherSelection(authForm.mode));
           return;
         }
@@ -595,7 +484,7 @@ function App(props: AppDeps) {
         }
 
         setAuthForm(createAuthFormState(unauthSelection === "signup" ? "signup" : "login"));
-        setStatusLine("Loading...");
+        setStatusLine("");
         return;
       }
 
@@ -618,24 +507,6 @@ function App(props: AppDeps) {
 
     if (input === "r") {
       void refresh();
-      return;
-    }
-
-    if (input === "n") {
-      setBusy(true);
-      void (async () => {
-        try {
-          const current = await client.getSpotifyCurrentlyPlaying();
-          const line = current.isPlaying
-            ? `${current.trackName} - ${current.artistName} (${current.albumName})`
-            : "idle";
-          setStatusLine(`Now playing: ${line}`);
-        } catch (error) {
-          setStatusLine(`Now-playing failed: ${toMessage(error)}`);
-        } finally {
-          setBusy(false);
-        }
-      })();
       return;
     }
 
@@ -668,46 +539,7 @@ function App(props: AppDeps) {
     );
   }
 
-  return (
-    <Box flexDirection="column" padding={1}>
-      <Text color="green">clipify terminal app</Text>
-      <Box marginTop={1} flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
-        <Text>
-          backend: <Text color={statusColor(snapshot.backend)}>{snapshot.backend}</Text>
-        </Text>
-        <Text>
-          spotify: <Text color={statusColor(snapshot.spotify)}>{snapshot.spotify}</Text>
-        </Text>
-        <Text>user: {snapshot.user}</Text>
-        <Text>spotify profile: {snapshot.spotifyProfile}</Text>
-        <Text>now playing: {snapshot.nowPlaying}</Text>
-        {snapshot.error ? <Text color="red">error: {snapshot.error}</Text> : null}
-      </Box>
-
-      {!linkFlow && snapshot.spotify === "not-linked" ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="yellow" padding={1}>
-          <Text color="yellow">Spotify not linked</Text>
-          <Text dimColor>Press [l] to start browser auth. Terminal will auto-detect completion.</Text>
-        </Box>
-      ) : null}
-
-      {linkFlow ? (
-        <Box marginTop={1} flexDirection="column" borderStyle="single" borderColor="green" padding={1}>
-          <Text color="green">Linking Spotify</Text>
-          <Text dimColor>1) Open this URL in browser and approve access:</Text>
-          <Text>{linkFlow.authorizeUrl}</Text>
-          <Text dimColor>2) Keep this terminal open. Waiting for callback...</Text>
-        </Box>
-      ) : null}
-
-      <Box marginTop={1} flexDirection="column">
-        <Text dimColor>keys: [l] link  [n] now playing  [o] logout  [r] refresh  [q] quit</Text>
-        <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
-        <Text dimColor>api: {props.apiBaseUrl}</Text>
-        <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
-      </Box>
-    </Box>
-  );
+  return <AuthenticatedHome snapshot={homeSnapshot} width={stdoutWidth} busy={busy} statusLine={statusLine} linkFlow={linkFlow} />;
 }
 
 export async function runTerminalApp(deps: AppDeps): Promise<void> {

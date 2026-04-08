@@ -70,8 +70,9 @@ Known-good TUI paths:
 2. Arrow keys move selection.
 3. `Esc` cancels inline auth input and returns to the menu.
 4. Sign up flow transitions to authenticated dashboard.
-5. If Spotify is already linked, login lands directly on dashboard.
-6. If Spotify is not linked, signup/login starts the browser-based Spotify link flow.
+5. If Spotify is already linked, login lands on the authenticated home screen with now-playing, recent, and account panels.
+6. If Spotify is not linked, signup/login lands on the home screen link state and can start browser-based Spotify auth with `l`.
+7. Authenticated home supports `r` refresh, `o` logout, and `q` quit.
 
 ## Known Local Pitfalls
 

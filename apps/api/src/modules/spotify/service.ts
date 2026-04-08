@@ -2,36 +2,15 @@ import { eq } from "drizzle-orm";
 import type { AppEnv } from "../../config/env";
 import type { AppDb } from "../../db/client";
 import { spotifyConnections, spotifyOauthStates } from "../../db/schema";
+import type {
+  SpotifyAuthStatusResponse,
+  SpotifyCallbackResponse,
+  SpotifyCurrentlyPlayingResponse,
+  SpotifyProfileResponse,
+  SpotifyRecentlyPlayedResponse,
+  SpotifyStartAuthResponse
+} from "./contracts";
 import { createStateHash, createTokenCipher } from "./crypto";
-
-export type SpotifyStartAuthResponse = {
-  authorizeUrl: string;
-  state: string;
-};
-
-export type SpotifyCallbackResponse = {
-  linked: boolean;
-  userId: string;
-};
-
-export type SpotifyAuthStatusResponse = {
-  linked: boolean;
-};
-
-export type SpotifyCurrentlyPlayingResponse = {
-  isPlaying: boolean;
-  trackName: string;
-  artistName: string;
-  albumName: string;
-};
-
-export type SpotifyProfileResponse = {
-  id: string;
-  displayName: string;
-  email: string;
-  profileUrl: string;
-  imageUrl: string;
-};
 
 export type SpotifyService = {
   isConfigured: () => boolean;
@@ -40,6 +19,7 @@ export type SpotifyService = {
   completeAuthorizationFromCallback: (code: string, state: string) => Promise<SpotifyCallbackResponse>;
   getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
+  getRecentlyPlayed: (userId: string) => Promise<SpotifyRecentlyPlayedResponse>;
   getProfile: (userId: string) => Promise<SpotifyProfileResponse>;
 };
 
@@ -90,7 +70,7 @@ type SpotifyTokenResponse = {
   refresh_token?: string;
 };
 
-const REQUIRED_SCOPE = "user-read-private user-read-email user-read-playback-state";
+const REQUIRED_SCOPE = "user-read-private user-read-email user-read-playback-state user-read-recently-played";
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
   if (!expiresAt) {
@@ -439,10 +419,16 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
 
       if (response.status === 204) {
         return {
+          playbackState: "idle",
           isPlaying: false,
           trackName: "",
           artistName: "",
-          albumName: ""
+          albumName: "",
+          albumImageUrl: "",
+          deviceName: "",
+          deviceType: "",
+          progressMs: 0,
+          durationMs: 0
         };
       }
 
@@ -455,14 +441,79 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
 
       const payload = (await response.json()) as {
         is_playing?: boolean;
-        item?: { name?: string; artists?: { name?: string }[]; album?: { name?: string } };
+        progress_ms?: number;
+        device?: { name?: string; type?: string };
+        item?: {
+          name?: string;
+          duration_ms?: number;
+          artists?: { name?: string }[];
+          album?: { name?: string; images?: { url?: string }[] };
+        };
       };
 
       return {
+        playbackState: payload.item?.name ? (payload.is_playing ? "playing" : "paused") : "idle",
         isPlaying: Boolean(payload.is_playing),
         trackName: payload.item?.name ?? "",
         artistName: payload.item?.artists?.[0]?.name ?? "",
-        albumName: payload.item?.album?.name ?? ""
+        albumName: payload.item?.album?.name ?? "",
+        albumImageUrl: payload.item?.album?.images?.[0]?.url ?? "",
+        deviceName: payload.device?.name ?? "",
+        deviceType: payload.device?.type ?? "",
+        progressMs: payload.progress_ms ?? 0,
+        durationMs: payload.item?.duration_ms ?? 0
+      };
+    },
+    async getRecentlyPlayed(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const cipher = requireCipher();
+      let connection = await ensureConnection(userId);
+      let accessToken = cipher.decrypt(connection.accessToken);
+
+      let response = await fetchImpl("https://api.spotify.com/v1/me/player/recently-played?limit=5", {
+        headers: {
+          authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      if (response.status === 401) {
+        connection = await refreshAccessToken(connection);
+        accessToken = cipher.decrypt(connection.accessToken);
+        response = await fetchImpl("https://api.spotify.com/v1/me/player/recently-played?limit=5", {
+          headers: {
+            authorization: `Bearer ${accessToken}`
+          }
+        });
+      }
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify recently-played request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        items?: Array<{
+          played_at?: string;
+          track?: {
+            name?: string;
+            artists?: { name?: string }[];
+            album?: { name?: string };
+          };
+        }>;
+      };
+
+      return {
+        items: (payload.items ?? []).map((item) => ({
+          trackName: item.track?.name ?? "",
+          artistName: item.track?.artists?.[0]?.name ?? "",
+          albumName: item.track?.album?.name ?? "",
+          playedAt: item.played_at ?? ""
+        }))
       };
     },
     async getProfile(userId: string) {
