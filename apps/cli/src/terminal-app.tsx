@@ -1,6 +1,24 @@
 import type { ApiClient, ApiClientError } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useState } from "react";
+import {
+  advanceAuthForm,
+  createAuthFormState,
+  focusFirstInvalidField,
+  getAuthActionOrder,
+  getAuthFieldLabel,
+  getAuthFieldOrder,
+  getAuthTitle,
+  getAuthToggleLabel,
+  getFocusedValue,
+  moveAuthFocus,
+  switchAuthMode,
+  updateFocusedValue,
+  validateAuthForm,
+  type AuthActionKey,
+  type AuthFieldKey,
+  type AuthFormState
+} from "./auth-form";
 import { clearSessionCookie, saveSessionCookie } from "./config";
 
 type AppDeps = {
@@ -19,7 +37,6 @@ type Snapshot = {
   error?: string;
 };
 
-type InputMode = "none" | "signup-name" | "signup-email" | "signup-password" | "login-email" | "login-password";
 type UnauthMenuAction = "signup" | "login" | "exit";
 
 type LinkFlow = {
@@ -36,59 +53,9 @@ function createInitialSnapshot(): Snapshot {
   };
 }
 
-function buildSpotifyLogo(width: number, height: number): string[] {
-  const rows: string[] = [];
-  const xRadius = (width - 1) / 2;
-  const yRadius = (height - 1) / 2;
-
-  const inArc = (
-    x: number,
-    y: number,
-    baseY: number,
-    curve: number,
-    tilt: number,
-    thickness: number,
-    minX: number,
-    maxX: number
-  ): boolean => {
-    if (x < minX || x > maxX) {
-      return false;
-    }
-
-    const curveY = baseY + curve * x * x + tilt * x;
-    return Math.abs(y - curveY) <= thickness;
-  };
-
-  for (let y = 0; y < height; y += 1) {
-    let row = "";
-    const ny = (y - yRadius) / yRadius;
-
-    for (let x = 0; x < width; x += 1) {
-      const nx = (x - xRadius) / xRadius;
-      const insideCircle = nx * nx + ny * ny <= 1;
-
-      if (!insideCircle) {
-        row += ".";
-        continue;
-      }
-
-      const isWave =
-        inArc(nx, ny, -0.40, 0.22, 0.06, 0.05, -0.72, 0.66) ||
-        inArc(nx, ny, -0.20, 0.20, 0.05, 0.05, -0.66, 0.57) ||
-        inArc(nx, ny, -0.01, 0.18, 0.04, 0.05, -0.58, 0.49);
-
-      row += isWave ? "b" : "g";
-    }
-
-    rows.push(row);
-  }
-
-  return rows;
-}
-
-const spotifyHeroLogo = buildSpotifyLogo(55, 17);
-const spotifyHeroWidth = spotifyHeroLogo[0]?.length ?? 39;
-const unauthMenuWidth = 20;
+const spotifyAccentMark = [" ▄██▄ ", "██  ██", " ████ ", "  ▀▀  "] as const;
+const controlsPanelWidth = 46;
+const brandBlockWidth = 38;
 const unauthMenuActions: UnauthMenuAction[] = ["signup", "login", "exit"];
 
 function centerText(content: string, width: number): string {
@@ -103,8 +70,8 @@ function centerText(content: string, width: number): string {
 }
 
 function formatUnauthMenuItem(label: string, selected: boolean): string {
-  const content = selected ? `> ${label} <` : `  ${label}  `;
-  return centerText(content, unauthMenuWidth);
+  const prefix = selected ? "›" : " ";
+  return `${prefix} ${label}`.padEnd(controlsPanelWidth - 4, " ");
 }
 
 function nextUnauthSelection(current: UnauthMenuAction, direction: "up" | "down"): UnauthMenuAction {
@@ -120,36 +87,155 @@ function nextUnauthSelection(current: UnauthMenuAction, direction: "up" | "down"
   return unauthMenuActions[(index + 1) % unauthMenuActions.length] ?? "signup";
 }
 
-function SpotifyHero() {
+function BrandPanel({ showSubtitle = true }: { showSubtitle?: boolean }) {
   return (
-    <Box flexDirection="column" alignItems="center">
-      {spotifyHeroLogo.map((line, lineIndex) => (
-        <Text key={`spotify-logo-line-${lineIndex}`}>
-          {Array.from(line).map((pixel, pixelIndex) => {
-            if (pixel === "g") {
-              return (
-                <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`} backgroundColor="green">
-                  {" "}
-                </Text>
-              );
-            }
-
-            if (pixel === "b") {
-              return (
-                <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`} backgroundColor="black">
-                  {" "}
-                </Text>
-              );
-            }
-
-            return <Text key={`spotify-logo-pixel-${lineIndex}-${pixelIndex}`}>{" "}</Text>;
-          })}
+    <Box flexDirection="column" alignItems="center" width={brandBlockWidth}>
+      {spotifyAccentMark.map((line, lineIndex) => (
+        <Text key={`brand-logo-line-${lineIndex}`} color={lineIndex < 2 ? "green" : "cyan"}>
+          {centerText(line, brandBlockWidth)}
         </Text>
       ))}
-      <Box width={spotifyHeroWidth} flexDirection="column" alignItems="center">
-        <Text color="green" bold>
-          C L I p i f y
+      <Text color="green" bold>
+        {centerText("CLIPIFY", brandBlockWidth)}
+      </Text>
+      {showSubtitle ? <Text color="white">{centerText("spotify control for terminal", brandBlockWidth)}</Text> : null}
+    </Box>
+  );
+}
+
+function maskFieldValue(field: AuthFieldKey, value: string, active: boolean): string {
+  if (field === "password") {
+    return value ? "*".repeat(value.length) : active ? "••••••••" : "";
+  }
+
+  return value;
+}
+
+function formatAuthFieldRow(field: AuthFieldKey, value: string, active: boolean): string {
+  const label = `${getAuthFieldLabel(field)}:`;
+  const renderedValue = maskFieldValue(field, value, active) || (active ? "…" : "");
+  return `${label.padEnd(11, " ")}${renderedValue}`;
+}
+
+function formatAuthActionRow(label: string): string {
+  return `> ${label}`.padEnd(controlsPanelWidth - 4, " ");
+}
+
+function renderFocusableRow(content: string, selected: boolean) {
+  return (
+    <Text color={selected ? "black" : "white"} backgroundColor={selected ? "cyan" : undefined} bold={selected}>
+      {content}
+    </Text>
+  );
+}
+
+function AuthPanel({
+  authForm,
+  busy
+}: {
+  authForm: AuthFormState;
+  busy: boolean;
+}) {
+  const fields = getAuthFieldOrder(authForm.mode);
+  const actions = getAuthActionOrder(authForm.mode);
+  const helperText = authForm.focus.kind === "field" ? "[↑↓] move  [esc] back  [enter] next" : "[↑↓] move  [esc] back  [enter] choose";
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} paddingY={0} width={controlsPanelWidth}>
+      <Text color="cyan" bold>
+        {getAuthTitle(authForm.mode)}
+      </Text>
+      <Text color="white">{authForm.mode === "signup" ? "Set up your local session" : "Resume your local session"}</Text>
+      <Box marginTop={1} flexDirection="column">
+        <Text color="cyan">Fields</Text>
+        {fields.map((field) => {
+          const selected = authForm.focus.kind === "field" && authForm.focus.field === field;
+          return (
+            <React.Fragment key={field}>
+              {renderFocusableRow(formatAuthFieldRow(field, authForm.values[field], selected), selected)}
+            </React.Fragment>
+          );
+        })}
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color="cyan">Actions</Text>
+        {actions.map((action) => {
+          const selected = authForm.focus.kind === "action" && authForm.focus.action === action;
+          let label = "Submit";
+
+          if (action === "switch-mode") {
+            label = getAuthToggleLabel(authForm.mode);
+          }
+
+          if (action === "back") {
+            label = "Back";
+          }
+
+          return <React.Fragment key={action}>{renderFocusableRow(formatAuthActionRow(label), selected)}</React.Fragment>;
+        })}
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color="white">{helperText}</Text>
+        {busy ? <Text color="yellow">submitting...</Text> : null}
+        {!busy && authForm.message ? (
+          <Text color={authForm.message.tone === "error" ? "red" : "cyan"}>{authForm.message.text}</Text>
+        ) : null}
+      </Box>
+    </Box>
+  );
+}
+
+function ControlsPanel({
+  unauthSelection,
+  helperLine,
+  busy,
+  statusLine,
+  authForm
+}: {
+  unauthSelection: UnauthMenuAction;
+  helperLine: string;
+  busy: boolean;
+  statusLine: string;
+  authForm: AuthFormState | null;
+}) {
+  const showStatus = busy || statusLine !== "Loading...";
+
+  if (authForm) {
+    return <AuthPanel authForm={authForm} busy={busy} />;
+  }
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} paddingY={0} width={controlsPanelWidth}>
+      <Text color="cyan" bold>
+        Launcher
+      </Text>
+      <Text color="white">Session entry</Text>
+      <Box marginTop={1} flexDirection="column">
+        <Text
+          color={unauthSelection === "signup" ? "black" : "white"}
+          backgroundColor={unauthSelection === "signup" ? "cyan" : undefined}
+          bold={unauthSelection === "signup"}
+        >
+          {formatUnauthMenuItem("Create account", unauthSelection === "signup")}
         </Text>
+        <Text
+          color={unauthSelection === "login" ? "black" : "white"}
+          backgroundColor={unauthSelection === "login" ? "cyan" : undefined}
+          bold={unauthSelection === "login"}
+        >
+          {formatUnauthMenuItem("Log in", unauthSelection === "login")}
+        </Text>
+        <Text
+          color={unauthSelection === "exit" ? "black" : "white"}
+          backgroundColor={unauthSelection === "exit" ? "cyan" : undefined}
+          bold={unauthSelection === "exit"}
+        >
+          {formatUnauthMenuItem("Quit", unauthSelection === "exit")}
+        </Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column">
+        <Text color="white">{helperLine}</Text>
+        {showStatus ? <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : `status: ${statusLine}`}</Text> : null}
       </Box>
     </Box>
   );
@@ -272,12 +358,11 @@ function App(props: AppDeps) {
   const { stdout } = useStdout();
   const stdoutWidth = stdout.columns ?? 120;
   const stdoutHeight = stdout.rows ?? 40;
+  const showSubtitle = stdoutHeight >= 20;
+  const helperLine = stdoutHeight >= 22 ? "[↑↓] navigate  [enter] select" : "[↑↓] move  [enter] select";
   const [sessionCookie, setSessionCookie] = useState<string | undefined>(props.initialSessionCookie);
   const [snapshot, setSnapshot] = useState<Snapshot>(createInitialSnapshot);
-  const [inputMode, setInputMode] = useState<InputMode>("none");
-  const [inputValue, setInputValue] = useState("");
-  const [pendingEmail, setPendingEmail] = useState("");
-  const [pendingName, setPendingName] = useState("");
+  const [authForm, setAuthForm] = useState<AuthFormState | null>(null);
   const [linkFlow, setLinkFlow] = useState<LinkFlow | null>(null);
   const [statusLine, setStatusLine] = useState("Loading...");
   const [busy, setBusy] = useState(false);
@@ -301,10 +386,7 @@ function App(props: AppDeps) {
     clearSessionCookie();
     setSessionCookie(undefined);
     setSnapshot(createInitialSnapshot());
-    setInputMode("none");
-    setInputValue("");
-    setPendingEmail("");
-    setPendingName("");
+    setAuthForm(null);
     setLinkFlow(null);
     setBusy(false);
     setUnauthSelection("login");
@@ -334,10 +416,7 @@ function App(props: AppDeps) {
   const completeAuthenticatedOnboarding = async (nextSessionCookie: string, successLine: string) => {
     saveSessionCookie(nextSessionCookie);
     setSessionCookie(nextSessionCookie);
-    setInputMode("none");
-    setInputValue("");
-    setPendingEmail("");
-    setPendingName("");
+    setAuthForm(null);
     setStatusLine(successLine);
 
     const authenticatedClient = props.makeClient(nextSessionCookie);
@@ -391,127 +470,97 @@ function App(props: AppDeps) {
       return;
     }
 
-    if (inputMode !== "none") {
-      if (key.return) {
-        const value = inputValue.trim();
-
-        if (inputMode === "login-email") {
-          if (!value) {
-            setStatusLine("Email is required");
-            return;
-          }
-
-          setPendingEmail(value);
-          setInputMode("login-password");
-          setInputValue("");
-          setStatusLine("Enter password");
-          return;
-        }
-
-        if (inputMode === "signup-name") {
-          if (!value) {
-            setStatusLine("Name is required");
-            return;
-          }
-
-          setPendingName(value);
-          setInputMode("signup-email");
-          setInputValue("");
-          setStatusLine("Enter email");
-          return;
-        }
-
-        if (inputMode === "signup-email") {
-          if (!value) {
-            setStatusLine("Email is required");
-            return;
-          }
-
-          setPendingEmail(value);
-          setInputMode("signup-password");
-          setInputValue("");
-          setStatusLine("Enter password");
-          return;
-        }
-
-        if (inputMode === "signup-password") {
-          if (!pendingName || !pendingEmail || !value) {
-            setStatusLine("Name, email, and password are required");
-            return;
-          }
-
-          setBusy(true);
-          void (async () => {
-            try {
-              const result = await client.signUpWithEmailPassword({
-                name: pendingName,
-                email: pendingEmail,
-                password: value
-              });
-              await completeAuthenticatedOnboarding(result.sessionCookie, "Sign up successful");
-            } catch (error) {
-              setStatusLine(`Sign up failed: ${toMessage(error)}`);
-              setInputMode("none");
-              setInputValue("");
-              setPendingEmail("");
-              setPendingName("");
-            } finally {
-              setBusy(false);
-            }
-          })();
-          return;
-        }
-
-        if (inputMode === "login-password") {
-          if (!pendingEmail || !value) {
-            setStatusLine("Email and password are required");
-            return;
-          }
-
-          setBusy(true);
-          void (async () => {
-            try {
-              const result = await client.signInWithEmailPassword({
-                email: pendingEmail,
-                password: value
-              });
-              await completeAuthenticatedOnboarding(result.sessionCookie, "Login successful");
-            } catch (error) {
-              setStatusLine(`Login failed: ${toMessage(error)}`);
-              setInputMode("none");
-              setInputValue("");
-              setPendingEmail("");
-              setPendingName("");
-            } finally {
-              setBusy(false);
-            }
-          })();
-          return;
-        }
-
-        setInputMode("none");
-        setInputValue("");
-        setPendingEmail("");
-        setPendingName("");
+    if (authForm) {
+      if (key.escape) {
+        setAuthForm(null);
+        setStatusLine("Loading...");
+        setUnauthSelection(authForm.mode === "signup" ? "signup" : "login");
         return;
       }
 
-      if (key.escape) {
-        setInputMode("none");
-        setInputValue("");
-        setPendingEmail("");
-        setPendingName("");
-        setStatusLine("Canceled");
+      if (key.upArrow) {
+        setAuthForm((current) => (current ? moveAuthFocus(current, "up") : current));
+        return;
+      }
+
+      if (key.downArrow) {
+        setAuthForm((current) => (current ? moveAuthFocus(current, "down") : current));
         return;
       }
 
       if (key.backspace || key.delete) {
-        setInputValue((current) => current.slice(0, -1));
+        setAuthForm((current) => {
+          if (!current || current.focus.kind !== "field") {
+            return current;
+          }
+
+          return updateFocusedValue(current, getFocusedValue(current).slice(0, -1));
+        });
         return;
       }
 
-      if (input) {
-        setInputValue((current) => current + input);
+      if (key.return) {
+        if (authForm.focus.kind === "field") {
+          setAuthForm((current) => (current ? advanceAuthForm(current) : current));
+          return;
+        }
+
+        if (authForm.focus.action === "switch-mode") {
+          setAuthForm((current) => (current ? switchAuthMode(current) : current));
+          return;
+        }
+
+        if (authForm.focus.action === "back") {
+          setAuthForm(null);
+          setStatusLine("Loading...");
+          setUnauthSelection(authForm.mode === "signup" ? "signup" : "login");
+          return;
+        }
+
+        const validationError = validateAuthForm(authForm);
+        if (validationError) {
+          setAuthForm((current) => (current ? focusFirstInvalidField(current) : current));
+          return;
+        }
+
+        setBusy(true);
+        void (async () => {
+          try {
+            if (authForm.mode === "signup") {
+              const result = await client.signUpWithEmailPassword({
+                name: authForm.values.name.trim(),
+                email: authForm.values.email.trim(),
+                password: authForm.values.password
+              });
+              await completeAuthenticatedOnboarding(result.sessionCookie, "Sign up successful");
+            } else {
+              const result = await client.signInWithEmailPassword({
+                email: authForm.values.email.trim(),
+                password: authForm.values.password
+              });
+              await completeAuthenticatedOnboarding(result.sessionCookie, "Login successful");
+            }
+          } catch (error) {
+            setAuthForm((current) =>
+              current
+                ? {
+                    ...current,
+                    message: {
+                      tone: "error",
+                      text: authForm.mode === "signup" ? `Sign up failed: ${toMessage(error)}` : `Login failed: ${toMessage(error)}`
+                    }
+                  }
+                : current
+            );
+          } finally {
+            setBusy(false);
+          }
+        })();
+        return;
+      }
+
+      if (input && !key.tab && authForm.focus.kind === "field") {
+        setAuthForm((current) => (current ? updateFocusedValue(current, `${getFocusedValue(current)}${input}`) : current));
       }
       return;
     }
@@ -538,11 +587,8 @@ function App(props: AppDeps) {
           return;
         }
 
-        setInputMode(unauthSelection === "signup" ? "signup-name" : "login-email");
-        setInputValue("");
-        setPendingEmail("");
-        setPendingName("");
-        setStatusLine(unauthSelection === "signup" ? "Enter name" : "Enter email");
+        setAuthForm(createAuthFormState(unauthSelection === "signup" ? "signup" : "login"));
+        setStatusLine("Loading...");
         return;
       }
 
@@ -601,25 +647,16 @@ function App(props: AppDeps) {
   if (!isAuthenticated) {
     return (
       <Box flexDirection="column" width={stdoutWidth} height={stdoutHeight} justifyContent="center" alignItems="center">
-        <SpotifyHero />
-        <Box marginTop={1} flexDirection="column" alignItems="center">
-          <Text color={unauthSelection === "signup" ? "green" : "gray"}>
-            {formatUnauthMenuItem("Sign up", unauthSelection === "signup")}
-          </Text>
-          <Text color={unauthSelection === "login" ? "green" : "gray"}>
-            {formatUnauthMenuItem("Login", unauthSelection === "login")}
-          </Text>
-          <Text color={unauthSelection === "exit" ? "green" : "gray"}>
-            {formatUnauthMenuItem("Exit", unauthSelection === "exit")}
-          </Text>
-          <Text dimColor>Use up/down arrows and Enter</Text>
+        <BrandPanel showSubtitle={showSubtitle} />
+        <Box marginTop={1}>
+          <ControlsPanel
+            unauthSelection={unauthSelection}
+            helperLine={helperLine}
+            busy={busy}
+            statusLine={statusLine}
+            authForm={authForm}
+          />
         </Box>
-        {inputMode === "signup-name" ? <Text color="yellow">name&gt; {inputValue}</Text> : null}
-        {inputMode === "signup-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
-        {inputMode === "signup-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
-        {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
-        {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
-        <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
       </Box>
     );
   }
@@ -658,8 +695,6 @@ function App(props: AppDeps) {
 
       <Box marginTop={1} flexDirection="column">
         <Text dimColor>keys: [l] link  [n] now playing  [o] logout  [r] refresh  [q] quit</Text>
-        {inputMode === "login-email" ? <Text color="yellow">email&gt; {inputValue}</Text> : null}
-        {inputMode === "login-password" ? <Text color="yellow">password&gt; {"*".repeat(inputValue.length)}</Text> : null}
         <Text color={busy ? "yellow" : "cyan"}>{busy ? "working..." : statusLine}</Text>
         <Text dimColor>api: {props.apiBaseUrl}</Text>
         <Text dimColor>cookie: {maskCookie(sessionCookie)}</Text>
