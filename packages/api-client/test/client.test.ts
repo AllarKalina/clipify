@@ -232,8 +232,14 @@ describe("api client", () => {
           artistName: "Fleetwood Mac",
           albumName: "Rumours",
           albumImageUrl: "https://i.scdn.co/image/rumours",
+          deviceId: "device-1",
           deviceName: "MacBook Pro",
           deviceType: "Computer",
+          deviceStatus: "active",
+          supportsVolume: true,
+          volumePercent: 60,
+          shuffleEnabled: false,
+          repeatMode: "off",
           progressMs: 120000,
           durationMs: 257000
         });
@@ -257,9 +263,12 @@ describe("api client", () => {
         return Response.json({
           items: [
             {
+              id: "track-1",
               trackName: "Dreams",
               artistName: "Fleetwood Mac",
               albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000,
               playedAt: "2026-04-08T10:00:00.000Z"
             }
           ]
@@ -273,7 +282,132 @@ describe("api client", () => {
     expect(requestedUrl).toContain("/v1/spotify/me/player/recently-played");
   });
 
-  test("posts spotify playback actions for authenticated user", async () => {
+  test("returns browse and search payloads for authenticated user", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        const value = String(url);
+
+        if (value.includes("/browse/featured-playlists")) {
+          return Response.json({
+            items: [
+              {
+                id: "playlist-1",
+                name: "Focus Flow",
+                description: "Deep work picks",
+                imageUrl: "",
+                ownerName: "Spotify",
+                trackCount: 20,
+                uri: "spotify:playlist:1"
+              }
+            ]
+          });
+        }
+
+        if (value.includes("/me/playlists")) {
+          return Response.json({
+            items: [
+              {
+                id: "playlist-2",
+                name: "Daily Mix",
+                description: "",
+                imageUrl: "",
+                ownerName: "Allar",
+                trackCount: 12,
+                uri: "spotify:playlist:2"
+              }
+            ]
+          });
+        }
+
+        if (value.includes("/me/tracks")) {
+          return Response.json({
+            items: [
+              {
+                id: "track-2",
+                trackName: "Duvet",
+                artistName: "boa",
+                albumName: "Twilight",
+                uri: "spotify:track:2",
+                durationMs: 201000
+              }
+            ]
+          });
+        }
+
+        if (value.includes("/search")) {
+          return Response.json({
+            tracks: [],
+            playlists: [],
+            albums: [
+              {
+                id: "album-1",
+                name: "Rumours",
+                artistName: "Fleetwood Mac",
+                imageUrl: "",
+                uri: "spotify:album:1"
+              }
+            ],
+            artists: []
+          });
+        }
+
+        return Response.json({
+          id: "playlist-2",
+          name: "Daily Mix",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 12,
+          uri: "spotify:playlist:2",
+          tracks: []
+        });
+      }
+    });
+
+    const [featured, playlists, savedTracks, search, playlist] = await Promise.all([
+      client.getSpotifyFeaturedPlaylists(),
+      client.getSpotifyPlaylists(),
+      client.getSpotifySavedTracks(),
+      client.searchSpotify("rumours"),
+      client.getSpotifyPlaylist("playlist-2")
+    ]);
+
+    expect(featured.items[0]?.name).toBe("Focus Flow");
+    expect(playlists.items[0]?.name).toBe("Daily Mix");
+    expect(savedTracks.items[0]?.trackName).toBe("Duvet");
+    expect(search.albums[0]?.name).toBe("Rumours");
+    expect(playlist.name).toBe("Daily Mix");
+  });
+
+  test("returns queue items for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          items: [
+            {
+              trackName: "Go Your Own Way",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              type: "track"
+            }
+          ]
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyQueue();
+
+    expect(payload.items[0]?.trackName).toBe("Go Your Own Way");
+    expect(requestedUrl).toContain("/v1/spotify/me/player/queue");
+  });
+
+  test("posts spotify playback and mode actions for authenticated user", async () => {
     const calls: Array<{ url: string; method: string; cookie: string }> = [];
     const client = createApiClient({
       baseUrl: "https://example.com",
@@ -284,6 +418,14 @@ describe("api client", () => {
           method: init?.method ?? "GET",
           cookie: new Headers(init?.headers).get("cookie") ?? ""
         });
+
+        if (String(url).includes("/play-track")) {
+          return Response.json({ ok: true, action: "play-track" });
+        }
+
+        if (String(url).includes("/play-context")) {
+          return Response.json({ ok: true, action: "play-context" });
+        }
 
         if (String(url).endsWith("/play")) {
           return Response.json({ ok: true, action: "play" });
@@ -297,6 +439,18 @@ describe("api client", () => {
           return Response.json({ ok: true, action: "next" });
         }
 
+        if (String(url).includes("/shuffle")) {
+          return Response.json({ ok: true, action: "shuffle" });
+        }
+
+        if (String(url).includes("/repeat")) {
+          return Response.json({ ok: true, action: "repeat" });
+        }
+
+        if (String(url).includes("/volume")) {
+          return Response.json({ ok: true, action: "volume" });
+        }
+
         return Response.json({ ok: true, action: "previous" });
       }
     });
@@ -305,14 +459,24 @@ describe("api client", () => {
     await client.pauseSpotify();
     await client.nextSpotify();
     await client.previousSpotify();
+    await client.playSpotifyTrack("spotify:track:1");
+    await client.playSpotifyContext("spotify:album:1");
+    await client.setSpotifyShuffle(true);
+    await client.setSpotifyRepeatMode("context");
+    await client.setSpotifyVolume(70);
 
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(9);
     expect(calls[0]?.method).toBe("POST");
     expect(calls[0]?.cookie).toBe("better-auth.session_token=abc123");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/pause");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/next");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/previous");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play-track?uri=spotify%3Atrack%3A1");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play-context?contextUri=spotify%3Aalbum%3A1");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/shuffle?state=true");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/repeat?state=context");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/volume?volumePercent=70");
   });
 
   test("throws when protected route is called without session cookie", async () => {

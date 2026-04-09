@@ -1,11 +1,19 @@
 import { z } from "zod";
 import type { PublicExampleResponse, PublicVersionResponse } from "../../../apps/api/src/modules/public/contracts";
 import type {
+  SpotifyAlbumSummary,
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
   SpotifyPlayerActionResponse,
   SpotifyCurrentlyPlayingResponse,
+  SpotifyFeaturedPlaylistsResponse,
+  SpotifyPlaylistDetailResponse,
+  SpotifyPlaylistsResponse,
   SpotifyProfileResponse,
+  SpotifySavedTracksResponse,
+  SpotifySearchResponse,
+  SpotifyQueueResponse,
+  SpotifyRepeatMode,
   SpotifyRecentlyPlayedResponse,
   SpotifyStartAuthResponse
 } from "../../../apps/api/src/modules/spotify/contracts";
@@ -52,18 +60,95 @@ const spotifyCurrentlyPlayingSchema = z.object({
   artistName: z.string(),
   albumName: z.string(),
   albumImageUrl: z.string(),
+  deviceId: z.string(),
   deviceName: z.string(),
   deviceType: z.string(),
+  deviceStatus: z.enum(["active", "available", "restricted", "none"]),
+  supportsVolume: z.boolean(),
+  volumePercent: z.number(),
+  shuffleEnabled: z.boolean(),
+  repeatMode: z.enum(["off", "track", "context"]),
   progressMs: z.number(),
   durationMs: z.number()
 });
 
-const spotifyRecentlyPlayedSchema = z.object({
+const spotifyQueueSchema = z.object({
   items: z.array(
     z.object({
       trackName: z.string(),
       artistName: z.string(),
       albumName: z.string(),
+      type: z.enum(["track", "episode", "unknown"])
+    })
+  )
+});
+
+const spotifyTrackSummarySchema = z.object({
+  id: z.string(),
+  trackName: z.string(),
+  artistName: z.string(),
+  albumName: z.string(),
+  uri: z.string(),
+  durationMs: z.number()
+});
+
+const spotifyPlaylistSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  imageUrl: z.string(),
+  ownerName: z.string(),
+  trackCount: z.number(),
+  uri: z.string()
+});
+
+const spotifyAlbumSummarySchema: z.ZodType<SpotifyAlbumSummary> = z.object({
+  id: z.string(),
+  name: z.string(),
+  artistName: z.string(),
+  imageUrl: z.string(),
+  uri: z.string()
+});
+
+const spotifyArtistSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  imageUrl: z.string(),
+  uri: z.string()
+});
+
+const spotifyPlaylistsSchema = z.object({
+  items: z.array(spotifyPlaylistSummarySchema)
+});
+
+const spotifySavedTracksSchema = z.object({
+  items: z.array(spotifyTrackSummarySchema)
+});
+
+const spotifyPlaylistDetailSchema = spotifyPlaylistSummarySchema.extend({
+  tracks: z.array(spotifyTrackSummarySchema)
+});
+
+const spotifyFeaturedPlaylistsSchema = z.object({
+  items: z.array(spotifyPlaylistSummarySchema)
+});
+
+const spotifySearchSchema = z.object({
+  tracks: z.array(spotifyTrackSummarySchema),
+  playlists: z.array(spotifyPlaylistSummarySchema),
+  albums: z.array(spotifyAlbumSummarySchema),
+  artists: z.array(spotifyArtistSummarySchema)
+});
+
+const spotifyRecentlyPlayedSchema = z.object({
+  items: z.array(
+    z.object({
+      id: z.string(),
+      trackName: z.string(),
+      artistName: z.string(),
+      albumName: z.string(),
+      uri: z.string(),
+      durationMs: z.number(),
       playedAt: z.string()
     })
   )
@@ -79,7 +164,7 @@ const spotifyProfileSchema = z.object({
 
 const spotifyPlayerActionSchema = z.object({
   ok: z.literal(true),
-  action: z.enum(["play", "pause", "next", "previous"])
+  action: z.enum(["play", "pause", "next", "previous", "shuffle", "repeat", "volume", "play-track", "play-context"])
 });
 
 export class ApiClientError extends Error {
@@ -113,12 +198,23 @@ export type ApiClient = {
   completeSpotifyAuthorization: (input: { code: string; state: string }) => Promise<SpotifyCallbackResponse>;
   getSpotifyAuthorizationStatus: () => Promise<SpotifyAuthStatusResponse>;
   getSpotifyProfile: () => Promise<SpotifyProfileResponse>;
+  getSpotifyFeaturedPlaylists: () => Promise<SpotifyFeaturedPlaylistsResponse>;
+  getSpotifyPlaylists: () => Promise<SpotifyPlaylistsResponse>;
+  getSpotifySavedTracks: () => Promise<SpotifySavedTracksResponse>;
+  getSpotifyPlaylist: (playlistId: string) => Promise<SpotifyPlaylistDetailResponse>;
+  searchSpotify: (query: string) => Promise<SpotifySearchResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
+  getSpotifyQueue: () => Promise<SpotifyQueueResponse>;
   getSpotifyRecentlyPlayed: () => Promise<SpotifyRecentlyPlayedResponse>;
   playSpotify: () => Promise<SpotifyPlayerActionResponse>;
   pauseSpotify: () => Promise<SpotifyPlayerActionResponse>;
   nextSpotify: () => Promise<SpotifyPlayerActionResponse>;
   previousSpotify: () => Promise<SpotifyPlayerActionResponse>;
+  playSpotifyTrack: (uri: string) => Promise<SpotifyPlayerActionResponse>;
+  playSpotifyContext: (contextUri: string) => Promise<SpotifyPlayerActionResponse>;
+  setSpotifyShuffle: (enabled: boolean) => Promise<SpotifyPlayerActionResponse>;
+  setSpotifyRepeatMode: (mode: SpotifyRepeatMode) => Promise<SpotifyPlayerActionResponse>;
+  setSpotifyVolume: (volumePercent: number) => Promise<SpotifyPlayerActionResponse>;
 };
 
 type FetchLike = (input: URL | Request | string, init?: RequestInit) => Promise<Response>;
@@ -204,6 +300,87 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
 
     const response = await fetchImpl(url, {
       method: "POST",
+      headers
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
+    }
+
+    const body = await response.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiClientError(`Invalid response for ${path}`, 502, path);
+    }
+
+    return parsed.data;
+  }
+
+  async function postWithQuery<T>(
+    path: string,
+    schema: z.ZodType<T>,
+    query?: Record<string, string>,
+    requireSession = true
+  ): Promise<T> {
+    const url = new URL(path, baseUrl);
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, value);
+      }
+    }
+
+    const headers = new Headers({
+      accept: "application/json"
+    });
+
+    if (requireSession) {
+      if (!sessionCookie) {
+        throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
+      }
+      headers.set("cookie", sessionCookie);
+    }
+
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
+    }
+
+    const body = await response.json();
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      throw new ApiClientError(`Invalid response for ${path}`, 502, path);
+    }
+
+    return parsed.data;
+  }
+
+  async function put<T>(path: string, schema: z.ZodType<T>, query?: Record<string, string>, requireSession = true): Promise<T> {
+    const url = new URL(path, baseUrl);
+    if (query) {
+      for (const [key, value] of Object.entries(query)) {
+        url.searchParams.set(key, value);
+      }
+    }
+
+    const headers = new Headers({
+      accept: "application/json"
+    });
+
+    if (requireSession) {
+      if (!sessionCookie) {
+        throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
+      }
+      headers.set("cookie", sessionCookie);
+    }
+
+    const response = await fetchImpl(url, {
+      method: "PUT",
       headers
     });
 
@@ -344,9 +521,46 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
+    getSpotifyFeaturedPlaylists() {
+      return request("/v1/spotify/browse/featured-playlists", {
+        schema: spotifyFeaturedPlaylistsSchema,
+        requireSession: true
+      });
+    },
+    getSpotifyPlaylists() {
+      return request("/v1/spotify/me/playlists", {
+        schema: spotifyPlaylistsSchema,
+        requireSession: true
+      });
+    },
+    getSpotifySavedTracks() {
+      return request("/v1/spotify/me/tracks", {
+        schema: spotifySavedTracksSchema,
+        requireSession: true
+      });
+    },
+    getSpotifyPlaylist(playlistId) {
+      return request(`/v1/spotify/playlists/${playlistId}`, {
+        schema: spotifyPlaylistDetailSchema,
+        requireSession: true
+      });
+    },
+    searchSpotify(query) {
+      return request("/v1/spotify/search", {
+        schema: spotifySearchSchema,
+        query: { q: query },
+        requireSession: true
+      });
+    },
     getSpotifyCurrentlyPlaying() {
       return request("/v1/spotify/me/player/currently-playing", {
         schema: spotifyCurrentlyPlayingSchema,
+        requireSession: true
+      });
+    },
+    getSpotifyQueue() {
+      return request("/v1/spotify/me/player/queue", {
+        schema: spotifyQueueSchema,
         requireSession: true
       });
     },
@@ -367,6 +581,27 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     },
     previousSpotify() {
       return post("/v1/spotify/me/player/previous", spotifyPlayerActionSchema);
+    },
+    playSpotifyTrack(uri) {
+      return postWithQuery("/v1/spotify/me/player/play-track", spotifyPlayerActionSchema, { uri });
+    },
+    playSpotifyContext(contextUri) {
+      return postWithQuery("/v1/spotify/me/player/play-context", spotifyPlayerActionSchema, { contextUri });
+    },
+    setSpotifyShuffle(enabled) {
+      return put("/v1/spotify/me/player/shuffle", spotifyPlayerActionSchema, {
+        state: enabled ? "true" : "false"
+      });
+    },
+    setSpotifyRepeatMode(mode) {
+      return put("/v1/spotify/me/player/repeat", spotifyPlayerActionSchema, {
+        state: mode
+      });
+    },
+    setSpotifyVolume(volumePercent) {
+      return put("/v1/spotify/me/player/volume", spotifyPlayerActionSchema, {
+        volumePercent: String(volumePercent)
+      });
     }
   };
 }

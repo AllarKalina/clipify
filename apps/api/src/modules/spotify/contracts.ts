@@ -1,4 +1,6 @@
 export type SpotifyPlaybackState = "playing" | "paused" | "idle";
+export type SpotifyDeviceStatus = "active" | "available" | "restricted" | "none";
+export type SpotifyRepeatMode = "off" | "track" | "context";
 
 export type SpotifyStartAuthResponse = {
   authorizeUrl: string;
@@ -21,16 +23,100 @@ export type SpotifyCurrentlyPlayingResponse = {
   artistName: string;
   albumName: string;
   albumImageUrl: string;
+  deviceId: string;
   deviceName: string;
   deviceType: string;
+  deviceStatus: SpotifyDeviceStatus;
+  supportsVolume: boolean;
+  volumePercent: number;
+  shuffleEnabled: boolean;
+  repeatMode: SpotifyRepeatMode;
   progressMs: number;
   durationMs: number;
 };
 
-export type SpotifyRecentlyPlayedItem = {
+export type SpotifyQueueItem = {
   trackName: string;
   artistName: string;
   albumName: string;
+  type: "track" | "episode" | "unknown";
+};
+
+export type SpotifyQueueResponse = {
+  items: SpotifyQueueItem[];
+};
+
+export type SpotifyTrackSummary = {
+  id: string;
+  trackName: string;
+  artistName: string;
+  albumName: string;
+  uri: string;
+  durationMs: number;
+};
+
+export type SpotifyPlaylistSummary = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  ownerName: string;
+  trackCount: number;
+  uri: string;
+};
+
+export type SpotifyAlbumSummary = {
+  id: string;
+  name: string;
+  artistName: string;
+  imageUrl: string;
+  uri: string;
+};
+
+export type SpotifyArtistSummary = {
+  id: string;
+  name: string;
+  imageUrl: string;
+  uri: string;
+};
+
+export type SpotifyPlaylistsResponse = {
+  items: SpotifyPlaylistSummary[];
+};
+
+export type SpotifySavedTracksResponse = {
+  items: SpotifyTrackSummary[];
+};
+
+export type SpotifyPlaylistDetailResponse = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  ownerName: string;
+  trackCount: number;
+  uri: string;
+  tracks: SpotifyTrackSummary[];
+};
+
+export type SpotifyFeaturedPlaylistsResponse = {
+  items: SpotifyPlaylistSummary[];
+};
+
+export type SpotifySearchResponse = {
+  tracks: SpotifyTrackSummary[];
+  playlists: SpotifyPlaylistSummary[];
+  albums: SpotifyAlbumSummary[];
+  artists: SpotifyArtistSummary[];
+};
+
+export type SpotifyRecentlyPlayedItem = {
+  id: string;
+  trackName: string;
+  artistName: string;
+  albumName: string;
+  uri: string;
+  durationMs: number;
   playedAt: string;
 };
 
@@ -39,10 +125,17 @@ export type SpotifyRecentlyPlayedResponse = {
 };
 
 export type SpotifyPlayerAction = "play" | "pause" | "next" | "previous";
+export type SpotifyPlayerModeAction =
+  | SpotifyPlayerAction
+  | "shuffle"
+  | "repeat"
+  | "volume"
+  | "play-track"
+  | "play-context";
 
 export type SpotifyPlayerActionResponse = {
   ok: true;
-  action: SpotifyPlayerAction;
+  action: SpotifyPlayerModeAction;
 };
 
 export type SpotifyProfileResponse = {

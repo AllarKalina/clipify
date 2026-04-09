@@ -36,19 +36,6 @@ function formatProgress(progressMs: number, durationMs: number): string {
   return `${"█".repeat(filled)}${"─".repeat(width - filled)}  ${formatDuration(progressMs)} / ${formatDuration(durationMs)}`;
 }
 
-function formatRecentTime(playedAt: string): string {
-  if (!playedAt) {
-    return "--:--";
-  }
-
-  const date = new Date(playedAt);
-  if (Number.isNaN(date.getTime())) {
-    return "--:--";
-  }
-
-  return date.toISOString().slice(11, 16);
-}
-
 function clipLine(value: string, width: number): string {
   if (value.length <= width) {
     return value.padEnd(width, " ");
@@ -67,6 +54,27 @@ function statusColor(state: HomeSnapshot["spotify"] | HomeSnapshot["backend"]): 
   }
 
   return "red";
+}
+
+function formatRepeatMode(mode: HomeSnapshot["repeatMode"]): string {
+  return mode === "context" ? "all" : mode;
+}
+
+function describeDevice(snapshot: HomeSnapshot): string {
+  const suffix = snapshot.deviceType ? ` (${snapshot.deviceType.toLowerCase()})` : "";
+  if (snapshot.deviceStatus === "active" && snapshot.deviceName) {
+    return `${snapshot.deviceName}${suffix}`;
+  }
+
+  if (snapshot.deviceStatus === "available" && snapshot.deviceName) {
+    return `${snapshot.deviceName}${suffix} ready`;
+  }
+
+  if (snapshot.deviceStatus === "restricted" && snapshot.deviceName) {
+    return `${snapshot.deviceName}${suffix} restricted`;
+  }
+
+  return "No active device";
 }
 
 function HeroPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number }) {
@@ -98,8 +106,16 @@ function HeroPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number 
           Now playing
         </Text>
         <Text color="white">{clipLine("No active playback right now.", contentWidth)}</Text>
-        <Text color="white">{clipLine("Start something in Spotify, then press [r] to refresh.", contentWidth)}</Text>
+        <Text color="white">
+          {clipLine(
+            snapshot.deviceStatus === "available"
+              ? `Device ready: ${describeDevice(snapshot)}. Start playback in Spotify to attach here.`
+              : "Start something in Spotify, then press [r] to refresh.",
+            contentWidth
+          )}
+        </Text>
         <Text color="white">{clipLine("[space] play/pause  [,] previous  [.] next", contentWidth)}</Text>
+        <Text color="white">{clipLine("[s] shuffle  [t] repeat  [-/=] volume", contentWidth)}</Text>
       </Box>
     );
   }
@@ -117,31 +133,42 @@ function HeroPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number 
       </Text>
       <Text color="white">{clipLine(`${snapshot.artistName} · ${snapshot.albumName}`, contentWidth)}</Text>
       <Text color="white">{clipLine(formatProgress(snapshot.progressMs, snapshot.durationMs), contentWidth)}</Text>
+      <Text color="white">
+        {clipLine(
+          `shuffle ${snapshot.shuffleEnabled ? "on" : "off"}  repeat ${formatRepeatMode(snapshot.repeatMode)}  volume ${snapshot.volumePercent}%`,
+          contentWidth
+        )}
+      </Text>
       <Text color="white">{clipLine("[space] play/pause  [,] previous  [.] next", contentWidth)}</Text>
+      <Text color="white">{clipLine("[s] shuffle  [t] repeat  [-/=] volume", contentWidth)}</Text>
     </Box>
   );
 }
 
-function RecentPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number }) {
+function QueuePanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number }) {
   const contentWidth = width - 4;
-  const items = snapshot.recent.slice(0, 4);
+  const items = snapshot.queue.slice(0, 4);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
       <Text color="cyan" bold>
-        Recent
+        Up next
       </Text>
-      {snapshot.recentUnavailable ? (
+      {snapshot.queueStatus === "relink-required" ? (
         <>
-          <Text color="white">{clipLine("Recent history needs a fresh Spotify re-link.", contentWidth)}</Text>
+          <Text color="white">{clipLine("Queue needs a fresh Spotify re-link.", contentWidth)}</Text>
           <Text color="white">{clipLine("Press [l] to refresh scopes.", contentWidth)}</Text>
         </>
+      ) : snapshot.queueStatus === "no-device" ? (
+        <Text color="white">{clipLine("Queue appears when Spotify has an active device.", contentWidth)}</Text>
+      ) : snapshot.queueStatus === "unavailable" ? (
+        <Text color="white">{clipLine("Queue is temporarily unavailable.", contentWidth)}</Text>
       ) : items.length === 0 ? (
-        <Text color="white">{clipLine("No recent history yet.", contentWidth)}</Text>
+        <Text color="white">{clipLine("Nothing queued after the current track.", contentWidth)}</Text>
       ) : (
         items.map((item, index) => (
-          <Text key={`recent-${index}`} color="white">
-            {clipLine(`${formatRecentTime(item.playedAt)}  ${item.trackName} · ${item.artistName}`, contentWidth)}
+          <Text key={`queue-${index}`} color="white">
+            {clipLine(`${index + 1}. ${item.trackName} · ${item.artistName}`, contentWidth)}
           </Text>
         ))
       )}
@@ -151,19 +178,19 @@ function RecentPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: numbe
 
 function AccountPanel({ snapshot, width }: { snapshot: HomeSnapshot; width: number }) {
   const contentWidth = width - 4;
-  const deviceLabel = snapshot.deviceName
-    ? `${snapshot.deviceName}${snapshot.deviceType ? ` (${snapshot.deviceType.toLowerCase()})` : ""}`
-    : "No active device";
+  const deviceLabel = describeDevice(snapshot);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
       <Text color="cyan" bold>
-        Account
+        Player
       </Text>
       <Text color="white">{clipLine(snapshot.userName, contentWidth)}</Text>
       <Text color="white">{clipLine(snapshot.userEmail, contentWidth)}</Text>
       <Text color="white">{clipLine(`spotify: ${snapshot.spotifyDisplayName}`, contentWidth)}</Text>
       <Text color="white">{clipLine(`device: ${deviceLabel}`, contentWidth)}</Text>
+      <Text color="white">{clipLine(`shuffle: ${snapshot.shuffleEnabled ? "on" : "off"}  repeat: ${formatRepeatMode(snapshot.repeatMode)}`, contentWidth)}</Text>
+      <Text color="white">{clipLine(`volume: ${snapshot.supportsVolume ? `${snapshot.volumePercent}%` : "not available"}`, contentWidth)}</Text>
     </Box>
   );
 }
@@ -189,9 +216,7 @@ export function AuthenticatedHome({ snapshot, width, busy, statusLine, linkFlow 
         </Text>
         <Text color="white">
           {clipLine(
-            snapshot.deviceName
-              ? `device ${snapshot.deviceName}${snapshot.deviceType ? ` · ${snapshot.deviceType.toLowerCase()}` : ""}`
-              : "device waiting for playback context",
+            snapshot.deviceStatus === "none" ? "device waiting for playback context" : `device ${describeDevice(snapshot)}`,
             panelWidth - 4
           )}
         </Text>
@@ -210,19 +235,20 @@ export function AuthenticatedHome({ snapshot, width, busy, statusLine, linkFlow 
       ) : null}
       {twoColumn ? (
         <Box marginTop={1} gap={1}>
-          <RecentPanel snapshot={snapshot} width={secondaryWidth} />
+          <QueuePanel snapshot={snapshot} width={secondaryWidth} />
           <AccountPanel snapshot={snapshot} width={secondaryWidth} />
         </Box>
       ) : (
         <Box marginTop={1} flexDirection="column">
-          <RecentPanel snapshot={snapshot} width={secondaryWidth} />
+          <QueuePanel snapshot={snapshot} width={secondaryWidth} />
           <Box marginTop={1}>
             <AccountPanel snapshot={snapshot} width={secondaryWidth} />
           </Box>
         </Box>
       )}
       <Box marginTop={1} flexDirection="column" width={panelWidth}>
-        <Text color="white">[space] play/pause  [,] previous  [.] next  [r] refresh  [l] link  [o] logout  [q] quit</Text>
+        <Text color="white">[space] play/pause  [,] previous  [.] next  [s] shuffle  [t] repeat  [-/=] volume  [r] refresh</Text>
+        <Text color="white">[l] link  [o] logout  [q] quit</Text>
         <Text color={busy ? "yellow" : snapshot.error ? "red" : "cyan"}>{busy ? "working..." : statusLine}</Text>
       </Box>
     </Box>

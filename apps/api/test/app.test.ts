@@ -76,22 +76,107 @@ function createSpotifyMock() {
         artistName: "Fleetwood Mac",
         albumName: "Rumours",
         albumImageUrl: "https://i.scdn.co/image/rumours",
+        deviceId: "device-1",
         deviceName: "MacBook Pro",
         deviceType: "Computer",
+        deviceStatus: "active",
+        supportsVolume: true,
+        volumePercent: 60,
+        shuffleEnabled: false,
+        repeatMode: "off",
         progressMs: 120000,
         durationMs: 257000
+      };
+    },
+    async getQueue() {
+      return {
+        items: [
+          {
+            trackName: "Go Your Own Way",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            type: "track" as const
+          }
+        ]
       };
     },
     async getRecentlyPlayed() {
       return {
         items: [
           {
+            id: "track-1",
             trackName: "Dreams",
             artistName: "Fleetwood Mac",
             albumName: "Rumours",
+            uri: "spotify:track:1",
+            durationMs: 257000,
             playedAt: "2026-04-08T10:00:00.000Z"
           }
         ]
+      };
+    },
+    async getFeaturedPlaylists() {
+      return {
+        items: [
+          {
+            id: "playlist-1",
+            name: "Focus Flow",
+            description: "Deep work picks",
+            imageUrl: "",
+            ownerName: "Spotify",
+            trackCount: 20,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      };
+    },
+    async getPlaylists() {
+      return {
+        items: [
+          {
+            id: "playlist-2",
+            name: "Daily Mix",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 12,
+            uri: "spotify:playlist:2"
+          }
+        ]
+      };
+    },
+    async getSavedTracks() {
+      return {
+        items: [
+          {
+            id: "track-2",
+            trackName: "Duvet",
+            artistName: "boa",
+            albumName: "Twilight",
+            uri: "spotify:track:2",
+            durationMs: 201000
+          }
+        ]
+      };
+    },
+    async getPlaylist() {
+      return {
+        id: "playlist-2",
+        name: "Daily Mix",
+        description: "",
+        imageUrl: "",
+        ownerName: "Allar",
+        trackCount: 12,
+        uri: "spotify:playlist:2",
+        tracks: []
+      };
+    },
+    async search() {
+      return {
+        tracks: [],
+        playlists: [],
+        albums: [],
+        artists: []
       };
     },
     async play() {
@@ -105,6 +190,21 @@ function createSpotifyMock() {
     },
     async previous() {
       return { ok: true, action: "previous" as const };
+    },
+    async playTrack() {
+      return { ok: true, action: "play-track" as const };
+    },
+    async playContext() {
+      return { ok: true, action: "play-context" as const };
+    },
+    async setShuffle() {
+      return { ok: true, action: "shuffle" as const };
+    },
+    async setRepeatMode() {
+      return { ok: true, action: "repeat" as const };
+    },
+    async setVolume() {
+      return { ok: true, action: "volume" as const };
     },
     async getProfile() {
       return {
@@ -335,6 +435,28 @@ describe("app routes", () => {
     expect(body.items[0]?.trackName).toBe("Dreams");
   });
 
+  test("returns spotify queue when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/queue"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { items: Array<{ trackName: string }> };
+    expect(body.items[0]?.trackName).toBe("Go Your Own Way");
+  });
+
   test("runs spotify play action when session is present", async () => {
     const env = baseEnv();
 
@@ -355,6 +477,33 @@ describe("app routes", () => {
 
     const body = (await response.json()) as { action: string };
     expect(body.action).toBe("play");
+  });
+
+  test("runs spotify player mode actions when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const shuffle = await app.handle(new Request("http://localhost/v1/spotify/me/player/shuffle?state=true", { method: "PUT" }));
+    const repeat = await app.handle(new Request("http://localhost/v1/spotify/me/player/repeat?state=context", { method: "PUT" }));
+    const volume = await app.handle(new Request("http://localhost/v1/spotify/me/player/volume?volumePercent=70", { method: "PUT" }));
+
+    expect(shuffle.status).toBe(200);
+    expect(repeat.status).toBe(200);
+    expect(volume.status).toBe(200);
+    expect(((await shuffle.json()) as { action: string }).action).toBe("shuffle");
+    expect(((await repeat.json()) as { action: string }).action).toBe("repeat");
+    expect(((await volume.json()) as { action: string }).action).toBe("volume");
   });
 
   test("returns spotify profile when session is present", async () => {

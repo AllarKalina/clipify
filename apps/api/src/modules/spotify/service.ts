@@ -3,13 +3,24 @@ import type { AppEnv } from "../../config/env";
 import type { AppDb } from "../../db/client";
 import { spotifyConnections, spotifyOauthStates } from "../../db/schema";
 import type {
+  SpotifyAlbumSummary,
+  SpotifyArtistSummary,
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
+  SpotifyDeviceStatus,
+  SpotifyFeaturedPlaylistsResponse,
+  SpotifyPlaylistDetailResponse,
+  SpotifyPlaylistSummary,
   SpotifyPlayerAction,
   SpotifyPlayerActionResponse,
   SpotifyCurrentlyPlayingResponse,
+  SpotifyPlaylistsResponse,
+  SpotifyQueueResponse,
   SpotifyProfileResponse,
+  SpotifyRepeatMode,
   SpotifyRecentlyPlayedResponse,
+  SpotifySavedTracksResponse,
+  SpotifySearchResponse,
   SpotifyStartAuthResponse
 } from "./contracts";
 import { createStateHash, createTokenCipher } from "./crypto";
@@ -21,11 +32,22 @@ export type SpotifyService = {
   completeAuthorizationFromCallback: (code: string, state: string) => Promise<SpotifyCallbackResponse>;
   getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
+  getQueue: (userId: string) => Promise<SpotifyQueueResponse>;
   getRecentlyPlayed: (userId: string) => Promise<SpotifyRecentlyPlayedResponse>;
+  getFeaturedPlaylists: (userId: string) => Promise<SpotifyFeaturedPlaylistsResponse>;
+  getPlaylists: (userId: string) => Promise<SpotifyPlaylistsResponse>;
+  getSavedTracks: (userId: string) => Promise<SpotifySavedTracksResponse>;
+  getPlaylist: (userId: string, playlistId: string) => Promise<SpotifyPlaylistDetailResponse>;
+  search: (userId: string, query: string) => Promise<SpotifySearchResponse>;
   play: (userId: string) => Promise<SpotifyPlayerActionResponse>;
   pause: (userId: string) => Promise<SpotifyPlayerActionResponse>;
   next: (userId: string) => Promise<SpotifyPlayerActionResponse>;
   previous: (userId: string) => Promise<SpotifyPlayerActionResponse>;
+  playTrack: (userId: string, uri: string) => Promise<SpotifyPlayerActionResponse>;
+  playContext: (userId: string, contextUri: string) => Promise<SpotifyPlayerActionResponse>;
+  setShuffle: (userId: string, enabled: boolean) => Promise<SpotifyPlayerActionResponse>;
+  setRepeatMode: (userId: string, mode: SpotifyRepeatMode) => Promise<SpotifyPlayerActionResponse>;
+  setVolume: (userId: string, volumePercent: number) => Promise<SpotifyPlayerActionResponse>;
   getProfile: (userId: string) => Promise<SpotifyProfileResponse>;
 };
 
@@ -78,6 +100,12 @@ type SpotifyTokenResponse = {
 
 const REQUIRED_SCOPE =
   "user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state";
+
+type SpotifyApiCallResult = {
+  connection: SpotifyConnection;
+  accessToken: string;
+  response: Response;
+};
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
   if (!expiresAt) {
@@ -175,6 +203,117 @@ async function readSpotifyError(response: Response): Promise<string> {
   return text || "empty response";
 }
 
+function clampVolume(volumePercent: number): number {
+  return Math.max(0, Math.min(100, Math.round(volumePercent)));
+}
+
+function toRepeatMode(value: string | undefined): SpotifyRepeatMode {
+  if (value === "track" || value === "context") {
+    return value;
+  }
+
+  return "off";
+}
+
+function summarizePlaylist(item: {
+  id?: string;
+  name?: string;
+  description?: string | null;
+  images?: Array<{ url?: string }>;
+  owner?: { display_name?: string | null };
+  tracks?: { total?: number };
+  uri?: string;
+}): SpotifyPlaylistSummary {
+  return {
+    id: item.id ?? "",
+    name: item.name ?? "",
+    description: item.description ?? "",
+    imageUrl: item.images?.[0]?.url ?? "",
+    ownerName: item.owner?.display_name ?? "",
+    trackCount: item.tracks?.total ?? 0,
+    uri: item.uri ?? ""
+  };
+}
+
+function summarizeTrack(item: {
+  id?: string;
+  name?: string;
+  artists?: Array<{ name?: string }>;
+  album?: { name?: string };
+  uri?: string;
+  duration_ms?: number;
+}) {
+  return {
+    id: item.id ?? "",
+    trackName: item.name ?? "",
+    artistName: item.artists?.[0]?.name ?? "",
+    albumName: item.album?.name ?? "",
+    uri: item.uri ?? "",
+    durationMs: item.duration_ms ?? 0
+  };
+}
+
+function summarizeAlbum(item: {
+  id?: string;
+  name?: string;
+  artists?: Array<{ name?: string }>;
+  images?: Array<{ url?: string }>;
+  uri?: string;
+}): SpotifyAlbumSummary {
+  return {
+    id: item.id ?? "",
+    name: item.name ?? "",
+    artistName: item.artists?.[0]?.name ?? "",
+    imageUrl: item.images?.[0]?.url ?? "",
+    uri: item.uri ?? ""
+  };
+}
+
+function summarizeArtist(item: { id?: string; name?: string; images?: Array<{ url?: string }>; uri?: string }): SpotifyArtistSummary {
+  return {
+    id: item.id ?? "",
+    name: item.name ?? "",
+    imageUrl: item.images?.[0]?.url ?? "",
+    uri: item.uri ?? ""
+  };
+}
+
+function parsePlayerFailure(text: string): { status: number; message: string } {
+  const lowered = text.toLowerCase();
+  if (lowered.includes("no active device")) {
+    return {
+      status: 409,
+      message: "No active Spotify device. Start playback in Spotify first."
+    };
+  }
+
+  if (lowered.includes("restriction violated") || lowered.includes("restricted")) {
+    return {
+      status: 409,
+      message: "Playback is restricted on the current Spotify device."
+    };
+  }
+
+  if (lowered.includes("premium")) {
+    return {
+      status: 403,
+      message: "Spotify Premium is required for this playback control."
+    };
+  }
+
+  if (lowered.includes("insufficient client scope")) {
+    return {
+      status: 403,
+      message: "Playback control needs a fresh Spotify re-link."
+    };
+  }
+
+  return {
+    status: 502,
+    message: text || "Spotify player request failed."
+  };
+}
+
 export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): SpotifyService {
   const { fetchImpl = fetch, now = () => new Date(), randomUUID = () => crypto.randomUUID() } = deps;
   const store = deps.store ?? (deps.db ? createDrizzleStore(deps.db) : null);
@@ -195,6 +334,38 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     }
 
     return createTokenCipher(env.SPOTIFY_TOKEN_ENCRYPTION_KEY);
+  }
+
+  async function fetchSpotifyWithRetry(userId: string, input: string, init?: RequestInit): Promise<SpotifyApiCallResult> {
+    const cipher = requireCipher();
+    let connection = await ensureConnection(userId);
+    let accessToken = cipher.decrypt(connection.accessToken);
+
+    let response = await fetchImpl(input, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (response.status === 401) {
+      connection = await refreshAccessToken(connection);
+      accessToken = cipher.decrypt(connection.accessToken);
+      response = await fetchImpl(input, {
+        ...init,
+        headers: {
+          ...(init?.headers ?? {}),
+          authorization: `Bearer ${accessToken}`
+        }
+      });
+    }
+
+    return {
+      connection,
+      accessToken,
+      response
+    };
   }
 
   async function exchangeCodeForToken(code: string): Promise<SpotifyTokenResponse> {
@@ -264,33 +435,70 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
           ? "next"
             : "previous";
     const method = action === "play" || action === "pause" ? "PUT" : "POST";
-
-    const cipher = requireCipher();
-    let connection = await ensureConnection(userId);
-    let accessToken = cipher.decrypt(connection.accessToken);
-
-    let response = await fetchImpl(`https://api.spotify.com/v1/me/player/${path}`, {
-      method,
-      headers: {
-        authorization: `Bearer ${accessToken}`
-      }
+    const { response } = await fetchSpotifyWithRetry(userId, `https://api.spotify.com/v1/me/player/${path}`, {
+      method
     });
 
-    if (response.status === 401) {
-      connection = await refreshAccessToken(connection);
-      accessToken = cipher.decrypt(connection.accessToken);
-      response = await fetchImpl(`https://api.spotify.com/v1/me/player/${path}`, {
-        method,
-        headers: {
-          authorization: `Bearer ${accessToken}`
-        }
-      });
+    if (!response.ok) {
+      const failure = parsePlayerFailure(await readSpotifyError(response));
+      throw new Response(failure.message, { status: failure.status });
     }
 
+    return {
+      ok: true,
+      action
+    };
+  }
+
+  async function runPlayerSettingAction(
+    userId: string,
+    action: "shuffle" | "repeat" | "volume",
+    query: Record<string, string>
+  ): Promise<SpotifyPlayerActionResponse> {
+    if (!isConfigured()) {
+      throw new Response("Spotify is not configured", { status: 503 });
+    }
+
+    const url = new URL(`https://api.spotify.com/v1/me/player/${action}`);
+    for (const [key, value] of Object.entries(query)) {
+      url.searchParams.set(key, value);
+    }
+
+    const { response } = await fetchSpotifyWithRetry(userId, url.toString(), {
+      method: "PUT"
+    });
+
     if (!response.ok) {
-      throw new Response(`Spotify player ${action} failed (${response.status}): ${await readSpotifyError(response)}`, {
-        status: response.status
-      });
+      const failure = parsePlayerFailure(await readSpotifyError(response));
+      throw new Response(failure.message, { status: failure.status });
+    }
+
+    return {
+      ok: true,
+      action
+    };
+  }
+
+  async function runPlayPayloadAction(
+    userId: string,
+    action: "play-track" | "play-context",
+    payload: Record<string, unknown>
+  ): Promise<SpotifyPlayerActionResponse> {
+    if (!isConfigured()) {
+      throw new Response("Spotify is not configured", { status: 503 });
+    }
+
+    const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player/play", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const failure = parsePlayerFailure(await readSpotifyError(response));
+      throw new Response(failure.message, { status: failure.status });
     }
 
     return {
@@ -327,8 +535,8 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
       updatedAt: at
     };
 
-      await connectionStore.upsertConnection(updated);
-      return updated;
+    await connectionStore.upsertConnection(updated);
+    return updated;
   }
 
   async function ensureConnection(userId: string): Promise<SpotifyConnection> {
@@ -458,25 +666,58 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const cipher = requireCipher();
-      let connection = await ensureConnection(userId);
-      let accessToken = cipher.decrypt(connection.accessToken);
+      const [{ response }, deviceResult] = await Promise.all([
+        fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player"),
+        fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player/devices")
+      ]);
 
-      let response = await fetchImpl("https://api.spotify.com/v1/me/player/currently-playing", {
-        headers: {
-          authorization: `Bearer ${accessToken}`
-        }
-      });
+      let devices: Array<{
+        id?: string;
+        is_active?: boolean;
+        is_restricted?: boolean;
+        name?: string;
+        supports_volume?: boolean;
+        type?: string;
+        volume_percent?: number | null;
+      }> = [];
 
-      if (response.status === 401) {
-        connection = await refreshAccessToken(connection);
-        accessToken = cipher.decrypt(connection.accessToken);
-        response = await fetchImpl("https://api.spotify.com/v1/me/player/currently-playing", {
-          headers: {
-            authorization: `Bearer ${accessToken}`
-          }
-        });
+      if (deviceResult.response.ok) {
+        const payload = (await deviceResult.response.json()) as {
+          devices?: Array<{
+            id?: string;
+            is_active?: boolean;
+            is_restricted?: boolean;
+            name?: string;
+            supports_volume?: boolean;
+            type?: string;
+            volume_percent?: number | null;
+          }>;
+        };
+        devices = payload.devices ?? [];
       }
+
+      const primaryDevice =
+        devices.find((device) => device.is_active) ??
+        devices.find((device) => !device.is_restricted) ??
+        devices.find((device) => device.is_restricted) ??
+        null;
+
+      const baseDevice = {
+        deviceId: primaryDevice?.id ?? "",
+        deviceName: primaryDevice?.name ?? "",
+        deviceType: primaryDevice?.type ?? "",
+        deviceStatus: primaryDevice
+          ? primaryDevice.is_restricted
+            ? "restricted"
+            : primaryDevice.is_active
+              ? "active"
+              : "available"
+          : ("none" as SpotifyDeviceStatus),
+        supportsVolume: Boolean(primaryDevice?.supports_volume),
+        volumePercent: clampVolume(primaryDevice?.volume_percent ?? 0),
+        shuffleEnabled: false,
+        repeatMode: "off" as const
+      };
 
       if (response.status === 204) {
         return {
@@ -486,8 +727,7 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
           artistName: "",
           albumName: "",
           albumImageUrl: "",
-          deviceName: "",
-          deviceType: "",
+          ...baseDevice,
           progressMs: 0,
           durationMs: 0
         };
@@ -502,8 +742,18 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
 
       const payload = (await response.json()) as {
         is_playing?: boolean;
+        shuffle_state?: boolean;
+        repeat_state?: string;
         progress_ms?: number;
-        device?: { name?: string; type?: string };
+        device?: {
+          id?: string;
+          is_active?: boolean;
+          is_restricted?: boolean;
+          name?: string;
+          supports_volume?: boolean;
+          type?: string;
+          volume_percent?: number | null;
+        };
         item?: {
           name?: string;
           duration_ms?: number;
@@ -512,6 +762,21 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         };
       };
 
+      const resolvedDevice = payload.device?.name
+        ? {
+            deviceId: payload.device.id ?? baseDevice.deviceId,
+            deviceName: payload.device.name ?? "",
+            deviceType: payload.device.type ?? "",
+            deviceStatus: (payload.device.is_restricted
+              ? "restricted"
+              : payload.device.is_active
+                ? "active"
+                : "available") as SpotifyDeviceStatus,
+            supportsVolume: Boolean(payload.device.supports_volume),
+            volumePercent: clampVolume(payload.device.volume_percent ?? 0)
+          }
+        : baseDevice;
+
       return {
         playbackState: payload.item?.name ? (payload.is_playing ? "playing" : "paused") : "idle",
         isPlaying: Boolean(payload.is_playing),
@@ -519,10 +784,51 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         artistName: payload.item?.artists?.[0]?.name ?? "",
         albumName: payload.item?.album?.name ?? "",
         albumImageUrl: payload.item?.album?.images?.[0]?.url ?? "",
-        deviceName: payload.device?.name ?? "",
-        deviceType: payload.device?.type ?? "",
+        deviceId: resolvedDevice.deviceId,
+        deviceName: resolvedDevice.deviceName,
+        deviceType: resolvedDevice.deviceType,
+        deviceStatus: resolvedDevice.deviceStatus,
+        supportsVolume: resolvedDevice.supportsVolume,
+        volumePercent: resolvedDevice.volumePercent,
+        shuffleEnabled: Boolean(payload.shuffle_state),
+        repeatMode: toRepeatMode(payload.repeat_state),
         progressMs: payload.progress_ms ?? 0,
         durationMs: payload.item?.duration_ms ?? 0
+      };
+    },
+    async getQueue(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player/queue");
+
+      if (response.status === 204) {
+        return { items: [] };
+      }
+
+      if (!response.ok) {
+        const failure = parsePlayerFailure(await readSpotifyError(response));
+        throw new Response(failure.message, { status: failure.status });
+      }
+
+      const payload = (await response.json()) as {
+        queue?: Array<{
+          type?: string;
+          name?: string;
+          artists?: { name?: string }[];
+          show?: { publisher?: string };
+          album?: { name?: string };
+        }>;
+      };
+
+      return {
+        items: (payload.queue ?? []).slice(0, 5).map((item) => ({
+          trackName: item.name ?? "",
+          artistName: item.artists?.[0]?.name ?? item.show?.publisher ?? "",
+          albumName: item.album?.name ?? "",
+          type: item.type === "track" || item.type === "episode" ? item.type : "unknown"
+        }))
       };
     },
     async getRecentlyPlayed(userId: string) {
@@ -561,20 +867,199 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         items?: Array<{
           played_at?: string;
           track?: {
+            id?: string;
             name?: string;
             artists?: { name?: string }[];
             album?: { name?: string };
+            uri?: string;
+            duration_ms?: number;
           };
         }>;
       };
 
       return {
         items: (payload.items ?? []).map((item) => ({
+          id: item.track?.id ?? "",
           trackName: item.track?.name ?? "",
           artistName: item.track?.artists?.[0]?.name ?? "",
           albumName: item.track?.album?.name ?? "",
+          uri: item.track?.uri ?? "",
+          durationMs: item.track?.duration_ms ?? 0,
           playedAt: item.played_at ?? ""
         }))
+      };
+    },
+    async getFeaturedPlaylists(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(
+        userId,
+        "https://api.spotify.com/v1/browse/featured-playlists?limit=8"
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify featured-playlists request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        playlists?: {
+          items?: Array<{
+            id?: string;
+            name?: string;
+            description?: string | null;
+            images?: Array<{ url?: string }>;
+            owner?: { display_name?: string | null };
+            tracks?: { total?: number };
+            uri?: string;
+          }>;
+        };
+      };
+
+      return {
+        items: (payload.playlists?.items ?? []).map((item) => summarizePlaylist(item))
+      };
+    },
+    async getPlaylists(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/playlists?limit=20");
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify playlists request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        items?: Array<{
+          id?: string;
+          name?: string;
+          description?: string | null;
+          images?: Array<{ url?: string }>;
+          owner?: { display_name?: string | null };
+          tracks?: { total?: number };
+          uri?: string;
+        }>;
+      };
+
+      return {
+        items: (payload.items ?? []).map((item) => summarizePlaylist(item))
+      };
+    },
+    async getSavedTracks(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/tracks?limit=20");
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify saved-tracks request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        items?: Array<{
+          track?: {
+            id?: string;
+            name?: string;
+            artists?: Array<{ name?: string }>;
+            album?: { name?: string };
+            uri?: string;
+            duration_ms?: number;
+          };
+        }>;
+      };
+
+      return {
+        items: (payload.items ?? []).map((item) => summarizeTrack(item.track ?? {}))
+      };
+    },
+    async getPlaylist(userId: string, playlistId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(
+        userId,
+        `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,owner(display_name),tracks(total,items(track(id,name,artists(name),album(name),uri,duration_ms))),uri`
+      );
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify playlist request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        id?: string;
+        name?: string;
+        description?: string | null;
+        images?: Array<{ url?: string }>;
+        owner?: { display_name?: string | null };
+        tracks?: {
+          total?: number;
+          items?: Array<{
+            track?: {
+              id?: string;
+              name?: string;
+              artists?: Array<{ name?: string }>;
+              album?: { name?: string };
+              uri?: string;
+              duration_ms?: number;
+            };
+          }>;
+        };
+        uri?: string;
+      };
+
+      return {
+        ...summarizePlaylist(payload),
+        tracks: (payload.tracks?.items ?? []).map((item) => summarizeTrack(item.track ?? {}))
+      };
+    },
+    async search(userId: string, query: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      const url = new URL("https://api.spotify.com/v1/search");
+      url.searchParams.set("q", query);
+      url.searchParams.set("type", "track,playlist,album,artist");
+      url.searchParams.set("limit", "5");
+
+      const { response } = await fetchSpotifyWithRetry(userId, url.toString());
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Response(`Spotify search request failed (${response.status}): ${text || "empty response"}`, {
+          status: response.status
+        });
+      }
+
+      const payload = (await response.json()) as {
+        tracks?: { items?: Array<Parameters<typeof summarizeTrack>[0]> };
+        playlists?: { items?: Array<Parameters<typeof summarizePlaylist>[0]> };
+        albums?: { items?: Array<Parameters<typeof summarizeAlbum>[0]> };
+        artists?: { items?: Array<Parameters<typeof summarizeArtist>[0]> };
+      };
+
+      return {
+        tracks: (payload.tracks?.items ?? []).map((item) => summarizeTrack(item)),
+        playlists: (payload.playlists?.items ?? []).map((item) => summarizePlaylist(item)),
+        albums: (payload.albums?.items ?? []).map((item) => summarizeAlbum(item)),
+        artists: (payload.artists?.items ?? []).map((item) => summarizeArtist(item))
       };
     },
     async play(userId: string) {
@@ -588,6 +1073,31 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     },
     async previous(userId: string) {
       return runPlayerAction(userId, "previous");
+    },
+    async playTrack(userId: string, uri: string) {
+      return runPlayPayloadAction(userId, "play-track", {
+        uris: [uri]
+      });
+    },
+    async playContext(userId: string, contextUri: string) {
+      return runPlayPayloadAction(userId, "play-context", {
+        context_uri: contextUri
+      });
+    },
+    async setShuffle(userId: string, enabled: boolean) {
+      return runPlayerSettingAction(userId, "shuffle", {
+        state: enabled ? "true" : "false"
+      });
+    },
+    async setRepeatMode(userId: string, mode: SpotifyRepeatMode) {
+      return runPlayerSettingAction(userId, "repeat", {
+        state: mode
+      });
+    },
+    async setVolume(userId: string, volumePercent: number) {
+      return runPlayerSettingAction(userId, "volume", {
+        volume_percent: String(clampVolume(volumePercent))
+      });
     },
     async getProfile(userId: string) {
       if (!isConfigured()) {

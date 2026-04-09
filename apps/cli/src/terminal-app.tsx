@@ -18,13 +18,29 @@ import {
   type AuthFormState
 } from "./auth-form";
 import { getAuthLauncherSelection, submitAuthForm } from "./auth-controller";
+import { AuthenticatedShell } from "./app-shell";
+import {
+  appPages,
+  buildHomeSections,
+  buildLibrarySections,
+  buildPlaylistsSections,
+  buildSearchSections,
+  createInitialShellBrowseState,
+  flattenSections,
+  getPageLabel,
+  moveSelection,
+  type AppFocusRegion,
+  type AppPage,
+  type ContentAction,
+  type ShellBrowseState
+} from "./app-shell-state";
 import { clearSessionCookie, saveSessionCookie } from "./config";
-import { AuthenticatedHome } from "./home";
 import {
   applyProgressTick,
   computeHomeSnapshot,
   createInitialHomeSnapshot,
   createPendingAuthenticatedHomeSnapshot,
+  refreshPlayerSnapshot,
   shouldBackgroundRefresh,
   shouldTickPlayback,
   type HomeSnapshot
@@ -47,6 +63,7 @@ const spotifyAccentMark = [" ▄██▄ ", "██  ██", " ████ ",
 const controlsPanelWidth = 46;
 const brandBlockWidth = 38;
 const unauthMenuActions: UnauthMenuAction[] = ["signup", "login", "exit"];
+const homeBackgroundRefreshMs = 5000;
 
 function centerText(content: string, width: number): string {
   if (content.length >= width) {
@@ -266,6 +283,63 @@ function toMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function nextRepeatMode(mode: HomeSnapshot["repeatMode"]): HomeSnapshot["repeatMode"] {
+  if (mode === "off") {
+    return "context";
+  }
+
+  if (mode === "context") {
+    return "track";
+  }
+
+  return "off";
+}
+
+function getPlaybackFailureMessage(error: unknown, fallbackLabel: string): string {
+  const apiError = error as ApiClientError;
+  if (apiError?.name !== "ApiClientError") {
+    return `${fallbackLabel} failed: ${toMessage(error)}`;
+  }
+
+  if (apiError.status === 403 && apiError.message.includes("fresh Spotify re-link")) {
+    return "Playback control needs a fresh Spotify re-link. Press [l].";
+  }
+
+  return apiError.message.replace(/^Request failed for [^:]+:\s*\d+\s*/u, "") || `${fallbackLabel} failed`;
+}
+
+function getPageItemCount(page: AppPage, browse: ShellBrowseState): number {
+  const sections =
+    page === "home"
+      ? buildHomeSections(browse)
+      : page === "search"
+        ? buildSearchSections(browse)
+        : page === "library"
+          ? buildLibrarySections(browse)
+          : buildPlaylistsSections(browse);
+
+  return flattenSections(sections).length;
+}
+
+async function loadBrowseShell(client: ApiClient, current: ShellBrowseState): Promise<ShellBrowseState> {
+  const [featured, playlists, liked] = await Promise.allSettled([
+    client.getSpotifyFeaturedPlaylists(),
+    client.getSpotifyPlaylists(),
+    client.getSpotifySavedTracks()
+  ]);
+
+  return {
+    ...current,
+    featuredPlaylists: featured.status === "fulfilled" ? featured.value.items : current.featuredPlaylists,
+    playlists: playlists.status === "fulfilled" ? playlists.value.items : current.playlists,
+    likedTracks: liked.status === "fulfilled" ? liked.value.items : current.likedTracks
+  };
+}
+
+async function loadPlaylistDetail(client: ApiClient, playlistId: string) {
+  return client.getSpotifyPlaylist(playlistId);
+}
+
 function App(props: AppDeps) {
   const { exit } = useApp();
   const { stdout } = useStdout();
@@ -283,11 +357,30 @@ function App(props: AppDeps) {
   const [busy, setBusy] = useState(false);
   const [unauthSelection, setUnauthSelection] = useState<UnauthMenuAction>("signup");
   const [progressTickMs, setProgressTickMs] = useState(0);
+  const [appPage, setAppPage] = useState<AppPage>("home");
+  const [focusRegion, setFocusRegion] = useState<AppFocusRegion>("content");
+  const [contentIndex, setContentIndex] = useState(0);
+  const [browseState, setBrowseState] = useState<ShellBrowseState>(() => createInitialShellBrowseState());
+  const [searchEditing, setSearchEditing] = useState(false);
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = Boolean(sessionCookie);
   const backgroundRefreshInFlight = useRef(false);
+  const playerModeMutationsInFlight = useRef(0);
+  const homeSnapshotRef = useRef(homeSnapshot);
   const displayedHomeSnapshot = useMemo(() => applyProgressTick(homeSnapshot, progressTickMs), [homeSnapshot, progressTickMs]);
+
+  useEffect(() => {
+    homeSnapshotRef.current = homeSnapshot;
+  }, [homeSnapshot]);
+
+  const setHomeSnapshotTracked = (next: HomeSnapshot | ((current: HomeSnapshot) => HomeSnapshot)) => {
+    setHomeSnapshot((current) => {
+      const resolved = typeof next === "function" ? (next as (current: HomeSnapshot) => HomeSnapshot)(current) : next;
+      homeSnapshotRef.current = resolved;
+      return resolved;
+    });
+  };
 
   const refreshWithClient = async (targetClient: ApiClient): Promise<HomeSnapshot> => {
     return refreshWithClientMessage(targetClient, "Refreshed");
@@ -301,17 +394,30 @@ function App(props: AppDeps) {
       return next;
     }
 
-    setHomeSnapshot(next);
+    setHomeSnapshotTracked(next);
+    setBrowseState((current) => ({
+      ...current,
+      recentTracks: next.recent
+    }));
     setProgressTickMs(0);
     setBusy(false);
     setStatusLine(next.backend === "connected" ? successLine : "Backend unreachable or unauthorized");
+    if (next.backend === "connected" && next.spotify === "linked") {
+      try {
+        const loadedBrowse = await loadBrowseShell(targetClient, {
+          ...browseState,
+          recentTracks: next.recent
+        });
+        setBrowseState(loadedBrowse);
+      } catch {}
+    }
     return next;
   };
 
   const refresh = async () => refreshWithClient(client);
 
   const refreshSilentlyWithClient = async (targetClient: ApiClient): Promise<void> => {
-    const next = await computeHomeSnapshot(targetClient);
+    const next = await refreshPlayerSnapshot(targetClient, homeSnapshotRef.current);
     if (next.failureReason === "unauthorized") {
       completeLocalLogout("Session expired");
       return;
@@ -321,19 +427,24 @@ function App(props: AppDeps) {
       return;
     }
 
-    setHomeSnapshot(next);
+    setHomeSnapshotTracked(next);
     setProgressTickMs(0);
   };
 
   const completeLocalLogout = (successLine: string) => {
     clearSessionCookie();
     setSessionCookie(undefined);
-    setHomeSnapshot(createInitialHomeSnapshot());
+    setHomeSnapshotTracked(createInitialHomeSnapshot());
+    setBrowseState(createInitialShellBrowseState());
     setAuthForm(null);
     setLinkFlow(null);
     setBusy(false);
     setProgressTickMs(0);
     setUnauthSelection("login");
+    setAppPage("home");
+    setFocusRegion("content");
+    setContentIndex(0);
+    setSearchEditing(false);
     setStatusLine(successLine);
   };
 
@@ -359,7 +470,7 @@ function App(props: AppDeps) {
 
   const completeAuthenticatedOnboarding = async (nextSessionCookie: string, successLine: string) => {
     setSessionCookie(nextSessionCookie);
-    setHomeSnapshot(createPendingAuthenticatedHomeSnapshot());
+    setHomeSnapshotTracked(createPendingAuthenticatedHomeSnapshot());
     setAuthForm(null);
     setStatusLine(successLine);
 
@@ -379,15 +490,104 @@ function App(props: AppDeps) {
         await refreshWithClientMessage(client, label);
       } catch (error) {
         setBusy(false);
-        const apiError = error as ApiClientError;
-        if (apiError?.name === "ApiClientError" && (apiError.status === 401 || apiError.status === 403)) {
-          setStatusLine("Playback control needs a fresh Spotify re-link. Press [l].");
-          return;
-        }
-
-        setStatusLine(`${label} failed: ${toMessage(error)}`);
+        setStatusLine(getPlaybackFailureMessage(error, label));
       }
     })();
+  };
+
+  const runOptimisticPlayerModeAction = (
+    label: string,
+    applyOptimisticUpdate: (current: HomeSnapshot) => HomeSnapshot,
+    action: (targetClient: ApiClient) => Promise<unknown>
+  ) => {
+    playerModeMutationsInFlight.current += 1;
+    setHomeSnapshotTracked((current) => applyOptimisticUpdate(current));
+    setStatusLine(label);
+
+    void (async () => {
+      try {
+        await action(client);
+      } catch (error) {
+        playerModeMutationsInFlight.current = Math.max(0, playerModeMutationsInFlight.current - 1);
+        await refreshSilentlyWithClient(client);
+        setStatusLine(getPlaybackFailureMessage(error, label));
+        return;
+      }
+
+      playerModeMutationsInFlight.current = Math.max(0, playerModeMutationsInFlight.current - 1);
+      if (playerModeMutationsInFlight.current > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await refreshSilentlyWithClient(client);
+    })();
+  };
+
+  const executeContentAction = (action: ContentAction) => {
+    if (action.type === "noop") {
+      return;
+    }
+
+    if (action.type === "open-liked-tracks") {
+      setBrowseState((current) => ({
+        ...current,
+        libraryView: "liked-tracks"
+      }));
+      setAppPage("library");
+      setContentIndex(0);
+      return;
+    }
+
+    if (action.type === "close-liked-tracks") {
+      setBrowseState((current) => ({
+        ...current,
+        libraryView: "overview"
+      }));
+      setAppPage("library");
+      setContentIndex(0);
+      return;
+    }
+
+    if (action.type === "close-playlist-detail") {
+      setBrowseState((current) => ({
+        ...current,
+        playlistDetail: null
+      }));
+      setAppPage("playlists");
+      setContentIndex(0);
+      return;
+    }
+
+    if (action.type === "open-playlist") {
+      setBusy(true);
+      void loadPlaylistDetail(client, action.playlistId)
+        .then((detail) => {
+          setBrowseState((current) => ({
+            ...current,
+            playlistDetail: detail
+          }));
+          setAppPage("playlists");
+          setContentIndex(0);
+          setStatusLine(`Opened ${detail.name}`);
+        })
+        .catch((error) => {
+          setStatusLine(`Playlist load failed: ${toMessage(error)}`);
+        })
+        .finally(() => {
+          setBusy(false);
+        });
+      return;
+    }
+
+    if (action.type === "play-track") {
+      runPlaybackAction("Started track", (targetClient) => targetClient.playSpotifyTrack(action.uri));
+      return;
+    }
+
+    if (action.type === "play-context") {
+      runPlaybackAction("Started context", (targetClient) => targetClient.playSpotifyContext(action.uri));
+    }
   };
 
   useEffect(() => {
@@ -397,6 +597,54 @@ function App(props: AppDeps) {
 
     void refresh();
   }, [client, sessionCookie]);
+
+  useEffect(() => {
+    setContentIndex(0);
+    setSearchEditing(false);
+  }, [appPage]);
+
+  useEffect(() => {
+    const count = getPageItemCount(appPage, browseState);
+    if (contentIndex >= count) {
+      setContentIndex(Math.max(0, count - 1));
+    }
+  }, [appPage, browseState, contentIndex]);
+
+  useEffect(() => {
+    if (!isAuthenticated || appPage !== "search" || !browseState.searchQuery.trim()) {
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setBrowseState((current) => ({
+        ...current,
+        searchBusy: true,
+        searchError: ""
+      }));
+
+      void client
+        .searchSpotify(browseState.searchQuery.trim())
+        .then((results) => {
+          setBrowseState((current) => ({
+            ...current,
+            searchBusy: false,
+            searchResults: results,
+            searchError: ""
+          }));
+          setContentIndex(0);
+        })
+        .catch((error) => {
+          setBrowseState((current) => ({
+            ...current,
+            searchBusy: false,
+            searchError: toMessage(error),
+            searchResults: { tracks: [], playlists: [], albums: [], artists: [] }
+          }));
+        });
+    }, 250);
+
+    return () => clearTimeout(timeout);
+  }, [appPage, browseState.searchQuery, client, isAuthenticated]);
 
   useEffect(() => {
     setProgressTickMs(0);
@@ -427,7 +675,7 @@ function App(props: AppDeps) {
     }
 
     const interval = setInterval(() => {
-      if (backgroundRefreshInFlight.current) {
+      if (backgroundRefreshInFlight.current || playerModeMutationsInFlight.current > 0) {
         return;
       }
 
@@ -435,7 +683,7 @@ function App(props: AppDeps) {
       void refreshSilentlyWithClient(client).finally(() => {
         backgroundRefreshInFlight.current = false;
       });
-    }, 5000);
+    }, homeBackgroundRefreshMs);
 
     return () => clearInterval(interval);
   }, [busy, client, homeSnapshot, isAuthenticated, linkFlow]);
@@ -549,7 +797,7 @@ function App(props: AppDeps) {
       return;
     }
 
-    if (input === "q") {
+    if (input === "q" && (!isAuthenticated || !searchEditing)) {
       exit();
       return;
     }
@@ -579,6 +827,49 @@ function App(props: AppDeps) {
       return;
     }
 
+    const activeSections =
+      appPage === "home"
+        ? buildHomeSections(browseState)
+        : appPage === "search"
+          ? buildSearchSections(browseState)
+          : appPage === "library"
+            ? buildLibrarySections(browseState)
+            : buildPlaylistsSections(browseState);
+    const activeItems = flattenSections(activeSections);
+
+    if (key.tab) {
+      setFocusRegion((current) => (current === "sidebar" ? "content" : "sidebar"));
+      return;
+    }
+
+    if (searchEditing && appPage === "search") {
+      if (key.escape) {
+        setSearchEditing(false);
+        return;
+      }
+
+      if (key.backspace || key.delete) {
+        setBrowseState((current) => ({
+          ...current,
+          searchQuery: current.searchQuery.slice(0, -1)
+        }));
+        return;
+      }
+
+      if (key.return) {
+        setSearchEditing(false);
+        return;
+      }
+
+      if (input && !key.ctrl) {
+        setBrowseState((current) => ({
+          ...current,
+          searchQuery: `${current.searchQuery}${input}`
+        }));
+      }
+      return;
+    }
+
     if (input === "o") {
       setBusy(true);
       void (async () => {
@@ -591,6 +882,53 @@ function App(props: AppDeps) {
         }
       })();
       return;
+    }
+
+    if (focusRegion === "sidebar") {
+      if (key.upArrow) {
+        setAppPage((current) => appPages[moveSelection(appPages.indexOf(current), "up", appPages.length)] ?? "home");
+        return;
+      }
+
+      if (key.downArrow) {
+        setAppPage((current) => appPages[moveSelection(appPages.indexOf(current), "down", appPages.length)] ?? "home");
+        return;
+      }
+
+      if (key.rightArrow || key.return) {
+        setFocusRegion("content");
+        return;
+      }
+    }
+
+    if (focusRegion === "content") {
+      if (key.leftArrow) {
+        setFocusRegion("sidebar");
+        return;
+      }
+
+      if (key.upArrow) {
+        setContentIndex((current) => moveSelection(current, "up", activeItems.length));
+        return;
+      }
+
+      if (key.downArrow) {
+        setContentIndex((current) => moveSelection(current, "down", activeItems.length));
+        return;
+      }
+
+      if (appPage === "search" && (input === "/" || (key.return && activeItems.length === 0))) {
+        setSearchEditing(true);
+        return;
+      }
+
+      if (key.return && activeItems.length > 0) {
+        const item = activeItems[contentIndex];
+        if (item) {
+          executeContentAction(item.action);
+        }
+        return;
+      }
     }
 
     if (input === "r") {
@@ -616,6 +954,58 @@ function App(props: AppDeps) {
       return;
     }
 
+    if (input === "s") {
+      const enabled = !homeSnapshotRef.current.shuffleEnabled;
+      runOptimisticPlayerModeAction(
+        enabled ? "Shuffle on" : "Shuffle off",
+        (current) => ({
+          ...current,
+          shuffleEnabled: enabled
+        }),
+        (targetClient) => targetClient.setSpotifyShuffle(enabled)
+      );
+      return;
+    }
+
+    if (input === "t") {
+      const mode = nextRepeatMode(homeSnapshotRef.current.repeatMode);
+      runOptimisticPlayerModeAction(
+        `Repeat ${mode === "context" ? "all" : mode}`,
+        (current) => ({
+          ...current,
+          repeatMode: mode
+        }),
+        (targetClient) => targetClient.setSpotifyRepeatMode(mode)
+      );
+      return;
+    }
+
+    if (input === "-" || input === "_") {
+      const nextVolume = Math.max(0, homeSnapshotRef.current.volumePercent - 10);
+      runOptimisticPlayerModeAction(
+        `Volume ${nextVolume}%`,
+        (current) => ({
+          ...current,
+          volumePercent: nextVolume
+        }),
+        (targetClient) => targetClient.setSpotifyVolume(nextVolume)
+      );
+      return;
+    }
+
+    if (input === "=" || input === "+") {
+      const nextVolume = Math.min(100, homeSnapshotRef.current.volumePercent + 10);
+      runOptimisticPlayerModeAction(
+        `Volume ${nextVolume}%`,
+        (current) => ({
+          ...current,
+          volumePercent: nextVolume
+        }),
+        (targetClient) => targetClient.setSpotifyVolume(nextVolume)
+      );
+      return;
+    }
+
     if (input === "l") {
       setBusy(true);
       void (async () => {
@@ -625,6 +1015,7 @@ function App(props: AppDeps) {
           setBusy(false);
         }
       })();
+      return;
     }
   });
 
@@ -646,12 +1037,18 @@ function App(props: AppDeps) {
   }
 
   return (
-    <AuthenticatedHome
-      snapshot={displayedHomeSnapshot}
+    <AuthenticatedShell
+      page={appPage}
+      focusRegion={focusRegion}
+      contentIndex={contentIndex}
+      player={displayedHomeSnapshot}
+      browse={browseState}
       width={stdoutWidth}
+      height={stdoutHeight}
       busy={busy}
       statusLine={statusLine}
-      linkFlow={linkFlow}
+      searchEditing={searchEditing}
+      linkPending={Boolean(linkFlow)}
     />
   );
 }
