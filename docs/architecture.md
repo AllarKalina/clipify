@@ -48,3 +48,11 @@ packages/
 - New domain behavior in API: add module under `apps/api/src/modules/<domain>`.
 - New reusable CLI/API transport logic: add in `packages/api-client`.
 - New CLI feature: add command surface in `apps/cli/src/index.ts` and supporting modules if file grows.
+- CLI launcher/auth shell stays in `apps/cli/src/terminal-app.tsx`; authenticated browsing/playback orchestration belongs in dedicated controller/state modules under `apps/cli/src/`.
+
+## CLI Shape
+
+- `terminal-app.tsx` owns launcher/auth shell composition only.
+- `authenticated-app-controller.tsx` owns authenticated-shell wiring only.
+- authenticated commands, effects, selectors, and input intents live in separate CLI modules and should be extended in place instead of growing the controller.
+- `app-shell.tsx` and its child view components are presentational only; they should receive derived props rather than raw orchestration state whenever possible.

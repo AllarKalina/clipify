@@ -1,6 +1,6 @@
 ---
 owner: platform
-last_updated: 2026-02-19
+last_updated: 2026-04-08
 read_when:
   - starting work in this repository
   - choosing which docs to read before implementation
@@ -18,12 +18,14 @@ Use this file first, then follow `read_when` hints in linked docs.
 2. `docs/architecture.md`
 3. `docs/backend-architecture-standard.md`
 4. `docs/api-compatibility.md`
+5. `docs/local-dev-agent-handoff.md` (when resuming local development)
 
 ## Platform and Delivery
 
 1. `docs/cicd-railway-github-setup.md`
 2. `docs/release.md`
 3. `docs/operations.md`
+4. `docs/local-dev-agent-handoff.md`
 
 ## Stack and Planning
 
