@@ -55,7 +55,7 @@ export function useAuthenticatedAppEffects({
   }, [autoStartLink, autoLinkStarted, context, dispatch, state.homeSnapshot.spotify, state.linkFlow, state.statusLine]);
 
   useEffect(() => {
-    if (state.appPage !== "search" || !state.browseState.searchQuery.trim()) {
+    if (!state.browseState.searchQuery.trim()) {
       return;
     }
 
@@ -74,7 +74,7 @@ export function useAuthenticatedAppEffects({
     }, 250);
 
     return () => clearTimeout(timeout);
-  }, [client, dispatch, state.appPage, state.browseState.searchQuery]);
+  }, [client, dispatch, state.browseState.searchQuery]);
 
   useEffect(() => {
     dispatch({ type: "reset-progress-tick" });

@@ -1,21 +1,30 @@
 import {
   buildHomeSections,
-  buildLibrarySections,
-  buildPlaylistsSections,
+  buildLibrarySidebarItems,
+  buildLikedTracksSections,
+  buildPlaylistDetailSections,
   buildSearchSections,
   flattenSections,
-  getPageLabel
+  getMainViewLabel
 } from "./app-shell-state";
 import type { AuthenticatedAppState } from "./authenticated-app-state";
 
+export function selectSidebarItems(state: AuthenticatedAppState) {
+  return buildLibrarySidebarItems(state.browseState);
+}
+
+export function selectSidebarItem(state: AuthenticatedAppState) {
+  return selectSidebarItems(state)[state.sidebarIndex] ?? null;
+}
+
 export function selectActiveSections(state: AuthenticatedAppState) {
-  return state.appPage === "home"
-    ? buildHomeSections(state.browseState)
-    : state.appPage === "search"
+  return state.mainView === "home"
+    ? buildHomeSections(state.homeSnapshot, state.browseState)
+    : state.mainView === "search-results"
       ? buildSearchSections(state.browseState)
-      : state.appPage === "library"
-        ? buildLibrarySections(state.browseState)
-        : buildPlaylistsSections(state.browseState);
+      : state.mainView === "liked-tracks"
+        ? buildLikedTracksSections(state.browseState)
+        : buildPlaylistDetailSections(state.browseState);
 }
 
 export function selectActiveItems(state: AuthenticatedAppState) {
@@ -23,11 +32,15 @@ export function selectActiveItems(state: AuthenticatedAppState) {
 }
 
 export function selectSelectedItem(state: AuthenticatedAppState) {
-  return selectActiveItems(state)[state.contentIndex] ?? null;
+  if (state.contentIndex === 0) {
+    return null;
+  }
+
+  return selectActiveItems(state)[state.contentIndex - 1] ?? null;
 }
 
 export function selectCanStartSearchEditing(state: AuthenticatedAppState) {
-  return state.appPage === "search" && selectActiveItems(state).length === 0;
+  return state.focusRegion === "content" && state.contentIndex === 0;
 }
 
 export function selectInputBlocked(state: AuthenticatedAppState) {
@@ -36,7 +49,9 @@ export function selectInputBlocked(state: AuthenticatedAppState) {
 
 export function selectShellViewModel(state: AuthenticatedAppState) {
   return {
-    pageLabel: getPageLabel(state.appPage),
+    mainLabel: getMainViewLabel(state.mainView),
+    sidebarItems: selectSidebarItems(state),
+    sidebarItem: selectSidebarItem(state),
     activeSections: selectActiveSections(state),
     activeItems: selectActiveItems(state),
     selectedItem: selectSelectedItem(state),

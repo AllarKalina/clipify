@@ -2,20 +2,20 @@ import { describe, expect, test } from "bun:test";
 import { authenticatedAppReducer, createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
 
 describe("authenticated app state", () => {
-  test("changing page resets content selection and exits search editing", () => {
+  test("changing main view resets content selection and exits search editing", () => {
     const initial = {
       ...createInitialAuthenticatedAppState("Restoring session..."),
-      appPage: "search" as const,
+      mainView: "search-results" as const,
       contentIndex: 4,
       searchEditing: true
     };
 
     const next = authenticatedAppReducer(initial, {
-      type: "set-page",
-      page: "library"
+      type: "set-main-view",
+      mainView: "home"
     });
 
-    expect(next.appPage).toBe("library");
+    expect(next.mainView).toBe("home");
     expect(next.contentIndex).toBe(0);
     expect(next.searchEditing).toBeFalse();
   });
@@ -50,7 +50,7 @@ describe("authenticated app state", () => {
     expect(next.devicePicker.devices).toHaveLength(1);
   });
 
-  test("search completion stores results and clears busy state", () => {
+  test("search completion stores results and switches to search-results", () => {
     const initial = authenticatedAppReducer(createInitialAuthenticatedAppState(""), {
       type: "search-started"
     });
@@ -74,39 +74,14 @@ describe("authenticated app state", () => {
       }
     });
 
+    expect(next.mainView).toBe("search-results");
     expect(next.browseState.searchBusy).toBeFalse();
-    expect(next.browseState.searchError).toBe("");
     expect(next.browseState.searchResults.tracks[0]?.trackName).toBe("Dreams");
   });
 
-  test("home snapshot replacement syncs recent tracks into browse state", () => {
-    const next = authenticatedAppReducer(createInitialAuthenticatedAppState(""), {
-      type: "replace-home-snapshot",
-      snapshot: {
-        ...createInitialAuthenticatedAppState("").homeSnapshot,
-        backend: "connected",
-        spotify: "linked",
-        recent: [
-          {
-            id: "track-1",
-            trackName: "Dreams",
-            artistName: "Fleetwood Mac",
-            albumName: "Rumours",
-            uri: "spotify:track:1",
-            durationMs: 257000,
-            playedAt: "2026-04-11T09:00:00.000Z"
-          }
-        ]
-      }
-    });
-
-    expect(next.browseState.recentTracks[0]?.trackName).toBe("Dreams");
-  });
-
-  test("opening playlist detail forces playlists page and resets selection", () => {
+  test("opening playlist detail switches the main pane and resets selection", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),
-      appPage: "home" as const,
       contentIndex: 3
     };
 
@@ -124,8 +99,26 @@ describe("authenticated app state", () => {
       }
     });
 
-    expect(next.appPage).toBe("playlists");
+    expect(next.mainView).toBe("playlist-detail");
     expect(next.contentIndex).toBe(0);
     expect(next.browseState.playlistDetail?.name).toBe("Roadtrip");
+  });
+
+  test("set search query transitions empty search-results back home", () => {
+    const initial = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "search-results" as const,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        searchQuery: "weekend"
+      }
+    };
+
+    const next = authenticatedAppReducer(initial, {
+      type: "set-search-query",
+      searchQuery: ""
+    });
+
+    expect(next.mainView).toBe("home");
   });
 });

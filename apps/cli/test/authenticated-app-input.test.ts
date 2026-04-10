@@ -28,14 +28,39 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "submit-device-selection" });
   });
 
-  test("starts search editing from empty search page", () => {
+  test("starts search editing from the main search bar", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
-      appPage: "search" as const,
-      focusRegion: "content" as const
+      focusRegion: "content" as const,
+      contentIndex: 0
     };
 
     expect(resolveAuthenticatedIntent(state, "/", {})).toEqual({ type: "start-search-editing" });
+    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "start-search-editing" });
+  });
+
+  test("sidebar arrows navigate library entries", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      focusRegion: "sidebar" as const,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 20,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "move-sidebar-selection", direction: "down" });
+    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "activate-sidebar-item" });
   });
 
   test("maps transport keys to intents", () => {

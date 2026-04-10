@@ -19,7 +19,21 @@ export type AuthenticatedCommandContext = {
   openBrowserOnLink: boolean;
 };
 
-async function loadBrowseShell(client: ApiClient, current: ShellBrowseState): Promise<ShellBrowseState> {
+function getBrowseWarning(
+  featured: PromiseSettledResult<unknown>,
+  playlists: PromiseSettledResult<unknown>,
+  liked: PromiseSettledResult<unknown>
+): string {
+  const failures = [
+    featured.status === "rejected" ? `featured picks: ${toMessage(featured.reason)}` : null,
+    playlists.status === "rejected" ? `playlists: ${toMessage(playlists.reason)}` : null,
+    liked.status === "rejected" ? `liked songs: ${toMessage(liked.reason)}` : null
+  ].filter(Boolean);
+
+  return failures.length > 0 ? `Browse data incomplete: ${failures.join(" | ")}` : "";
+}
+
+async function loadBrowseShellWithStatus(client: ApiClient, current: ShellBrowseState) {
   const [featured, playlists, liked] = await Promise.allSettled([
     client.getSpotifyFeaturedPlaylists(),
     client.getSpotifyPlaylists(),
@@ -27,10 +41,13 @@ async function loadBrowseShell(client: ApiClient, current: ShellBrowseState): Pr
   ]);
 
   return {
-    ...current,
-    featuredPlaylists: featured.status === "fulfilled" ? featured.value.items : current.featuredPlaylists,
-    playlists: playlists.status === "fulfilled" ? playlists.value.items : current.playlists,
-    likedTracks: liked.status === "fulfilled" ? liked.value.items : current.likedTracks
+    browseState: {
+      ...current,
+      featuredPlaylists: featured.status === "fulfilled" ? featured.value.items : current.featuredPlaylists,
+      playlists: playlists.status === "fulfilled" ? playlists.value.items : current.playlists,
+      likedTracks: liked.status === "fulfilled" ? liked.value.items : current.likedTracks
+    },
+    warning: getBrowseWarning(featured, playlists, liked)
   };
 }
 
@@ -65,11 +82,14 @@ export async function refreshAuthenticatedApp(
     } catch {}
 
     try {
-      const loadedBrowse = await loadBrowseShell(client, {
+      const loadedBrowse = await loadBrowseShellWithStatus(client, {
         ...getState().browseState,
         recentTracks: next.recent
       });
-      dispatch({ type: "replace-browse-state", browseState: loadedBrowse });
+      dispatch({ type: "replace-browse-state", browseState: loadedBrowse.browseState });
+      if (loadedBrowse.warning) {
+        dispatch({ type: "set-status-line", statusLine: loadedBrowse.warning });
+      }
     } catch {}
   }
 
@@ -232,16 +252,6 @@ export function executeContentAction(
 
   if (action.type === "open-liked-tracks") {
     dispatch({ type: "open-liked-tracks" });
-    return;
-  }
-
-  if (action.type === "close-liked-tracks") {
-    dispatch({ type: "close-liked-tracks" });
-    return;
-  }
-
-  if (action.type === "close-playlist-detail") {
-    dispatch({ type: "close-playlist-detail" });
     return;
   }
 

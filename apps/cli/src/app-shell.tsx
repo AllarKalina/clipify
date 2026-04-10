@@ -1,7 +1,7 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
 import { Box } from "ink";
 import React from "react";
-import type { ContentSection, AppFocusRegion, AppPage, ShellBrowseState } from "./app-shell-state";
+import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
 import { AppPageBody } from "./app-page-body";
 import { AppSidebar } from "./app-sidebar";
 import { BottomPlayer } from "./bottom-player";
@@ -9,8 +9,10 @@ import { DevicePickerOverlay } from "./device-picker-overlay";
 import type { HomeSnapshot } from "./home-state";
 
 type AppShellProps = {
-  page: AppPage;
+  mainView: MainView;
   focusRegion: AppFocusRegion;
+  sidebarItems: ContentItem[];
+  sidebarIndex: number;
   contentIndex: number;
   player: HomeSnapshot;
   browse: ShellBrowseState;
@@ -28,7 +30,7 @@ type AppShellProps = {
 };
 
 export function AuthenticatedShell(props: AppShellProps) {
-  const sidebarWidth = 18;
+  const sidebarWidth = Math.max(28, Math.floor(props.width * 0.24));
   const shellWidth = props.width;
   const bodyHeight = Math.max(8, props.height - 8);
   const contentWidth = shellWidth - sidebarWidth - 3;
@@ -38,13 +40,14 @@ export function AuthenticatedShell(props: AppShellProps) {
       <Box height={bodyHeight}>
         <AppSidebar
           width={sidebarWidth}
-          page={props.page}
           focusRegion={props.focusRegion}
           userName={props.player.userName}
+          items={props.sidebarItems}
+          selectedIndex={props.sidebarIndex}
         />
         <Box marginLeft={1} flexDirection="column" width={contentWidth}>
           <AppPageBody
-            page={props.page}
+            mainView={props.mainView}
             browse={props.browse}
             sections={props.sections}
             contentIndex={props.contentIndex}
@@ -62,7 +65,7 @@ export function AuthenticatedShell(props: AppShellProps) {
           width={shellWidth - 2}
           statusLine={props.statusLine}
           busy={props.busy}
-          page={props.page}
+          mainView={props.mainView}
           focusRegion={props.focusRegion}
           linkPending={props.linkPending}
         />

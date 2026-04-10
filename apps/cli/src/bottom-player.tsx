@@ -2,7 +2,7 @@ import { Box, Text } from "ink";
 import React from "react";
 import { describePlayerDevice } from "./device-picker-state";
 import type { HomeSnapshot } from "./home-state";
-import { getPageLabel, type AppFocusRegion, type AppPage } from "./app-shell-state";
+import { getMainViewLabel, type AppFocusRegion, type MainView } from "./app-shell-state";
 import { clipLine, formatDuration, formatProgress } from "./app-shell-utils";
 
 type BottomPlayerProps = {
@@ -10,7 +10,7 @@ type BottomPlayerProps = {
   width: number;
   statusLine: string;
   busy: boolean;
-  page: AppPage;
+  mainView: MainView;
   focusRegion: AppFocusRegion;
   linkPending: boolean;
 };
@@ -20,7 +20,7 @@ export function BottomPlayer({
   width,
   statusLine,
   busy,
-  page,
+  mainView,
   focusRegion,
   linkPending
 }: BottomPlayerProps) {
@@ -40,7 +40,7 @@ export function BottomPlayer({
     <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width}>
       <Box justifyContent="space-between">
         <Text color="white">{clipLine(playbackLabel, leftWidth)}</Text>
-        <Text color="white">{clipLine(`[${getPageLabel(page)}] ${focusRegion}`, centerWidth)}</Text>
+        <Text color="white">{clipLine(`[${getMainViewLabel(mainView)}] ${focusRegion}`, centerWidth)}</Text>
         <Text color="white">{clipLine(describePlayerDevice(player), rightWidth)}</Text>
       </Box>
       <Box justifyContent="space-between">
@@ -59,9 +59,9 @@ export function BottomPlayer({
         </Text>
       </Box>
       <Text color="white">
-        {clipLine("[tab] focus  [↑↓] move  [enter] select/edit  [space] play  [,/.] prev/next  [s/t] shuffle/repeat  [-/=] volume", width - 4)}
+        {clipLine("[tab] focus  [↑↓] move  [enter] select/edit  [/] search  [h] home  [space] play  [,/.] prev/next", width - 4)}
       </Text>
-      <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit", width - 4)}</Text>
+      <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit  [s/t] shuffle/repeat  [-/=] volume", width - 4)}</Text>
       <Text color={busy ? "yellow" : player.error ? "red" : "cyan"}>{clipLine(busy ? "working..." : statusLine, width - 4)}</Text>
     </Box>
   );

@@ -1,23 +1,21 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
 import {
   buildHomeSections,
-  buildLibrarySections,
-  buildPlaylistsSections,
+  buildLikedTracksSections,
+  buildPlaylistDetailSections,
   buildSearchSections,
   createInitialShellBrowseState,
+  buildLibrarySidebarItems,
   flattenSections,
   moveSelection,
   type AppFocusRegion,
-  type AppPage,
+  type MainView,
   type PlaylistDetail,
   type SearchResults,
   type ShellBrowseState
 } from "./app-shell-state";
 import { clampDeviceSelection } from "./device-picker-state";
-import {
-  createPendingAuthenticatedHomeSnapshot,
-  type HomeSnapshot
-} from "./home-state";
+import { createPendingAuthenticatedHomeSnapshot, type HomeSnapshot } from "./home-state";
 
 export type LinkFlow = {
   authorizeUrl: string;
@@ -33,8 +31,9 @@ export type DevicePickerState = {
 export type AuthenticatedAppState = {
   homeSnapshot: HomeSnapshot;
   progressTickMs: number;
-  appPage: AppPage;
+  mainView: MainView;
   focusRegion: AppFocusRegion;
+  sidebarIndex: number;
   contentIndex: number;
   browseState: ShellBrowseState;
   searchEditing: boolean;
@@ -51,8 +50,10 @@ export type AuthenticatedAppAction =
   | { type: "patch-home-snapshot"; patch: Partial<HomeSnapshot> }
   | { type: "reset-progress-tick" }
   | { type: "advance-progress-tick"; amountMs: number }
-  | { type: "set-page"; page: AppPage }
+  | { type: "set-main-view"; mainView: MainView }
   | { type: "set-focus-region"; focusRegion: AppFocusRegion }
+  | { type: "move-sidebar-selection"; direction: "up" | "down" }
+  | { type: "set-sidebar-index"; sidebarIndex: number }
   | { type: "move-content-selection"; direction: "up" | "down" }
   | { type: "set-content-index"; contentIndex: number }
   | { type: "set-search-editing"; searchEditing: boolean }
@@ -63,9 +64,7 @@ export type AuthenticatedAppAction =
   | { type: "replace-browse-state"; browseState: ShellBrowseState }
   | { type: "patch-browse-state"; patch: Partial<ShellBrowseState> }
   | { type: "open-liked-tracks" }
-  | { type: "close-liked-tracks" }
   | { type: "open-playlist-detail"; detail: PlaylistDetail }
-  | { type: "close-playlist-detail" }
   | { type: "open-device-picker" }
   | { type: "close-device-picker" }
   | { type: "set-device-picker-loading"; loading: boolean }
@@ -73,22 +72,25 @@ export type AuthenticatedAppAction =
   | { type: "move-device-selection"; direction: "up" | "down" }
   | { type: "set-link-flow"; linkFlow: LinkFlow | null };
 
-function getSections(page: AppPage, browseState: ShellBrowseState) {
-  return page === "home"
-    ? buildHomeSections(browseState)
-    : page === "search"
-      ? buildSearchSections(browseState)
-      : page === "library"
-        ? buildLibrarySections(browseState)
-        : buildPlaylistsSections(browseState);
+function buildMainSections(state: AuthenticatedAppState) {
+  return state.mainView === "home"
+    ? buildHomeSections(state.homeSnapshot, state.browseState)
+    : state.mainView === "search-results"
+      ? buildSearchSections(state.browseState)
+      : state.mainView === "liked-tracks"
+        ? buildLikedTracksSections(state.browseState)
+        : buildPlaylistDetailSections(state.browseState);
 }
 
-export function getPageItemCount(page: AppPage, browseState: ShellBrowseState): number {
-  return flattenSections(getSections(page, browseState)).length;
+function getSidebarItemCount(state: AuthenticatedAppState): number {
+  return buildLibrarySidebarItems(state.browseState).length;
 }
 
-function clampContentIndex(page: AppPage, browseState: ShellBrowseState, current: number): number {
-  const count = getPageItemCount(page, browseState);
+export function getMainItemCount(state: AuthenticatedAppState): number {
+  return 1 + flattenSections(buildMainSections(state)).length;
+}
+
+function clampSelection(current: number, count: number): number {
   if (count <= 0) {
     return 0;
   }
@@ -96,14 +98,16 @@ function clampContentIndex(page: AppPage, browseState: ShellBrowseState, current
   return Math.min(Math.max(0, current), count - 1);
 }
 
-function withBrowseState(
-  state: AuthenticatedAppState,
-  browseState: ShellBrowseState
-): AuthenticatedAppState {
-  return {
+function withBrowseState(state: AuthenticatedAppState, browseState: ShellBrowseState): AuthenticatedAppState {
+  const nextState = {
     ...state,
-    browseState,
-    contentIndex: clampContentIndex(state.appPage, browseState, state.contentIndex)
+    browseState
+  };
+
+  return {
+    ...nextState,
+    sidebarIndex: clampSelection(state.sidebarIndex, getSidebarItemCount(nextState)),
+    contentIndex: clampSelection(state.contentIndex, getMainItemCount(nextState))
   };
 }
 
@@ -111,8 +115,9 @@ export function createInitialAuthenticatedAppState(initialStatusLine: string): A
   return {
     homeSnapshot: createPendingAuthenticatedHomeSnapshot(),
     progressTickMs: 0,
-    appPage: "home",
+    mainView: "home",
     focusRegion: "content",
+    sidebarIndex: 0,
     contentIndex: 0,
     browseState: createInitialShellBrowseState(),
     searchEditing: false,
@@ -128,21 +133,12 @@ export function createInitialAuthenticatedAppState(initialStatusLine: string): A
   };
 }
 
-export function authenticatedAppReducer(
-  state: AuthenticatedAppState,
-  action: AuthenticatedAppAction
-): AuthenticatedAppState {
+export function authenticatedAppReducer(state: AuthenticatedAppState, action: AuthenticatedAppAction): AuthenticatedAppState {
   switch (action.type) {
     case "set-busy":
-      return {
-        ...state,
-        busy: action.busy
-      };
+      return { ...state, busy: action.busy };
     case "set-status-line":
-      return {
-        ...state,
-        statusLine: action.statusLine
-      };
+      return { ...state, statusLine: action.statusLine };
     case "replace-home-snapshot":
       return withBrowseState(
         {
@@ -163,71 +159,94 @@ export function authenticatedAppReducer(
         }
       };
     case "reset-progress-tick":
-      return {
-        ...state,
-        progressTickMs: 0
-      };
+      return { ...state, progressTickMs: 0 };
     case "advance-progress-tick":
       return {
         ...state,
         progressTickMs: Math.min(state.homeSnapshot.durationMs, state.progressTickMs + action.amountMs)
       };
-    case "set-page":
+    case "set-main-view":
       return {
         ...state,
-        appPage: action.page,
+        mainView: action.mainView,
         contentIndex: 0,
         searchEditing: false
       };
     case "set-focus-region":
+      return { ...state, focusRegion: action.focusRegion };
+    case "move-sidebar-selection":
       return {
         ...state,
-        focusRegion: action.focusRegion
+        sidebarIndex: moveSelection(state.sidebarIndex, action.direction, getSidebarItemCount(state))
+      };
+    case "set-sidebar-index":
+      return {
+        ...state,
+        sidebarIndex: clampSelection(action.sidebarIndex, getSidebarItemCount(state))
       };
     case "move-content-selection":
       return {
         ...state,
-        contentIndex: moveSelection(
-          state.contentIndex,
-          action.direction,
-          getPageItemCount(state.appPage, state.browseState)
-        )
+        contentIndex: moveSelection(state.contentIndex, action.direction, getMainItemCount(state))
       };
     case "set-content-index":
       return {
         ...state,
-        contentIndex: clampContentIndex(state.appPage, state.browseState, action.contentIndex)
+        contentIndex: clampSelection(action.contentIndex, getMainItemCount(state))
       };
     case "set-search-editing":
-      return {
-        ...state,
-        searchEditing: action.searchEditing
-      };
-    case "set-search-query":
-      return withBrowseState(state, {
-        ...state.browseState,
-        searchQuery: action.searchQuery
-      });
+      return { ...state, searchEditing: action.searchEditing };
+    case "set-search-query": {
+      const trimmed = action.searchQuery.trim();
+      return withBrowseState(
+        {
+          ...state,
+          mainView: trimmed ? "search-results" : state.mainView === "search-results" ? "home" : state.mainView
+        },
+        {
+          ...state.browseState,
+          searchQuery: action.searchQuery
+        }
+      );
+    }
     case "search-started":
-      return withBrowseState(state, {
-        ...state.browseState,
-        searchBusy: true,
-        searchError: ""
-      });
+      return withBrowseState(
+        {
+          ...state,
+          mainView: state.browseState.searchQuery.trim() ? "search-results" : state.mainView
+        },
+        {
+          ...state.browseState,
+          searchBusy: true,
+          searchError: ""
+        }
+      );
     case "search-completed":
-      return withBrowseState(state, {
-        ...state.browseState,
-        searchBusy: false,
-        searchResults: action.results,
-        searchError: ""
-      });
+      return withBrowseState(
+        {
+          ...state,
+          mainView: "search-results"
+        },
+        {
+          ...state.browseState,
+          searchBusy: false,
+          searchResults: action.results,
+          searchError: ""
+        }
+      );
     case "search-failed":
-      return withBrowseState(state, {
-        ...state.browseState,
-        searchBusy: false,
-        searchError: action.error,
-        searchResults: { tracks: [], playlists: [], albums: [], artists: [] }
-      });
+      return withBrowseState(
+        {
+          ...state,
+          mainView: "search-results"
+        },
+        {
+          ...state.browseState,
+          searchBusy: false,
+          searchError: action.error,
+          searchResults: { tracks: [], playlists: [], albums: [], artists: [] }
+        }
+      );
     case "replace-browse-state":
       return withBrowseState(state, action.browseState);
     case "patch-browse-state":
@@ -236,53 +255,25 @@ export function authenticatedAppReducer(
         ...action.patch
       });
     case "open-liked-tracks":
-      return withBrowseState(
-        {
-          ...state,
-          appPage: "library",
-          contentIndex: 0
-        },
-        {
-          ...state.browseState,
-          libraryView: "liked-tracks"
-        }
-      );
-    case "close-liked-tracks":
-      return withBrowseState(
-        {
-          ...state,
-          appPage: "library",
-          contentIndex: 0
-        },
-        {
-          ...state.browseState,
-          libraryView: "overview"
-        }
-      );
+      return {
+        ...withBrowseState(state, state.browseState),
+        mainView: "liked-tracks",
+        focusRegion: "content",
+        contentIndex: 0
+      };
     case "open-playlist-detail":
-      return withBrowseState(
-        {
-          ...state,
-          appPage: "playlists",
-          contentIndex: 0
-        },
-        {
-          ...state.browseState,
-          playlistDetail: action.detail
-        }
-      );
-    case "close-playlist-detail":
-      return withBrowseState(
-        {
-          ...state,
-          appPage: "playlists",
-          contentIndex: 0
-        },
-        {
-          ...state.browseState,
-          playlistDetail: null
-        }
-      );
+      return {
+        ...withBrowseState(
+          state,
+          {
+            ...state.browseState,
+            playlistDetail: action.detail
+          }
+        ),
+        mainView: "playlist-detail",
+        focusRegion: "content",
+        contentIndex: 0
+      };
     case "open-device-picker":
       return {
         ...state,
@@ -314,10 +305,7 @@ export function authenticatedAppReducer(
         devicePicker: {
           ...state.devicePicker,
           devices: action.devices,
-          selectedIndex: clampDeviceSelection(
-            state.devicePicker.selectedIndex,
-            action.devices.length
-          )
+          selectedIndex: clampDeviceSelection(state.devicePicker.selectedIndex, action.devices.length)
         }
       };
     case "move-device-selection":
@@ -333,10 +321,7 @@ export function authenticatedAppReducer(
         }
       };
     case "set-link-flow":
-      return {
-        ...state,
-        linkFlow: action.linkFlow
-      };
+      return { ...state, linkFlow: action.linkFlow };
     default:
       return state;
   }

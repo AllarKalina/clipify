@@ -1,5 +1,7 @@
-export type AppPage = "home" | "search" | "library" | "playlists";
+import type { HomeSnapshot } from "./home-state";
+
 export type AppFocusRegion = "sidebar" | "content";
+export type MainView = "home" | "search-results" | "liked-tracks" | "playlist-detail";
 
 export type PlaylistSummary = {
   id: string;
@@ -55,8 +57,6 @@ export type ContentAction =
   | { type: "play-context"; uri: string }
   | { type: "open-playlist"; playlistId: string }
   | { type: "open-liked-tracks" }
-  | { type: "close-playlist-detail" }
-  | { type: "close-liked-tracks" }
   | { type: "noop" };
 
 export type ContentItem = {
@@ -83,10 +83,7 @@ export type ShellBrowseState = {
   searchResults: SearchResults;
   searchBusy: boolean;
   searchError: string;
-  libraryView: "overview" | "liked-tracks";
 };
-
-export const appPages: AppPage[] = ["home", "search", "library", "playlists"];
 
 export function createInitialShellBrowseState(): ShellBrowseState {
   return {
@@ -103,19 +100,18 @@ export function createInitialShellBrowseState(): ShellBrowseState {
       artists: []
     },
     searchBusy: false,
-    searchError: "",
-    libraryView: "overview"
+    searchError: ""
   };
 }
 
-export function getPageLabel(page: AppPage): string {
-  return page === "home"
+export function getMainViewLabel(mainView: MainView): string {
+  return mainView === "home"
     ? "Home"
-    : page === "search"
+    : mainView === "search-results"
       ? "Search"
-      : page === "library"
-        ? "Library"
-        : "Playlists";
+      : mainView === "liked-tracks"
+        ? "Liked songs"
+        : "Playlist";
 }
 
 export function moveSelection(current: number, direction: "up" | "down", itemCount: number): number {
@@ -134,140 +130,87 @@ export function flattenSections(sections: ContentSection[]): ContentItem[] {
   return sections.flatMap((section) => section.items);
 }
 
-export function buildHomeSections(state: ShellBrowseState): ContentSection[] {
+export function buildLibrarySidebarItems(state: ShellBrowseState): ContentItem[] {
   return [
     {
-      id: "recent",
-      title: "Recently played",
-      items: state.recentTracks.slice(0, 6).map((track) => ({
-        id: `recent-${track.id || track.uri}`,
+      id: "library-liked",
+      title: "Liked songs",
+      subtitle: `${state.likedTracks.length} saved tracks`,
+      meta: "library",
+      action: { type: "open-liked-tracks" } as const
+    },
+    ...state.playlists.map((playlist) => ({
+      id: `library-playlist-${playlist.id}`,
+      title: playlist.name,
+      subtitle: playlist.ownerName,
+      meta: `${playlist.trackCount} tracks`,
+      action: { type: "open-playlist", playlistId: playlist.id } as const
+    }))
+  ];
+}
+
+export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowseState): ContentSection[] {
+  if (homeSnapshot.spotify !== "linked") {
+    return [];
+  }
+
+  return [
+    {
+      id: "quick-launch",
+      title: "Quick launch",
+      items: state.playlists.slice(0, 6).map((playlist) => ({
+        id: `quick-launch-${playlist.id}`,
+        title: playlist.name,
+        subtitle: playlist.ownerName,
+        meta: `${playlist.trackCount} tracks`,
+        action: { type: "play-context", uri: playlist.uri } as const
+      }))
+    },
+    {
+      id: "picked",
+      title: "Picked for you",
+      items: state.featuredPlaylists.slice(0, 6).map((playlist) => ({
+        id: `picked-${playlist.id}`,
+        title: playlist.name,
+        subtitle: playlist.description || playlist.ownerName,
+        meta: `${playlist.trackCount} tracks`,
+        action: { type: "open-playlist", playlistId: playlist.id } as const
+      }))
+    }
+  ].filter((section) => section.items.length > 0);
+}
+
+export function buildLikedTracksSections(state: ShellBrowseState): ContentSection[] {
+  return [
+    {
+      id: "liked-tracks",
+      title: "Liked songs",
+      items: state.likedTracks.map((track) => ({
+        id: `liked-${track.id || track.uri}`,
         title: track.trackName,
         subtitle: track.artistName,
         meta: track.albumName,
         action: { type: "play-track", uri: track.uri } as const
       }))
-    },
-    {
-      id: "featured",
-      title: "Browse picks",
-      items: state.featuredPlaylists.slice(0, 6).map((playlist) => ({
-        id: `featured-${playlist.id}`,
-        title: playlist.name,
-        subtitle: playlist.description || playlist.ownerName,
-        meta: `${playlist.trackCount} tracks`,
-        action: { type: "open-playlist", playlistId: playlist.id } as const
-      }))
-    },
-    {
-      id: "playlists",
-      title: "Your playlists",
-      items: state.playlists.slice(0, 6).map((playlist) => ({
-        id: `playlist-${playlist.id}`,
-        title: playlist.name,
-        subtitle: playlist.description || playlist.ownerName,
-        meta: `${playlist.trackCount} tracks`,
-        action: { type: "open-playlist", playlistId: playlist.id } as const
-      }))
     }
   ].filter((section) => section.items.length > 0);
 }
 
-export function buildLibrarySections(state: ShellBrowseState): ContentSection[] {
-  if (state.libraryView === "liked-tracks") {
-    return [
-      {
-        id: "liked-header",
-        title: "Liked tracks",
-        items: [
-          {
-            id: "liked-back",
-            title: "Back to library",
-            subtitle: "Return to playlists and entries",
-            action: { type: "close-liked-tracks" } as const
-          }
-        ]
-      },
-      {
-        id: "liked-tracks",
-        title: "Saved tracks",
-        items: state.likedTracks.map((track) => ({
-          id: `liked-${track.id || track.uri}`,
-          title: track.trackName,
-          subtitle: track.artistName,
-          meta: track.albumName,
-          action: { type: "play-track", uri: track.uri } as const
-        }))
-      }
-    ];
+export function buildPlaylistDetailSections(state: ShellBrowseState): ContentSection[] {
+  if (!state.playlistDetail) {
+    return [];
   }
 
   return [
     {
-      id: "entries",
-      title: "Your library",
-      items: [
-        {
-          id: "liked-entry",
-          title: "Liked songs",
-          subtitle: `${state.likedTracks.length} saved tracks`,
-          action: { type: "open-liked-tracks" } as const
-        }
-      ]
-    },
-    {
-      id: "library-playlists",
-      title: "Your playlists",
-      items: state.playlists.map((playlist) => ({
-        id: `library-playlist-${playlist.id}`,
-        title: playlist.name,
-        subtitle: playlist.description || playlist.ownerName,
-        meta: `${playlist.trackCount} tracks`,
-        action: { type: "open-playlist", playlistId: playlist.id } as const
-      }))
-    }
-  ].filter((section) => section.items.length > 0);
-}
-
-export function buildPlaylistsSections(state: ShellBrowseState): ContentSection[] {
-  if (state.playlistDetail) {
-    return [
-      {
-        id: "playlist-header",
-        title: state.playlistDetail.name,
-        items: [
-          {
-            id: "playlist-back",
-            title: "Back to playlists",
-            subtitle: state.playlistDetail.description || state.playlistDetail.ownerName,
-            meta: `${state.playlistDetail.trackCount} tracks`,
-            action: { type: "close-playlist-detail" } as const
-          }
-        ]
-      },
-      {
-        id: "playlist-tracks",
-        title: "Tracks",
-        items: state.playlistDetail.tracks.map((track) => ({
-          id: `playlist-track-${track.id || track.uri}`,
-          title: track.trackName,
-          subtitle: track.artistName,
-          meta: track.albumName,
-          action: { type: "play-track", uri: track.uri } as const
-        }))
-      }
-    ];
-  }
-
-  return [
-    {
-      id: "playlists",
-      title: "Playlists",
-      items: state.playlists.map((playlist) => ({
-        id: `playlist-list-${playlist.id}`,
-        title: playlist.name,
-        subtitle: playlist.description || playlist.ownerName,
-        meta: `${playlist.trackCount} tracks`,
-        action: { type: "open-playlist", playlistId: playlist.id } as const
+      id: "playlist-tracks",
+      title: state.playlistDetail.name,
+      items: state.playlistDetail.tracks.map((track) => ({
+        id: `playlist-track-${track.id || track.uri}`,
+        title: track.trackName,
+        subtitle: track.artistName,
+        meta: track.albumName,
+        action: { type: "play-track", uri: track.uri } as const
       }))
     }
   ];

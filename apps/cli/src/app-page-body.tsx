@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import React from "react";
-import type { ContentSection, AppFocusRegion, AppPage, ShellBrowseState } from "./app-shell-state";
-import { getPageLabel } from "./app-shell-state";
+import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
+import { getMainViewLabel } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 
@@ -13,8 +13,30 @@ function renderRow(content: string, selected: boolean, activeRegion: boolean) {
   );
 }
 
+function renderTile(item: ContentItem, selected: boolean, activeRegion: boolean, width: number) {
+  const lineOne = clipLine(item.title, width - 2);
+  const lineTwo = clipLine(item.subtitle || item.meta || " ", width - 2);
+
+  return (
+    <Box
+      key={item.id}
+      flexDirection="column"
+      width={width}
+      marginRight={1}
+      paddingX={1}
+      borderStyle="round"
+      borderColor={selected && activeRegion ? "green" : "gray"}
+    >
+      <Text color={selected && activeRegion ? "green" : "white"} bold>
+        {lineOne}
+      </Text>
+      <Text color="white">{lineTwo}</Text>
+    </Box>
+  );
+}
+
 type AppPageBodyProps = {
-  page: AppPage;
+  mainView: MainView;
   browse: ShellBrowseState;
   sections: ContentSection[];
   contentIndex: number;
@@ -26,7 +48,7 @@ type AppPageBodyProps = {
 };
 
 export function AppPageBody({
-  page,
+  mainView,
   browse,
   sections,
   contentIndex,
@@ -36,56 +58,75 @@ export function AppPageBody({
   player,
   linkPending
 }: AppPageBodyProps) {
-  let absoluteIndex = 0;
   const contentWidth = width - 4;
-  const itemCount = sections.reduce((total, section) => total + section.items.length, 0);
+  const searchSelected = contentIndex === 0;
+  let absoluteIndex = 1;
+  const viewLabel = getMainViewLabel(mainView);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
-      <Text color="green" bold>
-        {getPageLabel(page)}
-      </Text>
-      {page === "search" ? (
-        <Box marginBottom={1} flexDirection="column">
-          <Text color="white">{clipLine("Query", contentWidth)}</Text>
-          <Text color={searchEditing ? "black" : "white"} backgroundColor={searchEditing ? "green" : undefined}>
-            {clipLine(browse.searchQuery ? browse.searchQuery : "Press [enter] to type a search", contentWidth)}
-          </Text>
-          {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
-          {browse.searchBusy ? <Text color="yellow">{clipLine("Searching Spotify...", contentWidth)}</Text> : null}
-        </Box>
-      ) : null}
-      {sections.length === 0 ? (
+      <Box marginBottom={1} flexDirection="column">
+        <Text color="green" bold>
+          {clipLine(viewLabel, contentWidth)}
+        </Text>
+        <Text color="cyan">{clipLine(mainView === "home" ? "What do you want to play?" : "[h] Home  What do you want to play?", contentWidth)}</Text>
+        <Text color={searchSelected && focusRegion === "content" ? "black" : "white"} backgroundColor={searchSelected && focusRegion === "content" ? "green" : undefined}>
+          {clipLine(browse.searchQuery || "Type [/] or press [enter] to search", contentWidth)}
+        </Text>
+        {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
+        {browse.searchBusy ? <Text color="yellow">{clipLine("Searching Spotify...", contentWidth)}</Text> : null}
+      </Box>
+      {player.spotify !== "linked" ? (
         <Text color="white">
           {clipLine(
-            player.spotify !== "linked"
-              ? linkPending
-                ? "Finish Spotify link to unlock browsing."
-                : "Link Spotify with [l] to populate Home, Search, Library and Playlists."
-              : page === "search"
-                ? "Press [/] to start a search."
-                : "Nothing to show on this page yet.",
+            linkPending
+              ? "Finish Spotify link to unlock Home and library."
+              : "Link Spotify with [l] to unlock search, quick launch, and your library.",
+            contentWidth
+          )}
+        </Text>
+      ) : sections.length === 0 ? (
+        <Text color="white">
+          {clipLine(
+            mainView === "search-results" && browse.searchQuery
+              ? "No results for this query."
+              : `Nothing to show in ${getMainViewLabel(mainView)} yet.`,
             contentWidth
           )}
         </Text>
       ) : (
-        sections.map((section) => (
-          <Box key={section.id} flexDirection="column" marginBottom={1}>
-            <Text color="cyan">{section.title}</Text>
-            {section.items.map((item) => {
-              const selected = absoluteIndex === contentIndex;
-              const row = clipLine(
-                item.meta ? `${item.title} · ${item.subtitle} · ${item.meta}` : `${item.title} · ${item.subtitle}`,
-                contentWidth
-              );
-              absoluteIndex += 1;
-              return <React.Fragment key={item.id}>{renderRow(row, selected, focusRegion === "content")}</React.Fragment>;
-            })}
-          </Box>
-        ))
+        sections.map((section) => {
+          const tileMode = mainView === "home";
+          const tileWidth = Math.max(24, Math.floor((contentWidth - 2) / 2));
+
+          return (
+            <Box key={section.id} flexDirection="column" marginBottom={1}>
+              <Text color="cyan">{section.title}</Text>
+              {tileMode ? (
+                <Box flexWrap="wrap">
+                  {section.items.map((item) => {
+                    const selected = absoluteIndex === contentIndex;
+                    absoluteIndex += 1;
+                    return renderTile(item, selected, focusRegion === "content", tileWidth);
+                  })}
+                </Box>
+              ) : (
+                section.items.map((item) => {
+                  const selected = absoluteIndex === contentIndex;
+                  const row = clipLine(
+                    item.meta ? `${item.title} · ${item.subtitle} · ${item.meta}` : `${item.title} · ${item.subtitle}`,
+                    contentWidth
+                  );
+                  absoluteIndex += 1;
+                  return <React.Fragment key={item.id}>{renderRow(row, selected, focusRegion === "content")}</React.Fragment>;
+                })
+              )}
+            </Box>
+          );
+        })
       )}
-      {page !== "search" ? null : itemCount === 0 && !browse.searchBusy && browse.searchQuery ? (
-        <Text color="white">{clipLine("No results for this query.", contentWidth)}</Text>
+      {!searchEditing && mainView === "home" ? (
+        <Text color="white">{clipLine("Quick launch starts playback. Sidebar opens library detail. Featured picks open detail.", contentWidth)}</Text>
       ) : null}
     </Box>
   );

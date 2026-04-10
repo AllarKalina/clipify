@@ -56,3 +56,4 @@ packages/
 - `authenticated-app-controller.tsx` owns authenticated-shell wiring only.
 - authenticated commands, effects, selectors, and input intents live in separate CLI modules and should be extended in place instead of growing the controller.
 - `app-shell.tsx` and its child view components are presentational only; they should receive derived props rather than raw orchestration state whenever possible.
+- the authenticated shell is modeled as a library sidebar plus a main pane; avoid reintroducing page-tab navigation when extending the CLI.

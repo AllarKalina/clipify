@@ -31,38 +31,32 @@ Desired outcomes:
 - explain `no active device` vs `playback controlled elsewhere`
 - surface a clearer failure state when transport has nowhere to go
 
-## 2. Queue / Up Next
+## 2. Spotify-Like Home Reshape
 
-Goal: make the home screen useful even when the current track is already obvious.
+Goal: make the authenticated shell feel like a compact Spotify client.
 
 Why next:
 
 - biggest product win after now-playing
-- gives the home screen a forward-looking surface
-- makes the app feel like a controller, not only a status board
+- removes low-value Home chrome that duplicated the bottom player
+- gives Home a clearer hierarchy: search, shortcuts, discovery
 
 Desired outcomes:
 
-- small `Up next` or queue panel near the hero
-- enough metadata to identify upcoming tracks quickly
-- terminal-friendly, compact rendering
+- library-first sidebar instead of page navigation
+- interactive search bar at the top of the main pane
+- `Quick launch` from the user library
+- `Picked for you` from featured playlists
 
-## 3. Playlists Quick Launch
+Status:
 
-Goal: let the home screen start music, not only observe and control it.
+- completed in the Spotify-like shell slice
+- bottom player owns now-playing; Home no longer duplicates it
+- sidebar now represents the user library
+- Home shows search, quick launch, and featured picks
+- search results replace Home content in the main pane
 
-Why after queue:
-
-- natural next step once playback state is solid
-- gives users a direct “do something” entry point from home
-
-Desired outcomes:
-
-- short list of recent or pinned playlists
-- fast keyboard launch from the home screen
-- compact metadata and clear selection behavior
-
-## 4. Background Refresh Polish
+## 3. Background Refresh Polish
 
 Goal: make the home feel more live and less mechanically refreshed.
 
@@ -76,7 +70,7 @@ Desired outcomes:
 - smarter status-line handling during silent refresh
 - optional subtle `live` signal instead of static `Refreshed`
 
-## 5. Better Transport Feedback
+## 4. Better Transport Feedback
 
 Goal: make transport actions easier to trust and debug.
 
@@ -90,7 +84,7 @@ Desired outcomes:
 - clearer guidance for premium/device/scope failures
 - better relink messaging when scopes are stale
 
-## 6. Progress / Timing Polish
+## 5. Progress / Timing Polish
 
 Goal: refine playback feel after the functional fix is shipped.
 
@@ -126,8 +120,8 @@ Status:
 If only one roadmap order is needed, use:
 
 1. Device state polish
-2. Queue / up next
-3. Playlists quick launch
-4. Background refresh polish
+2. Background refresh polish
+3. Better transport feedback
+4. Progress / timing polish
 
-This is the best path from “good terminal status app” to “real Spotify terminal surface”.
+This is the best path from “good terminal status app” to “real Spotify-like terminal surface”.

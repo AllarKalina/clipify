@@ -3,58 +3,112 @@ import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authen
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
 
 describe("authenticated app selectors", () => {
-  test("builds active sections from current page", () => {
+  test("builds home sections as quick launch plus picked for you", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
+      contentIndex: 1,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
       browseState: {
         ...createInitialAuthenticatedAppState("").browseState,
-        recentTracks: [
+        playlists: [
           {
-            id: "track-1",
-            trackName: "Dreams",
-            artistName: "Fleetwood Mac",
-            albumName: "Rumours",
-            uri: "spotify:track:1",
-            durationMs: 257000,
-            playedAt: "2026-04-11T09:00:00.000Z"
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 24,
+            uri: "spotify:playlist:1"
+          }
+        ],
+        featuredPlaylists: [
+          {
+            id: "featured-1",
+            name: "Mint",
+            description: "Fresh electronic picks",
+            imageUrl: "",
+            ownerName: "Spotify",
+            trackCount: 50,
+            uri: "spotify:playlist:featured-1"
           }
         ]
       }
     };
 
     const viewModel = selectShellViewModel(state);
-    expect(viewModel.activeSections[0]?.title).toBe("Recently played");
-    expect(viewModel.selectedItem?.title).toBe("Dreams");
+    expect(viewModel.activeSections.map((section) => section.title)).toEqual(["Quick launch", "Picked for you"]);
+    expect(viewModel.activeSections[0]?.items[0]?.action).toEqual({
+      type: "play-context",
+      uri: "spotify:playlist:1"
+    });
+    expect(viewModel.selectedItem?.title).toBe("Roadtrip");
   });
 
-  test("search editing starts only when search page has no active items", () => {
-    const emptySearch = {
+  test("builds sidebar library items with liked songs first", () => {
+    const state = {
       ...createInitialAuthenticatedAppState(""),
-      appPage: "search" as const
-    };
-    const populatedSearch = {
-      ...emptySearch,
       browseState: {
-        ...emptySearch.browseState,
-        searchResults: {
-          tracks: [
-            {
-              id: "track-1",
-              trackName: "Dreams",
-              artistName: "Fleetwood Mac",
-              albumName: "Rumours",
-              uri: "spotify:track:1",
-              durationMs: 257000
-            }
-          ],
-          playlists: [],
-          albums: [],
-          artists: []
-        }
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 24,
+            uri: "spotify:playlist:1"
+          }
+        ],
+        likedTracks: [
+          {
+            id: "track-1",
+            trackName: "Dreams",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            uri: "spotify:track:1",
+            durationMs: 257000
+          }
+        ]
       }
     };
 
-    expect(selectCanStartSearchEditing(emptySearch)).toBeTrue();
-    expect(selectCanStartSearchEditing(populatedSearch)).toBeFalse();
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.sidebarItems[0]?.title).toBe("Liked songs");
+    expect(viewModel.sidebarItems[1]?.title).toBe("Roadtrip");
+  });
+
+  test("search bar is the only search-edit entry point", () => {
+    const emptyMain = createInitialAuthenticatedAppState("");
+    const populatedMain = {
+      ...emptyMain,
+      contentIndex: 1,
+      browseState: {
+        ...emptyMain.browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 24,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      },
+      homeSnapshot: {
+        ...emptyMain.homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      }
+    };
+
+    expect(selectCanStartSearchEditing(emptyMain)).toBeTrue();
+    expect(selectCanStartSearchEditing(populatedMain)).toBeFalse();
   });
 });

@@ -16,7 +16,7 @@ import {
 } from "./authenticated-app-commands";
 import { useAuthenticatedAppEffects } from "./authenticated-app-effects";
 import { resolveAuthenticatedIntent } from "./authenticated-app-input";
-import { selectSelectedItem, selectShellViewModel } from "./authenticated-app-selectors";
+import { selectSelectedItem, selectShellViewModel, selectSidebarItem } from "./authenticated-app-selectors";
 import {
   authenticatedAppReducer,
   createInitialAuthenticatedAppState,
@@ -109,19 +109,36 @@ export function AuthenticatedAppController({
           focusRegion: state.focusRegion === "sidebar" ? "content" : "sidebar"
         });
         return;
+      case "move-sidebar-selection":
+        dispatch({ type: "move-sidebar-selection", direction: intent.direction });
+        return;
+      case "activate-sidebar-item": {
+        const selectedSidebarItem = selectSidebarItem(state);
+        if (selectedSidebarItem) {
+          executeContentAction(context, selectedSidebarItem.action);
+        }
+        return;
+      }
       case "set-focus-region":
         dispatch({ type: "set-focus-region", focusRegion: intent.focusRegion });
         return;
-      case "set-page":
-        dispatch({ type: "set-page", page: intent.page });
+      case "go-home":
+        dispatch({ type: "set-search-query", searchQuery: "" });
+        dispatch({ type: "set-main-view", mainView: "home" });
+        dispatch({ type: "set-focus-region", focusRegion: "content" });
         return;
       case "move-content-selection":
         dispatch({ type: "move-content-selection", direction: intent.direction });
         return;
       case "start-search-editing":
+        dispatch({ type: "set-focus-region", focusRegion: "content" });
+        dispatch({ type: "set-content-index", contentIndex: 0 });
         dispatch({ type: "set-search-editing", searchEditing: true });
         return;
       case "stop-search-editing":
+        if (!state.browseState.searchQuery.trim()) {
+          dispatch({ type: "set-main-view", mainView: "home" });
+        }
         dispatch({ type: "set-search-editing", searchEditing: false });
         return;
       case "append-search-query":
@@ -211,8 +228,10 @@ export function AuthenticatedAppController({
 
   return (
     <AuthenticatedShell
-      page={state.appPage}
+      mainView={state.mainView}
       focusRegion={state.focusRegion}
+      sidebarItems={shell.sidebarItems}
+      sidebarIndex={state.sidebarIndex}
       contentIndex={state.contentIndex}
       player={displayedHomeSnapshot}
       browse={state.browseState}

@@ -70,10 +70,10 @@ Known-good TUI paths:
 2. Arrow keys move selection.
 3. `Esc` cancels inline auth input and returns to the menu.
 4. Sign up flow transitions to authenticated dashboard.
-5. If Spotify is already linked, login lands in the authenticated shell with `Home / Search / Library / Playlists`.
-6. Authenticated shell supports device picker with `d`, refresh with `r`, logout with `o`, and quit with `q`.
+5. If Spotify is already linked, login lands in the authenticated shell with a library sidebar and a Home main pane.
+6. Authenticated shell Home shows top search, `Quick launch`, and `Picked for you`; sidebar rows open library detail, `d` opens devices, `r` refreshes, `o` logs out, and `q` quits.
 7. If Spotify is not linked, signup/login lands on the authenticated shell link state and can start browser-based Spotify auth with `l`.
-8. Search page supports `/` or `Enter` to begin editing the query when no result row is selected.
+8. `/` or `Enter` on the top search bar begins editing the query; search results replace the Home content in the main pane.
 
 ## Known Local Pitfalls
 

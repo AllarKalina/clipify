@@ -1,6 +1,5 @@
-import { appPages, moveSelection } from "./app-shell-state";
 import { nextRepeatMode } from "./authenticated-app-utils";
-import { selectCanStartSearchEditing, selectSelectedItem } from "./authenticated-app-selectors";
+import { selectCanStartSearchEditing, selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
 import type { AuthenticatedAppState } from "./authenticated-app-state";
 
 export type AuthenticatedIntent =
@@ -11,12 +10,14 @@ export type AuthenticatedIntent =
   | { type: "submit-device-selection" }
   | { type: "toggle-focus" }
   | { type: "set-focus-region"; focusRegion: "sidebar" | "content" }
-  | { type: "set-page"; page: AuthenticatedAppState["appPage"] }
+  | { type: "move-sidebar-selection"; direction: "up" | "down" }
+  | { type: "activate-sidebar-item" }
   | { type: "move-content-selection"; direction: "up" | "down" }
   | { type: "start-search-editing" }
   | { type: "stop-search-editing" }
   | { type: "append-search-query"; value: string }
   | { type: "trim-search-query" }
+  | { type: "go-home" }
   | { type: "logout" }
   | { type: "open-device-picker" }
   | { type: "refresh" }
@@ -49,7 +50,7 @@ export function resolveAuthenticatedIntent(
     return { type: "exit" };
   }
 
-  if (selectInputBlockedFallback(state)) {
+  if (state.busy) {
     return { type: "none" };
   }
 
@@ -73,17 +74,7 @@ export function resolveAuthenticatedIntent(
     return { type: "none" };
   }
 
-  if (input === "q" && !state.searchEditing) {
-    return { type: "exit" };
-  }
-
-  if (key.tab) {
-    return {
-      type: "toggle-focus"
-    };
-  }
-
-  if (state.searchEditing && state.appPage === "search") {
+  if (state.searchEditing) {
     if (key.escape || key.return) {
       return { type: "stop-search-editing" };
     }
@@ -99,6 +90,18 @@ export function resolveAuthenticatedIntent(
     return { type: "none" };
   }
 
+  if (input === "q") {
+    return { type: "exit" };
+  }
+
+  if (key.tab) {
+    return { type: "toggle-focus" };
+  }
+
+  if (input === "h") {
+    return { type: "go-home" };
+  }
+
   if (input === "o") {
     return { type: "logout" };
   }
@@ -109,21 +112,15 @@ export function resolveAuthenticatedIntent(
 
   if (state.focusRegion === "sidebar") {
     if (key.upArrow) {
-      return {
-        type: "set-page",
-        page: appPages[moveSelection(appPages.indexOf(state.appPage), "up", appPages.length)] ?? "home"
-      };
+      return { type: "move-sidebar-selection", direction: "up" };
     }
 
     if (key.downArrow) {
-      return {
-        type: "set-page",
-        page: appPages[moveSelection(appPages.indexOf(state.appPage), "down", appPages.length)] ?? "home"
-      };
+      return { type: "move-sidebar-selection", direction: "down" };
     }
 
-    if (key.rightArrow || key.return) {
-      return { type: "set-focus-region", focusRegion: "content" };
+    if ((key.return || key.rightArrow) && selectSidebarItem(state)) {
+      return { type: "activate-sidebar-item" };
     }
   }
 
@@ -140,7 +137,7 @@ export function resolveAuthenticatedIntent(
       return { type: "move-content-selection", direction: "down" };
     }
 
-    if (state.appPage === "search" && (input === "/" || (key.return && selectCanStartSearchEditing(state)))) {
+    if (input === "/" || (key.return && selectCanStartSearchEditing(state))) {
       return { type: "start-search-editing" };
     }
 
@@ -192,8 +189,4 @@ export function resolveAuthenticatedIntent(
   }
 
   return { type: "none" };
-}
-
-function selectInputBlockedFallback(state: AuthenticatedAppState) {
-  return state.busy;
 }
