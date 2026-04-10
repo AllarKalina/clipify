@@ -1,4 +1,4 @@
-import { ApiClientError, type ApiClient } from "@clipify/api-client";
+import { ApiClientError, type ApiClient, type SpotifyDeviceSummary } from "@clipify/api-client";
 import { Box, Text, render, useApp, useInput, useStdout } from "ink";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -35,6 +35,7 @@ import {
   type ShellBrowseState
 } from "./app-shell-state";
 import { clearSessionCookie, saveSessionCookie } from "./config";
+import { clampDeviceSelection } from "./device-picker-state";
 import {
   applyProgressTick,
   computeHomeSnapshot,
@@ -362,6 +363,10 @@ function App(props: AppDeps) {
   const [contentIndex, setContentIndex] = useState(0);
   const [browseState, setBrowseState] = useState<ShellBrowseState>(() => createInitialShellBrowseState());
   const [searchEditing, setSearchEditing] = useState(false);
+  const [devicePickerOpen, setDevicePickerOpen] = useState(false);
+  const [devicePickerDevices, setDevicePickerDevices] = useState<SpotifyDeviceSummary[]>([]);
+  const [devicePickerIndex, setDevicePickerIndex] = useState(0);
+  const [devicePickerLoading, setDevicePickerLoading] = useState(false);
 
   const client = useMemo(() => props.makeClient(sessionCookie), [props, sessionCookie]);
   const isAuthenticated = Boolean(sessionCookie);
@@ -386,6 +391,30 @@ function App(props: AppDeps) {
     return refreshWithClientMessage(targetClient, "Refreshed");
   };
 
+  const loadDevicesWithClient = async (targetClient: ApiClient): Promise<SpotifyDeviceSummary[]> => {
+    const nextDevices = (await targetClient.getSpotifyDevices()).items;
+    setDevicePickerDevices(nextDevices);
+    setDevicePickerIndex((current) => clampDeviceSelection(current, nextDevices.length));
+    return nextDevices;
+  };
+
+  const openDevicePicker = () => {
+    setDevicePickerOpen(true);
+    setDevicePickerLoading(true);
+    void loadDevicesWithClient(client)
+      .catch((error) => {
+        setStatusLine(`Device list failed: ${toMessage(error)}`);
+      })
+      .finally(() => {
+        setDevicePickerLoading(false);
+      });
+  };
+
+  const closeDevicePicker = () => {
+    setDevicePickerOpen(false);
+    setDevicePickerLoading(false);
+  };
+
   const refreshWithClientMessage = async (targetClient: ApiClient, successLine: string): Promise<HomeSnapshot> => {
     setBusy(true);
     const next = await computeHomeSnapshot(targetClient);
@@ -403,6 +432,9 @@ function App(props: AppDeps) {
     setBusy(false);
     setStatusLine(next.backend === "connected" ? successLine : "Backend unreachable or unauthorized");
     if (next.backend === "connected" && next.spotify === "linked") {
+      try {
+        await loadDevicesWithClient(targetClient);
+      } catch {}
       try {
         const loadedBrowse = await loadBrowseShell(targetClient, {
           ...browseState,
@@ -445,6 +477,10 @@ function App(props: AppDeps) {
     setFocusRegion("content");
     setContentIndex(0);
     setSearchEditing(false);
+    setDevicePickerOpen(false);
+    setDevicePickerDevices([]);
+    setDevicePickerIndex(0);
+    setDevicePickerLoading(false);
     setStatusLine(successLine);
   };
 
@@ -521,6 +557,25 @@ function App(props: AppDeps) {
 
       await new Promise((resolve) => setTimeout(resolve, 300));
       await refreshSilentlyWithClient(client);
+    })();
+  };
+
+  const runDeviceTransfer = (device: SpotifyDeviceSummary) => {
+    if (device.isRestricted) {
+      setStatusLine(`${device.name} is restricted and cannot be controlled from Clipify.`);
+      return;
+    }
+
+    setBusy(true);
+    void (async () => {
+      try {
+        await client.transferSpotifyPlayback(device.id);
+        closeDevicePicker();
+        await refreshWithClientMessage(client, `Device ready: ${device.name}`);
+      } catch (error) {
+        setBusy(false);
+        setStatusLine(getPlaybackFailureMessage(error, "Device transfer"));
+      }
     })();
   };
 
@@ -609,6 +664,10 @@ function App(props: AppDeps) {
       setContentIndex(Math.max(0, count - 1));
     }
   }, [appPage, browseState, contentIndex]);
+
+  useEffect(() => {
+    setDevicePickerIndex((current) => clampDeviceSelection(current, devicePickerDevices.length));
+  }, [devicePickerDevices]);
 
   useEffect(() => {
     if (!isAuthenticated || appPage !== "search" || !browseState.searchQuery.trim()) {
@@ -720,6 +779,33 @@ function App(props: AppDeps) {
     }
 
     if (busy) {
+      return;
+    }
+
+    if (devicePickerOpen) {
+      if (key.escape || input === "d") {
+        closeDevicePicker();
+        return;
+      }
+
+      if (key.upArrow) {
+        setDevicePickerIndex((current) => moveSelection(current, "up", devicePickerDevices.length));
+        return;
+      }
+
+      if (key.downArrow) {
+        setDevicePickerIndex((current) => moveSelection(current, "down", devicePickerDevices.length));
+        return;
+      }
+
+      if (key.return) {
+        const selectedDevice = devicePickerDevices[devicePickerIndex];
+        if (selectedDevice) {
+          runDeviceTransfer(selectedDevice);
+        }
+        return;
+      }
+
       return;
     }
 
@@ -870,7 +956,7 @@ function App(props: AppDeps) {
       return;
     }
 
-    if (input === "o") {
+	    if (input === "o") {
       setBusy(true);
       void (async () => {
         try {
@@ -881,10 +967,15 @@ function App(props: AppDeps) {
           setStatusLine(`Logout failed: ${toMessage(error)}`);
         }
       })();
+	      return;
+	    }
+
+    if (input === "d") {
+      openDevicePicker();
       return;
     }
 
-    if (focusRegion === "sidebar") {
+	    if (focusRegion === "sidebar") {
       if (key.upArrow) {
         setAppPage((current) => appPages[moveSelection(appPages.indexOf(current), "up", appPages.length)] ?? "home");
         return;
@@ -1049,6 +1140,10 @@ function App(props: AppDeps) {
       statusLine={statusLine}
       searchEditing={searchEditing}
       linkPending={Boolean(linkFlow)}
+      devicePickerOpen={devicePickerOpen}
+      devicePickerDevices={devicePickerDevices}
+      devicePickerIndex={devicePickerIndex}
+      devicePickerLoading={devicePickerLoading}
     />
   );
 }

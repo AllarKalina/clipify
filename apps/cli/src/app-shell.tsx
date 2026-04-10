@@ -1,6 +1,8 @@
+import type { SpotifyDeviceSummary } from "@clipify/api-client";
 import { Box, Text } from "ink";
 import React from "react";
 import type { HomeSnapshot } from "./home-state";
+import { describeAvailableDevice, describePlayerDevice } from "./device-picker-state";
 import {
   appPages,
   buildHomeSections,
@@ -27,6 +29,10 @@ type AppShellProps = {
   statusLine: string;
   searchEditing: boolean;
   linkPending: boolean;
+  devicePickerOpen: boolean;
+  devicePickerDevices: SpotifyDeviceSummary[];
+  devicePickerIndex: number;
+  devicePickerLoading: boolean;
 };
 
 function clipLine(value: string, width: number): string {
@@ -64,23 +70,6 @@ function formatProgress(progressMs: number, durationMs: number, width: number): 
   const ratio = Math.max(0, Math.min(1, progressMs / durationMs));
   const filled = Math.max(1, Math.round(ratio * width));
   return `${"█".repeat(filled)}${"─".repeat(Math.max(0, width - filled))}`;
-}
-
-function describeDevice(player: HomeSnapshot): string {
-  const suffix = player.deviceType ? ` · ${player.deviceType.toLowerCase()}` : "";
-  if (player.deviceStatus === "active" && player.deviceName) {
-    return `${player.deviceName}${suffix}`;
-  }
-
-  if (player.deviceStatus === "available" && player.deviceName) {
-    return `${player.deviceName}${suffix} ready`;
-  }
-
-  if (player.deviceStatus === "restricted" && player.deviceName) {
-    return `${player.deviceName}${suffix} restricted`;
-  }
-
-  return "No active device";
 }
 
 function renderRow(content: string, selected: boolean, activeRegion: boolean) {
@@ -210,7 +199,7 @@ function BottomPlayer({
       <Box justifyContent="space-between">
         <Text color="white">{clipLine(playbackLabel, leftWidth)}</Text>
         <Text color="white">{clipLine(`[${getPageLabel(page)}] ${focusRegion}`, centerWidth)}</Text>
-        <Text color="white">{clipLine(describeDevice(player), rightWidth)}</Text>
+        <Text color="white">{clipLine(describePlayerDevice(player), rightWidth)}</Text>
       </Box>
       <Box justifyContent="space-between">
         <Text color="white">{clipLine(player.albumName || " ", leftWidth)}</Text>
@@ -230,7 +219,60 @@ function BottomPlayer({
       <Text color="white">
         {clipLine("[tab] focus  [↑↓] move  [enter] select/edit  [space] play  [,/.] prev/next  [s/t] shuffle/repeat  [-/=] volume", width - 4)}
       </Text>
+      <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit", width - 4)}</Text>
       <Text color={busy ? "yellow" : player.error ? "red" : "cyan"}>{clipLine(busy ? "working..." : statusLine, width - 4)}</Text>
+    </Box>
+  );
+}
+
+function DevicePickerOverlay({
+  width,
+  height,
+  devices,
+  selectedIndex,
+  loading
+}: {
+  width: number;
+  height: number;
+  devices: SpotifyDeviceSummary[];
+  selectedIndex: number;
+  loading: boolean;
+}) {
+  const panelWidth = Math.min(72, Math.max(44, width - 8));
+  const panelHeight = Math.min(12, Math.max(8, height - 6));
+  const contentWidth = panelWidth - 4;
+  const visibleItems = devices.slice(0, Math.max(1, panelHeight - 4));
+
+  return (
+    <Box
+      position="absolute"
+      width={width}
+      height={height}
+      justifyContent="center"
+      alignItems="center"
+    >
+      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} width={panelWidth}>
+        <Text color="yellow" bold>
+          Spotify Devices
+        </Text>
+        <Text color="white">{clipLine("[↑↓] move  [enter] transfer  [esc] close", contentWidth)}</Text>
+        {loading ? <Text color="yellow">{clipLine("Loading available devices...", contentWidth)}</Text> : null}
+        {!loading && visibleItems.length === 0 ? (
+          <Text color="white">{clipLine("No Spotify devices available right now.", contentWidth)}</Text>
+        ) : null}
+        {!loading
+          ? visibleItems.map((device, index) => (
+              <Text
+                key={device.id || `${device.name}-${index}`}
+                color={selectedIndex === index && !device.isRestricted ? "black" : device.isRestricted ? "yellow" : "white"}
+                backgroundColor={selectedIndex === index && !device.isRestricted ? "green" : undefined}
+                bold={selectedIndex === index}
+              >
+                {clipLine(describeAvailableDevice(device), contentWidth)}
+              </Text>
+            ))
+          : null}
+      </Box>
     </Box>
   );
 }
@@ -281,6 +323,15 @@ export function AuthenticatedShell(props: AppShellProps) {
           linkPending={props.linkPending}
         />
       </Box>
+      {props.devicePickerOpen ? (
+        <DevicePickerOverlay
+          width={shellWidth}
+          height={props.height}
+          devices={props.devicePickerDevices}
+          selectedIndex={props.devicePickerIndex}
+          loading={props.devicePickerLoading}
+        />
+      ) : null}
     </Box>
   );
 }

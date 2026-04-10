@@ -46,6 +46,20 @@ export type SpotifyQueueResponse = {
   items: SpotifyQueueItem[];
 };
 
+export type SpotifyDeviceSummary = {
+  id: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+  isRestricted: boolean;
+  supportsVolume: boolean;
+  volumePercent: number;
+};
+
+export type SpotifyDevicesResponse = {
+  items: SpotifyDeviceSummary[];
+};
+
 export type SpotifyTrackSummary = {
   id: string;
   trackName: string;
@@ -130,6 +144,7 @@ export type SpotifyPlayerModeAction =
   | "shuffle"
   | "repeat"
   | "volume"
+  | "transfer"
   | "play-track"
   | "play-context";
 

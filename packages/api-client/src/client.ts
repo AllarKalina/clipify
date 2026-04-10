@@ -4,6 +4,8 @@ import type {
   SpotifyAlbumSummary,
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
+  SpotifyDeviceSummary,
+  SpotifyDevicesResponse,
   SpotifyPlayerActionResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyFeaturedPlaylistsResponse,
@@ -81,6 +83,20 @@ const spotifyQueueSchema = z.object({
       type: z.enum(["track", "episode", "unknown"])
     })
   )
+});
+
+const spotifyDeviceSummarySchema: z.ZodType<SpotifyDeviceSummary> = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+  isActive: z.boolean(),
+  isRestricted: z.boolean(),
+  supportsVolume: z.boolean(),
+  volumePercent: z.number()
+});
+
+const spotifyDevicesSchema = z.object({
+  items: z.array(spotifyDeviceSummarySchema)
 });
 
 const spotifyTrackSummarySchema = z.object({
@@ -164,7 +180,7 @@ const spotifyProfileSchema = z.object({
 
 const spotifyPlayerActionSchema = z.object({
   ok: z.literal(true),
-  action: z.enum(["play", "pause", "next", "previous", "shuffle", "repeat", "volume", "play-track", "play-context"])
+  action: z.enum(["play", "pause", "next", "previous", "shuffle", "repeat", "volume", "transfer", "play-track", "play-context"])
 });
 
 export class ApiClientError extends Error {
@@ -204,6 +220,7 @@ export type ApiClient = {
   getSpotifyPlaylist: (playlistId: string) => Promise<SpotifyPlaylistDetailResponse>;
   searchSpotify: (query: string) => Promise<SpotifySearchResponse>;
   getSpotifyCurrentlyPlaying: () => Promise<SpotifyCurrentlyPlayingResponse>;
+  getSpotifyDevices: () => Promise<SpotifyDevicesResponse>;
   getSpotifyQueue: () => Promise<SpotifyQueueResponse>;
   getSpotifyRecentlyPlayed: () => Promise<SpotifyRecentlyPlayedResponse>;
   playSpotify: () => Promise<SpotifyPlayerActionResponse>;
@@ -215,6 +232,7 @@ export type ApiClient = {
   setSpotifyShuffle: (enabled: boolean) => Promise<SpotifyPlayerActionResponse>;
   setSpotifyRepeatMode: (mode: SpotifyRepeatMode) => Promise<SpotifyPlayerActionResponse>;
   setSpotifyVolume: (volumePercent: number) => Promise<SpotifyPlayerActionResponse>;
+  transferSpotifyPlayback: (deviceId: string) => Promise<SpotifyPlayerActionResponse>;
 };
 
 type FetchLike = (input: URL | Request | string, init?: RequestInit) => Promise<Response>;
@@ -558,6 +576,12 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
+    getSpotifyDevices() {
+      return request("/v1/spotify/me/player/devices", {
+        schema: spotifyDevicesSchema,
+        requireSession: true
+      });
+    },
     getSpotifyQueue() {
       return request("/v1/spotify/me/player/queue", {
         schema: spotifyQueueSchema,
@@ -601,6 +625,11 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     setSpotifyVolume(volumePercent) {
       return put("/v1/spotify/me/player/volume", spotifyPlayerActionSchema, {
         volumePercent: String(volumePercent)
+      });
+    },
+    transferSpotifyPlayback(deviceId) {
+      return put("/v1/spotify/me/player/transfer", spotifyPlayerActionSchema, {
+        deviceId
       });
     }
   };

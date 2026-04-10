@@ -53,6 +53,19 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
       progressMs: 120000,
       durationMs: 257000
     }),
+    getSpotifyDevices: async () => ({
+      items: [
+        {
+          id: "device-1",
+          name: "MacBook Pro",
+          type: "Computer",
+          isActive: true,
+          isRestricted: false,
+          supportsVolume: true,
+          volumePercent: 60
+        }
+      ]
+    }),
     getSpotifyQueue: async () => ({
       items: [
         {
@@ -82,6 +95,7 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
     previousSpotify: async () => ({ ok: true, action: "previous" }),
     playSpotifyTrack: async () => ({ ok: true, action: "play-track" }),
     playSpotifyContext: async () => ({ ok: true, action: "play-context" }),
+    transferSpotifyPlayback: async () => ({ ok: true, action: "transfer" }),
     setSpotifyShuffle: async () => ({ ok: true, action: "shuffle" }),
     setSpotifyRepeatMode: async () => ({ ok: true, action: "repeat" }),
     setSpotifyVolume: async () => ({ ok: true, action: "volume" }),

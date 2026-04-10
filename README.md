@@ -51,6 +51,7 @@ The terminal app connects to backend APIs for user/session and Spotify status.
 On first launch, use up/down arrows and Enter to choose `Sign up`, `Login`, or `Exit`.
 After successful sign up/login, Spotify linking starts automatically (browser callback completion is detected in terminal).
 After Spotify is linked, the terminal app displays your Spotify profile and now-playing state.
+Press `d` in the authenticated shell to inspect Spotify Connect devices and transfer control to one without autoplay.
 
 ### Database Tools
 
@@ -77,7 +78,11 @@ bun run --cwd apps/api db:studio
 - `GET /v1/spotify/auth/callback`
 - `GET /v1/spotify/auth/callback/public`
 - `GET /v1/spotify/me`
+- `GET /v1/spotify/me/player/devices`
 - `GET /v1/spotify/me/player/currently-playing`
+- `GET /v1/spotify/me/player/queue`
+- `GET /v1/spotify/me/player/recently-played`
+- `PUT /v1/spotify/me/player/transfer`
 - `ALL /api/auth/*`
 
 ## Spotify OAuth Notes

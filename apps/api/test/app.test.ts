@@ -88,6 +88,21 @@ function createSpotifyMock() {
         durationMs: 257000
       };
     },
+    async getDevices() {
+      return {
+        items: [
+          {
+            id: "device-1",
+            name: "MacBook Pro",
+            type: "Computer",
+            isActive: true,
+            isRestricted: false,
+            supportsVolume: true,
+            volumePercent: 60
+          }
+        ]
+      };
+    },
     async getQueue() {
       return {
         items: [
@@ -196,6 +211,9 @@ function createSpotifyMock() {
     },
     async playContext() {
       return { ok: true, action: "play-context" as const };
+    },
+    async transferPlayback() {
+      return { ok: true, action: "transfer" as const };
     },
     async setShuffle() {
       return { ok: true, action: "shuffle" as const };
@@ -413,6 +431,29 @@ describe("app routes", () => {
     expect(body.deviceName).toBe("MacBook Pro");
   });
 
+  test("returns spotify devices when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/devices"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { items: Array<{ name: string; isActive: boolean }> };
+    expect(body.items[0]?.name).toBe("MacBook Pro");
+    expect(body.items[0]?.isActive).toBeTrue();
+  });
+
   test("returns spotify recently played when session is present", async () => {
     const env = baseEnv();
 
@@ -504,6 +545,28 @@ describe("app routes", () => {
     expect(((await shuffle.json()) as { action: string }).action).toBe("shuffle");
     expect(((await repeat.json()) as { action: string }).action).toBe("repeat");
     expect(((await volume.json()) as { action: string }).action).toBe("volume");
+  });
+
+  test("runs spotify transfer action when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/me/player/transfer?deviceId=device-1", { method: "PUT" }));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { action: string };
+    expect(body.action).toBe("transfer");
   });
 
   test("returns spotify profile when session is present", async () => {

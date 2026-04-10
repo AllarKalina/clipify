@@ -7,7 +7,9 @@ import type {
   SpotifyArtistSummary,
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
+  SpotifyDeviceSummary,
   SpotifyDeviceStatus,
+  SpotifyDevicesResponse,
   SpotifyFeaturedPlaylistsResponse,
   SpotifyPlaylistDetailResponse,
   SpotifyPlaylistSummary,
@@ -32,6 +34,7 @@ export type SpotifyService = {
   completeAuthorizationFromCallback: (code: string, state: string) => Promise<SpotifyCallbackResponse>;
   getAuthorizationStatus: (userId: string) => Promise<SpotifyAuthStatusResponse>;
   getCurrentlyPlaying: (userId: string) => Promise<SpotifyCurrentlyPlayingResponse>;
+  getDevices: (userId: string) => Promise<SpotifyDevicesResponse>;
   getQueue: (userId: string) => Promise<SpotifyQueueResponse>;
   getRecentlyPlayed: (userId: string) => Promise<SpotifyRecentlyPlayedResponse>;
   getFeaturedPlaylists: (userId: string) => Promise<SpotifyFeaturedPlaylistsResponse>;
@@ -45,6 +48,7 @@ export type SpotifyService = {
   previous: (userId: string) => Promise<SpotifyPlayerActionResponse>;
   playTrack: (userId: string, uri: string) => Promise<SpotifyPlayerActionResponse>;
   playContext: (userId: string, contextUri: string) => Promise<SpotifyPlayerActionResponse>;
+  transferPlayback: (userId: string, deviceId: string) => Promise<SpotifyPlayerActionResponse>;
   setShuffle: (userId: string, enabled: boolean) => Promise<SpotifyPlayerActionResponse>;
   setRepeatMode: (userId: string, mode: SpotifyRepeatMode) => Promise<SpotifyPlayerActionResponse>;
   setVolume: (userId: string, volumePercent: number) => Promise<SpotifyPlayerActionResponse>;
@@ -105,6 +109,16 @@ type SpotifyApiCallResult = {
   connection: SpotifyConnection;
   accessToken: string;
   response: Response;
+};
+
+type SpotifyDevicePayload = {
+  id?: string;
+  is_active?: boolean;
+  is_restricted?: boolean;
+  name?: string;
+  supports_volume?: boolean;
+  type?: string;
+  volume_percent?: number | null;
 };
 
 function isExpired(expiresAt: Date | null, now: Date): boolean {
@@ -205,6 +219,34 @@ async function readSpotifyError(response: Response): Promise<string> {
 
 function clampVolume(volumePercent: number): number {
   return Math.max(0, Math.min(100, Math.round(volumePercent)));
+}
+
+function summarizeDevice(device: SpotifyDevicePayload): SpotifyDeviceSummary {
+  return {
+    id: device.id ?? "",
+    name: device.name ?? "",
+    type: device.type ?? "",
+    isActive: Boolean(device.is_active),
+    isRestricted: Boolean(device.is_restricted),
+    supportsVolume: Boolean(device.supports_volume),
+    volumePercent: clampVolume(device.volume_percent ?? 0)
+  };
+}
+
+function toDeviceStatus(device: SpotifyDeviceSummary | null): SpotifyDeviceStatus {
+  if (!device) {
+    return "none";
+  }
+
+  if (device.isRestricted) {
+    return "restricted";
+  }
+
+  if (device.isActive) {
+    return "active";
+  }
+
+  return "available";
 }
 
 function toRepeatMode(value: string | undefined): SpotifyRepeatMode {
@@ -507,6 +549,27 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     };
   }
 
+  async function fetchDevices(userId: string): Promise<SpotifyDeviceSummary[]> {
+    const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player/devices");
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Response(`Spotify devices request failed (${response.status}): ${text || "empty response"}`, {
+        status: response.status === 401 ? 401 : 502
+      });
+    }
+
+    const payload = (await response.json()) as {
+      devices?: SpotifyDevicePayload[];
+    };
+
+    return (payload.devices ?? []).map((device) => summarizeDevice(device));
+  }
+
+  function pickPrimaryDevice(devices: SpotifyDeviceSummary[]): SpotifyDeviceSummary | null {
+    return devices.find((device) => device.isActive) ?? devices.find((device) => !device.isRestricted) ?? devices[0] ?? null;
+  }
+
   async function refreshAccessToken(connection: SpotifyConnection): Promise<SpotifyConnection> {
     const cipher = requireCipher();
     const refreshToken = cipher.decrypt(connection.refreshToken);
@@ -661,60 +724,34 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         linked: Boolean(existing)
       };
     },
+    async getDevices(userId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      return {
+        items: await fetchDevices(userId)
+      };
+    },
     async getCurrentlyPlaying(userId: string) {
       if (!isConfigured()) {
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const [{ response }, deviceResult] = await Promise.all([
+      const [{ response }, devices] = await Promise.all([
         fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player"),
-        fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player/devices")
+        fetchDevices(userId)
       ]);
 
-      let devices: Array<{
-        id?: string;
-        is_active?: boolean;
-        is_restricted?: boolean;
-        name?: string;
-        supports_volume?: boolean;
-        type?: string;
-        volume_percent?: number | null;
-      }> = [];
-
-      if (deviceResult.response.ok) {
-        const payload = (await deviceResult.response.json()) as {
-          devices?: Array<{
-            id?: string;
-            is_active?: boolean;
-            is_restricted?: boolean;
-            name?: string;
-            supports_volume?: boolean;
-            type?: string;
-            volume_percent?: number | null;
-          }>;
-        };
-        devices = payload.devices ?? [];
-      }
-
-      const primaryDevice =
-        devices.find((device) => device.is_active) ??
-        devices.find((device) => !device.is_restricted) ??
-        devices.find((device) => device.is_restricted) ??
-        null;
+      const primaryDevice = pickPrimaryDevice(devices);
 
       const baseDevice = {
         deviceId: primaryDevice?.id ?? "",
         deviceName: primaryDevice?.name ?? "",
         deviceType: primaryDevice?.type ?? "",
-        deviceStatus: primaryDevice
-          ? primaryDevice.is_restricted
-            ? "restricted"
-            : primaryDevice.is_active
-              ? "active"
-              : "available"
-          : ("none" as SpotifyDeviceStatus),
-        supportsVolume: Boolean(primaryDevice?.supports_volume),
-        volumePercent: clampVolume(primaryDevice?.volume_percent ?? 0),
+        deviceStatus: toDeviceStatus(primaryDevice),
+        supportsVolume: primaryDevice?.supportsVolume ?? false,
+        volumePercent: primaryDevice?.volumePercent ?? 0,
         shuffleEnabled: false,
         repeatMode: "off" as const
       };
@@ -762,18 +799,15 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         };
       };
 
-      const resolvedDevice = payload.device?.name
+      const currentDevice = payload.device ? summarizeDevice(payload.device) : null;
+      const resolvedDevice = currentDevice
         ? {
-            deviceId: payload.device.id ?? baseDevice.deviceId,
-            deviceName: payload.device.name ?? "",
-            deviceType: payload.device.type ?? "",
-            deviceStatus: (payload.device.is_restricted
-              ? "restricted"
-              : payload.device.is_active
-                ? "active"
-                : "available") as SpotifyDeviceStatus,
-            supportsVolume: Boolean(payload.device.supports_volume),
-            volumePercent: clampVolume(payload.device.volume_percent ?? 0)
+            deviceId: currentDevice.id || baseDevice.deviceId,
+            deviceName: currentDevice.name || baseDevice.deviceName,
+            deviceType: currentDevice.type || baseDevice.deviceType,
+            deviceStatus: toDeviceStatus(currentDevice),
+            supportsVolume: currentDevice.supportsVolume,
+            volumePercent: currentDevice.volumePercent
           }
         : baseDevice;
 
@@ -1083,6 +1117,36 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
       return runPlayPayloadAction(userId, "play-context", {
         context_uri: contextUri
       });
+    },
+    async transferPlayback(userId: string, deviceId: string) {
+      if (!isConfigured()) {
+        throw new Response("Spotify is not configured", { status: 503 });
+      }
+
+      if (!deviceId) {
+        throw new Response("Device id is required", { status: 400 });
+      }
+
+      const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          device_ids: [deviceId],
+          play: false
+        })
+      });
+
+      if (!response.ok) {
+        const failure = parsePlayerFailure(await readSpotifyError(response));
+        throw new Response(failure.message, { status: failure.status });
+      }
+
+      return {
+        ok: true,
+        action: "transfer"
+      };
     },
     async setShuffle(userId: string, enabled: boolean) {
       return runPlayerSettingAction(userId, "shuffle", {

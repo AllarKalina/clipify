@@ -23,6 +23,16 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
     durationMs: t.Number()
   });
 
+  const deviceSummary = t.Object({
+    id: t.String(),
+    name: t.String(),
+    type: t.String(),
+    isActive: t.Boolean(),
+    isRestricted: t.Boolean(),
+    supportsVolume: t.Boolean(),
+    volumePercent: t.Number()
+  });
+
   return new Elysia({ name: "spotify", prefix: "/v1/spotify" })
     .get(
       "/auth/start",
@@ -257,6 +267,22 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
       }
     )
     .get(
+      "/me/player/devices",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        return spotify.getDevices(session.user.id);
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Get available Spotify devices for authenticated user"
+        },
+        response: t.Object({
+          items: t.Array(deviceSummary)
+        })
+      }
+    )
+    .get(
       "/me/player/currently-playing",
       async ({ request }) => {
         const session = await requireSession(auth, request);
@@ -465,6 +491,30 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
         response: t.Object({
           ok: t.Literal(true),
           action: t.Literal("previous")
+        })
+      }
+    )
+    .put(
+      "/me/player/transfer",
+      async ({ request, query }) => {
+        const session = await requireSession(auth, request);
+        await spotify.transferPlayback(session.user.id, query.deviceId);
+        return {
+          ok: true as const,
+          action: "transfer" as const
+        };
+      },
+      {
+        detail: {
+          tags: ["spotify"],
+          summary: "Transfer Spotify playback to a device for authenticated user"
+        },
+        query: t.Object({
+          deviceId: t.String()
+        }),
+        response: t.Object({
+          ok: t.Literal(true),
+          action: t.Literal("transfer")
         })
       }
     )

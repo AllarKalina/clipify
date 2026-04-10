@@ -277,6 +277,69 @@ describe("spotify service", () => {
     expect(bootstrapStore.connections[0]?.refreshToken.startsWith("v1.")).toBeTrue();
   });
 
+  test("returns normalized spotify devices for linked user", async () => {
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async () =>
+        Response.json({
+          devices: [
+            {
+              id: "device-1",
+              name: "MacBook Pro",
+              type: "Computer",
+              is_active: true,
+              is_restricted: false,
+              supports_volume: true,
+              volume_percent: 60
+            },
+            {
+              id: "device-2",
+              name: "Office Speaker",
+              type: "Speaker",
+              is_active: false,
+              is_restricted: true,
+              supports_volume: false,
+              volume_percent: 0
+            }
+          ]
+        })
+    });
+
+    const result = await service.getDevices("user-1");
+
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0]).toEqual({
+      id: "device-1",
+      name: "MacBook Pro",
+      type: "Computer",
+      isActive: true,
+      isRestricted: false,
+      supportsVolume: true,
+      volumePercent: 60
+    });
+    expect(result.items[1]?.isRestricted).toBeTrue();
+  });
+
   test("returns recently played items for linked user", async () => {
     const bootstrapStore = createMemoryStore();
     const bootstrapService = createSpotifyService(baseEnv(), {
@@ -480,6 +543,49 @@ describe("spotify service", () => {
     expect(calls).toContain("PUT https://api.spotify.com/v1/me/player/shuffle?state=true");
     expect(calls).toContain("PUT https://api.spotify.com/v1/me/player/repeat?state=context");
     expect(calls).toContain("PUT https://api.spotify.com/v1/me/player/volume?volume_percent=70");
+  });
+
+  test("transfers playback to a selected device without autoplay", async () => {
+    const bootstrapStore = createMemoryStore();
+    const bootstrapService = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    const { state } = await bootstrapService.startAuthorization("user-1");
+    await bootstrapService.completeAuthorization("user-1", "code-1", state);
+
+    let transferBody = "";
+    const service = createSpotifyService(baseEnv(), {
+      store: bootstrapStore,
+      fetchImpl: async (url, init) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            expires_in: 3600
+          });
+        }
+
+        transferBody = String(init?.body ?? "");
+        return new Response(null, { status: 204 });
+      }
+    });
+
+    await expect(service.transferPlayback("user-1", "device-2")).resolves.toEqual({ ok: true, action: "transfer" });
+    expect(transferBody).toBe(JSON.stringify({ device_ids: ["device-2"], play: false }));
   });
 
   test("returns spotify profile for linked user", async () => {

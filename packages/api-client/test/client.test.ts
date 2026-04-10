@@ -253,6 +253,36 @@ describe("api client", () => {
     expect(requestedUrl).toContain("/v1/spotify/me/player/currently-playing");
   });
 
+  test("returns spotify devices for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          items: [
+            {
+              id: "device-1",
+              name: "MacBook Pro",
+              type: "Computer",
+              isActive: true,
+              isRestricted: false,
+              supportsVolume: true,
+              volumePercent: 60
+            }
+          ]
+        });
+      }
+    });
+
+    const payload = await client.getSpotifyDevices();
+
+    expect(payload.items[0]?.name).toBe("MacBook Pro");
+    expect(payload.items[0]?.isActive).toBeTrue();
+    expect(requestedUrl).toContain("/v1/spotify/me/player/devices");
+  });
+
   test("returns recently played items for authenticated user", async () => {
     let requestedUrl = "";
     const client = createApiClient({
@@ -439,6 +469,10 @@ describe("api client", () => {
           return Response.json({ ok: true, action: "next" });
         }
 
+        if (String(url).includes("/transfer")) {
+          return Response.json({ ok: true, action: "transfer" });
+        }
+
         if (String(url).includes("/shuffle")) {
           return Response.json({ ok: true, action: "shuffle" });
         }
@@ -461,11 +495,12 @@ describe("api client", () => {
     await client.previousSpotify();
     await client.playSpotifyTrack("spotify:track:1");
     await client.playSpotifyContext("spotify:album:1");
+    await client.transferSpotifyPlayback("device-2");
     await client.setSpotifyShuffle(true);
     await client.setSpotifyRepeatMode("context");
     await client.setSpotifyVolume(70);
 
-    expect(calls).toHaveLength(9);
+    expect(calls).toHaveLength(10);
     expect(calls[0]?.method).toBe("POST");
     expect(calls[0]?.cookie).toBe("better-auth.session_token=abc123");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play");
@@ -474,6 +509,7 @@ describe("api client", () => {
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/previous");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play-track?uri=spotify%3Atrack%3A1");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/play-context?contextUri=spotify%3Aalbum%3A1");
+    expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/transfer?deviceId=device-2");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/shuffle?state=true");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/repeat?state=context");
     expect(calls.map((call) => call.url)).toContain("https://example.com/v1/spotify/me/player/volume?volumePercent=70");
