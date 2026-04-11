@@ -831,6 +831,84 @@ describe("app routes", () => {
     expect(body.home.queueStatus).toBe("ready");
   });
 
+  test("reuses cached spotify profile across snapshot polls", async () => {
+    const env = baseEnv();
+    let profileCalls = 0;
+    const spotify = {
+      ...createSpotifyMock(),
+      async getProfile() {
+        profileCalls += 1;
+        return {
+          id: "spotify-user-1",
+          displayName: "Allar",
+          email: "allar@spotify.test",
+          profileUrl: "https://open.spotify.com/user/allar",
+          imageUrl: "https://i.scdn.co/image/avatar-1"
+        };
+      }
+    };
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: spotify as never,
+      checkReadiness: async () => true
+    });
+
+    const first = await app.handle(new Request("http://localhost/v1/cli/player/snapshot"));
+    const second = await app.handle(new Request("http://localhost/v1/cli/player/snapshot"));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(profileCalls).toBe(1);
+  });
+
+  test("reuses cached browse payload across bootstrap refreshes", async () => {
+    const env = baseEnv();
+    let featuredCalls = 0;
+    let playlistsCalls = 0;
+    let likedCalls = 0;
+    const spotify = {
+      ...createSpotifyMock(),
+      async getFeaturedPlaylists() {
+        featuredCalls += 1;
+        return createSpotifyMock().getFeaturedPlaylists();
+      },
+      async getPlaylists() {
+        playlistsCalls += 1;
+        return createSpotifyMock().getPlaylists();
+      },
+      async getSavedTracks() {
+        likedCalls += 1;
+        return createSpotifyMock().getSavedTracks();
+      }
+    };
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: spotify as never,
+      checkReadiness: async () => true
+    });
+
+    const first = await app.handle(new Request("http://localhost/v1/cli/bootstrap"));
+    const second = await app.handle(new Request("http://localhost/v1/cli/bootstrap"));
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(featuredCalls).toBe(1);
+    expect(playlistsCalls).toBe(1);
+    expect(likedCalls).toBe(1);
+  });
+
   test("returns snapshot with warning when player state call fails", async () => {
     const env = baseEnv();
     const spotify = {

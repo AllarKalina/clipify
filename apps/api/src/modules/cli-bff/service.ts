@@ -10,6 +10,14 @@ import type {
 import type { AuthSession } from "../auth/session";
 import type { SpotifyService } from "../spotify/service";
 
+type CacheEntry<T> = {
+  expiresAt: number;
+  value: T;
+};
+
+const PROFILE_CACHE_TTL_MS = 15 * 60_000;
+const BROWSE_CACHE_TTL_MS = 3 * 60_000;
+
 function createDefaultHome(session: AuthSession["user"], spotify: CliBootstrapResponse["home"]["spotify"]): CliBootstrapResponse["home"] {
   const linked = spotify === "linked";
   const relinkRequired = spotify === "relink-required";
@@ -44,6 +52,109 @@ function createDefaultHome(session: AuthSession["user"], spotify: CliBootstrapRe
 }
 
 export function createCliBffService(spotify: SpotifyService) {
+  const profileCache = new Map<string, CacheEntry<Awaited<ReturnType<SpotifyService["getProfile"]>>>>();
+  const browseCache = new Map<string, CacheEntry<CliBootstrapResponse["browse"]>>();
+
+  function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): CacheEntry<T> | null {
+    const cached = cache.get(key);
+    if (!cached) {
+      return null;
+    }
+
+    if (cached.expiresAt > Date.now()) {
+      return cached;
+    }
+
+    return null;
+  }
+
+  function setCached<T>(cache: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number) {
+    cache.set(key, {
+      value,
+      expiresAt: Date.now() + ttlMs
+    });
+  }
+
+  async function getProfileCached(userId: string, warnings: string[]) {
+    const cached = getCached(profileCache, userId);
+    if (cached) {
+      return cached.value;
+    }
+
+    const stale = profileCache.get(userId);
+    try {
+      const profile = await spotify.getProfile(userId);
+      setCached(profileCache, userId, profile, PROFILE_CACHE_TTL_MS);
+      return profile;
+    } catch {
+      if (stale) {
+        return stale.value;
+      }
+
+      warnings.push("profile unavailable");
+      return null;
+    }
+  }
+
+  async function getBrowseCached(userId: string, warnings: string[]): Promise<CliBootstrapResponse["browse"]> {
+    const cached = getCached(browseCache, userId);
+    if (cached) {
+      return cached.value;
+    }
+
+    const stale = browseCache.get(userId)?.value;
+
+    const [featuredResult, playlistsResult, likedResult] = await Promise.allSettled([
+      spotify.getFeaturedPlaylists(userId),
+      spotify.getPlaylists(userId),
+      spotify.getSavedTracks(userId)
+    ]);
+
+    const featuredPlaylists =
+      featuredResult.status === "fulfilled"
+        ? featuredResult.value.items
+        : stale?.featuredPlaylists ?? [];
+    const playlists =
+      playlistsResult.status === "fulfilled"
+        ? playlistsResult.value.items
+        : stale?.playlists ?? [];
+    const likedTracks =
+      likedResult.status === "fulfilled"
+        ? likedResult.value.items
+        : stale?.likedTracks ?? [];
+
+    if (
+      featuredResult.status === "rejected" &&
+      !stale?.featuredPlaylists &&
+      !(featuredResult.reason instanceof Response && featuredResult.reason.status === 403)
+    ) {
+      warnings.push("featured picks unavailable");
+    }
+
+    if (playlistsResult.status === "rejected" && !stale?.playlists) {
+      warnings.push("playlists unavailable");
+    }
+
+    if (likedResult.status === "rejected" && !stale?.likedTracks) {
+      warnings.push("liked songs unavailable");
+    }
+
+    const browse = {
+      featuredPlaylists,
+      playlists,
+      likedTracks
+    };
+    const hasFreshData =
+      featuredResult.status === "fulfilled" ||
+      playlistsResult.status === "fulfilled" ||
+      likedResult.status === "fulfilled";
+
+    if (hasFreshData || stale) {
+      setCached(browseCache, userId, browse, BROWSE_CACHE_TTL_MS);
+    }
+    return browse;
+  }
+
   async function loadPlayerSnapshot(session: AuthSession["user"]): Promise<CliPlayerSnapshotResponse> {
       const auth = await spotify.getAuthorizationStatus(session.id);
 
@@ -62,18 +173,16 @@ export function createCliBffService(spotify: SpotifyService) {
       }
 
       const warnings: string[] = [];
-      const [profileResult, currentlyPlayingResult] = await Promise.allSettled([
-        spotify.getProfile(session.id),
-        spotify.getCurrentlyPlaying(session.id)
+      const [profile, currentlyPlayingResult] = await Promise.all([
+        getProfileCached(session.id, warnings),
+        spotify
+          .getCurrentlyPlaying(session.id)
+          .then((value) => ({ ok: true as const, value }))
+          .catch((error: unknown) => ({ ok: false as const, error }))
       ]);
 
-      const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
-      if (profileResult.status === "rejected") {
-        warnings.push("profile unavailable");
-      }
-
       let currentlyPlaying =
-        currentlyPlayingResult.status === "fulfilled"
+        currentlyPlayingResult.ok
           ? currentlyPlayingResult.value
           : {
               playbackState: "idle" as const,
@@ -94,7 +203,7 @@ export function createCliBffService(spotify: SpotifyService) {
               durationMs: 0
             };
 
-      if (currentlyPlayingResult.status === "rejected") {
+      if (!currentlyPlayingResult.ok) {
         warnings.push("player state unavailable");
 
         try {
@@ -203,48 +312,11 @@ export function createCliBffService(spotify: SpotifyService) {
     async getBootstrap(session: AuthSession["user"]): Promise<CliBootstrapResponse> {
       const snapshot = await loadPlayerSnapshot(session);
       const warnings = snapshot.warning ? [snapshot.warning] : [];
-
-      const [featuredResult, playlistsResult, likedResult] = await Promise.allSettled([
-        spotify.getFeaturedPlaylists(session.id),
-        spotify.getPlaylists(session.id),
-        spotify.getSavedTracks(session.id)
-      ]);
-
-      const featuredPlaylists =
-        featuredResult.status === "fulfilled"
-          ? featuredResult.value.items
-          : [];
-      const playlists =
-        playlistsResult.status === "fulfilled"
-          ? playlistsResult.value.items
-          : [];
-      const likedTracks =
-        likedResult.status === "fulfilled"
-          ? likedResult.value.items
-          : [];
-
-      if (
-        featuredResult.status === "rejected" &&
-        !(featuredResult.reason instanceof Response && featuredResult.reason.status === 403)
-      ) {
-        warnings.push("featured picks unavailable");
-      }
-
-      if (playlistsResult.status === "rejected") {
-        warnings.push("playlists unavailable");
-      }
-
-      if (likedResult.status === "rejected") {
-        warnings.push("liked songs unavailable");
-      }
+      const browse = await getBrowseCached(session.id, warnings);
 
       return {
         home: snapshot.home,
-        browse: {
-          featuredPlaylists,
-          playlists,
-          likedTracks
-        },
+        browse,
         warning: warnings.join(" | ")
       };
     },
