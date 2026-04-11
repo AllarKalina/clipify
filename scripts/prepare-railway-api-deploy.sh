@@ -9,11 +9,11 @@ mkdir -p "$DEPLOY_ROOT/apps" "$DEPLOY_ROOT/packages"
 
 cp "$REPO_ROOT/package.json" "$DEPLOY_ROOT/package.json"
 cp "$REPO_ROOT/bun.lock" "$DEPLOY_ROOT/bun.lock"
+cp "$REPO_ROOT/apps/api/Dockerfile" "$DEPLOY_ROOT/Dockerfile"
 
 mkdir -p "$DEPLOY_ROOT/apps/api"
 cp -R "$REPO_ROOT/apps/api/src" "$DEPLOY_ROOT/apps/api/src"
 cp "$REPO_ROOT/apps/api/package.json" "$DEPLOY_ROOT/apps/api/package.json"
-cp "$REPO_ROOT/apps/api/Dockerfile" "$DEPLOY_ROOT/apps/api/Dockerfile"
 
 mkdir -p "$DEPLOY_ROOT/apps/cli"
 cp "$REPO_ROOT/apps/cli/package.json" "$DEPLOY_ROOT/apps/cli/package.json"
