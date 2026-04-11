@@ -31,7 +31,8 @@ export function createApp(deps: AppDeps) {
   const appWithPlugins = otelPlugin ? baseApp.use(otelPlugin) : baseApp;
 
   return appWithPlugins
-    .use(createProtectedSessionPlugin(auth))
+    .use(createProtectedSessionPlugin(auth, "/v1/me"))
+    .use(createProtectedSessionPlugin(auth, "/v1/cli"))
     .onRequest(({ request, set }) => {
       const requestId = set.headers["x-request-id"];
       logger.info("request.start", {

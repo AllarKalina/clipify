@@ -25,16 +25,41 @@ function baseEnv(nodeEnv: AppEnv["NODE_ENV"] = "test"): AppEnv {
 
 function createAuthMock(
   user: { id: string; email: string; name: string } | null,
-  handler?: (request: Request) => Response | Promise<Response>
+  endpointHandler?: (request: Request) => Promise<{
+    headers: Headers;
+    response: unknown;
+    status: number;
+  }> | {
+    headers: Headers;
+    response: unknown;
+    status: number;
+  }
 ) {
-  return {
-    async handler(request: Request) {
-      if (handler) {
-        return handler(request);
-      }
+  const authUser = {
+    id: user?.id ?? "u_123",
+    email: user?.email ?? "a@example.com",
+    name: user?.name ?? "Allar",
+    emailVerified: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 
-      return new Response("auth", { status: 200 });
-    },
+  async function handleEndpoint(
+    request: Request,
+    fallback: {
+      headers: Headers;
+      response: unknown;
+      status: number;
+    }
+  ) {
+    if (endpointHandler) {
+      return endpointHandler(request);
+    }
+
+    return fallback;
+  }
+
+  return {
     api: {
       async getSession() {
         if (!user) {
@@ -42,6 +67,61 @@ function createAuthMock(
         }
 
         return { user };
+      },
+      async signInEmail(context: { body: unknown; headers: Headers; asResponse?: boolean }) {
+        const request = new Request("http://localhost/api/auth/sign-in/email", {
+          method: "POST",
+          headers: context.headers,
+          body: JSON.stringify(context.body)
+        });
+
+        return handleEndpoint(
+          request,
+          {
+            headers: new Headers({
+              "set-cookie": "better-auth.session_token=signed-token-123; Path=/; HttpOnly"
+            }),
+            response: {
+              redirect: false,
+              token: "token-1",
+              user: authUser
+            },
+            status: 200
+          }
+        );
+      },
+      async signUpEmail(context: { body: unknown; headers: Headers; asResponse?: boolean }) {
+        const request = new Request("http://localhost/api/auth/sign-up/email", {
+          method: "POST",
+          headers: context.headers,
+          body: JSON.stringify(context.body)
+        });
+
+        return handleEndpoint(
+          request,
+          {
+            headers: new Headers({
+              "set-cookie": "better-auth.session_token=signed-token-123; Path=/; HttpOnly"
+            }),
+            response: {
+              token: "token-1",
+              user: authUser
+            },
+            status: 200
+          }
+        );
+      },
+      async signOut(context: { headers: Headers; asResponse?: boolean }) {
+        const request = new Request("http://localhost/api/auth/sign-out", {
+          method: "POST",
+          headers: context.headers
+        });
+
+        return handleEndpoint(request, {
+          headers: new Headers(),
+          response: { success: true },
+          status: 200
+        });
       }
     }
   };
@@ -396,7 +476,7 @@ describe("app routes", () => {
     expect(response.status).toBe(404);
   });
 
-  test("passes raw auth requests through without rebuilding the body", async () => {
+  test("routes explicit auth sign-in requests through the typed auth endpoint wrapper", async () => {
     const env = baseEnv();
     const observed: { method?: string; url?: string; contentType?: string; body?: string } = {};
 
@@ -409,7 +489,24 @@ describe("app routes", () => {
         observed.contentType = request.headers.get("content-type") ?? undefined;
         observed.body = await request.text();
 
-        return new Response("ok", { status: 204 });
+        return {
+          headers: new Headers({
+            "set-cookie": "better-auth.session_token=signed-token-123; Path=/; HttpOnly"
+          }),
+          response: {
+            redirect: false,
+            token: "token-1",
+            user: {
+              id: "u_123",
+              email: "a@example.com",
+              name: "Allar",
+              emailVerified: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            }
+          },
+          status: 200
+        };
       }) as never,
       spotify: createSpotifyMock() as never,
       checkReadiness: async () => true
@@ -422,16 +519,17 @@ describe("app routes", () => {
           "content-type": "application/json"
         },
         body: JSON.stringify({
-          email: "a@example.com"
+          email: "a@example.com",
+          password: "secret"
         })
       })
     );
 
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(200);
     expect(observed.method).toBe("POST");
     expect(observed.url).toBe("http://localhost/api/auth/sign-in/email");
     expect(observed.contentType).toBe("application/json");
-    expect(observed.body).toBe(JSON.stringify({ email: "a@example.com" }));
+    expect(observed.body).toBe(JSON.stringify({ email: "a@example.com", password: "secret" }));
   });
 
   test("blocks cli auth start route without session", async () => {

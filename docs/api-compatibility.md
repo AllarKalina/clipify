@@ -20,7 +20,8 @@ read_when:
 - BFF error responses are JSON envelopes: `{ error: { code, message, hint? } }`.
 - CLI BFF errors are normalized through typed application errors first, then status-aware fallback mapping for upstream `Response` failures.
 - `/v1/spotify/*` routes are not part of the supported surface.
-- Supported route families: `/v1/public/*`, `/v1/me`, `/v1/cli/*`, and `/api/auth/*`.
+- Supported route families: `/v1/public/*`, `/v1/me`, `/v1/cli/*`, and explicit `/api/auth/*` endpoints (`sign-in/email`, `sign-up/email`, `sign-out`).
+- Route-level rate limits may return `429` envelopes with code `RATE_LIMITED`.
 
 ## Version Metadata Endpoint
 

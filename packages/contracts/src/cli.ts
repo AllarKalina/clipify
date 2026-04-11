@@ -29,6 +29,7 @@ export type CliErrorCode =
   | "CONFLICT"
   | "UPSTREAM_FAILURE"
   | "SERVICE_UNAVAILABLE"
+  | "RATE_LIMITED"
   | "BAD_REQUEST"
   | "INTERNAL_ERROR";
 export type CliAuthStartResponse = SpotifyStartAuthResponse;

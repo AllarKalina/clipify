@@ -84,9 +84,12 @@ bun run --cwd apps/api db:studio
 - `GET /v1/cli/search`
 - `GET /v1/cli/devices`
 - `POST /v1/cli/player/action`
-- `ALL /api/auth/*`
+- `POST /api/auth/sign-in/email`
+- `POST /api/auth/sign-up/email`
+- `POST /api/auth/sign-out`
 
-`/api/auth/*` is mounted as a raw Better Auth pass-through (no manual request-body reconstruction).
+Auth routes are explicit typed Elysia endpoints that delegate to Better Auth `auth.api` handlers.
+Rate limiting is enabled on auth routes and `/v1/cli/search`.
 
 ## Spotify OAuth Notes
 

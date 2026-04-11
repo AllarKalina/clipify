@@ -30,7 +30,7 @@ packages/
 - `packages/api-client` owns HTTP calls and typed BFF transport for CLI.
 - `packages/contracts` owns shared domain/request types consumed by API and client.
 - CLI code must not call backend endpoints directly with ad-hoc `fetch`.
-- Better Auth transport is pass-through mounted at `/api/auth/*`; avoid rebuilding auth `Request` bodies in route handlers.
+- Better Auth transport is exposed through explicit typed `/api/auth/*` route handlers backed by `auth.api`.
 
 ## Data Flow
 
@@ -55,6 +55,7 @@ packages/
 - New CLI feature: add command surface in `apps/cli/src/index.ts` and supporting modules if file grows.
 - CLI launcher/auth shell stays in `apps/cli/src/terminal-app.tsx`; authenticated browsing/playback orchestration belongs in dedicated controller/state modules under `apps/cli/src/`.
 - Protected API routes should derive session context once per request and reuse it through helpers instead of repeating auth lookups in every handler.
+- CLI BFF routes should register shared schema models with Elysia `.model(...)` and reuse named refs in route contracts.
 
 ## CLI Shape
 

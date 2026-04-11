@@ -84,6 +84,7 @@ const cliErrorCodes: CliErrorCode[] = [
   "CONFLICT",
   "UPSTREAM_FAILURE",
   "SERVICE_UNAVAILABLE",
+  "RATE_LIMITED",
   "BAD_REQUEST",
   "INTERNAL_ERROR"
 ];
@@ -150,6 +151,13 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     };
   }
 
+  function authHeaders(path: string): Record<string, string> {
+    return {
+      ...requireSessionCookie(path),
+      origin: authOrigin
+    };
+  }
+
   function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === "object" && value !== null;
   }
@@ -202,6 +210,8 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         return "Resource not found.";
       case 409:
         return "Conflict.";
+      case 429:
+        return "Rate limit reached.";
       case 500:
         return "Unexpected server error.";
       case 502:
@@ -225,6 +235,8 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         return "NOT_FOUND";
       case 409:
         return parsed?.code ?? "CONFLICT";
+      case 429:
+        return "RATE_LIMITED";
       case 500:
         return "INTERNAL_ERROR";
       case 502:
@@ -256,80 +268,71 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     return result.data;
   }
 
+  function unwrapAuthCookieResult<T>(
+    path: string,
+    result: TreatyResult<T> & {
+      response: Response;
+      headers: Record<string, string>;
+    }
+  ): { sessionCookie: string } {
+    const payload = unwrapTreatyResult(path, result);
+    void payload;
+    return parseSessionCookie(result.response.headers.get("set-cookie") ?? "", path);
+  }
+
   async function signInWithEmailPassword(input: {
     email: string;
     password: string;
     rememberMe?: boolean;
   }): Promise<{ sessionCookie: string }> {
     const path = "/api/auth/sign-in/email";
-    const url = new URL(path, baseUrl);
-    const response = await fetchImpl(url, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        origin: authOrigin
-      },
-      body: JSON.stringify({
-        email: input.email,
-        password: input.password,
-        rememberMe: input.rememberMe ?? true
-      })
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
-    }
-
-    return parseSessionCookie(response.headers.get("set-cookie") ?? "", path);
+    return unwrapAuthCookieResult(
+      path,
+      await bff.api.auth["sign-in"].email.post(
+        {
+          email: input.email,
+          password: input.password,
+          rememberMe: input.rememberMe ?? true
+        },
+        {
+          headers: {
+            origin: authOrigin
+          }
+        }
+      )
+    );
   }
 
   async function signUpWithEmailPassword(input: { name: string; email: string; password: string }): Promise<{ sessionCookie: string }> {
     const path = "/api/auth/sign-up/email";
-    const url = new URL(path, baseUrl);
-    const response = await fetchImpl(url, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        origin: authOrigin
-      },
-      body: JSON.stringify({
-        name: input.name,
-        email: input.email,
-        password: input.password
-      })
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
-    }
-
-    return parseSessionCookie(response.headers.get("set-cookie") ?? "", path);
+    return unwrapAuthCookieResult(
+      path,
+      await bff.api.auth["sign-up"].email.post(
+        {
+          name: input.name,
+          email: input.email,
+          password: input.password
+        },
+        {
+          headers: {
+            origin: authOrigin
+          }
+        }
+      )
+    );
   }
 
   async function signOut(): Promise<void> {
     const path = "/api/auth/sign-out";
-    if (!sessionCookie) {
-      throw new ApiClientError(`Missing session cookie for ${path}`, 401, path, "UNAUTHORIZED");
-    }
-
-    const url = new URL(path, baseUrl);
-    const response = await fetchImpl(url, {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        cookie: sessionCookie,
-        origin: authOrigin
-      }
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
-    }
+    unwrapTreatyResult(
+      path,
+      await bff.api.auth["sign-out"].post(
+        {},
+        {
+          headers: authHeaders(path)
+        }
+      )
+    );
   }
 
   return {

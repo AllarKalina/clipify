@@ -12,6 +12,7 @@ export type CliErrorCode =
   | "CONFLICT"
   | "UPSTREAM_FAILURE"
   | "SERVICE_UNAVAILABLE"
+  | "RATE_LIMITED"
   | "BAD_REQUEST"
   | "INTERNAL_ERROR";
 
@@ -23,7 +24,11 @@ export type CliErrorPayload = {
   };
 };
 
-export type CliErrorStatus = 400 | 401 | 403 | 404 | 409 | 500 | 502 | 503;
+export type CliErrorStatus = 400 | 401 | 403 | 404 | 409 | 429 | 500 | 502 | 503;
+
+export const cliErrorModelNames = {
+  response: "CliErrorResponse"
+} as const;
 
 export class CliBffError extends Error {
   readonly status: CliErrorStatus;
@@ -61,6 +66,7 @@ export const cliErrorResponseSchema = t.Object({
       t.Literal("CONFLICT"),
       t.Literal("UPSTREAM_FAILURE"),
       t.Literal("SERVICE_UNAVAILABLE"),
+      t.Literal("RATE_LIMITED"),
       t.Literal("BAD_REQUEST"),
       t.Literal("INTERNAL_ERROR")
     ]),
@@ -69,92 +75,103 @@ export const cliErrorResponseSchema = t.Object({
   })
 });
 
+export const cliErrorModels = {
+  [cliErrorModelNames.response]: cliErrorResponseSchema
+} as const;
+
 export const cliErrorResponses = {
   400: cliErrorResponseSchema,
   401: cliErrorResponseSchema,
   403: cliErrorResponseSchema,
   404: cliErrorResponseSchema,
   409: cliErrorResponseSchema,
+  429: cliErrorResponseSchema,
   500: cliErrorResponseSchema,
   502: cliErrorResponseSchema,
   503: cliErrorResponseSchema
 } as const;
 
 function normalizeErrorStatus(status: number): CliErrorStatus {
-  if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 500 || status === 502 || status === 503) {
+  if (status === 400 || status === 401 || status === 403 || status === 404 || status === 409 || status === 429 || status === 500 || status === 502 || status === 503) {
     return status;
   }
 
   return 500;
 }
 
-function mapErrorCode(status: CliErrorStatus, message: string): CliErrorPayload["error"] {
+function defaultErrorForStatus(status: CliErrorStatus): CliErrorPayload["error"] {
+  switch (status) {
+    case 400:
+      return { code: "BAD_REQUEST", message: "Invalid request." };
+    case 401:
+      return { code: "UNAUTHORIZED", message: "Unauthorized. Please log in again." };
+    case 403:
+      return { code: "FORBIDDEN", message: "Forbidden." };
+    case 404:
+      return { code: "NOT_FOUND", message: "Resource not found." };
+    case 409:
+      return { code: "CONFLICT", message: "Conflict." };
+    case 429:
+      return { code: "RATE_LIMITED", message: "Rate limit reached." };
+    case 502:
+      return { code: "UPSTREAM_FAILURE", message: "Upstream request failed." };
+    case 503:
+      return { code: "SERVICE_UNAVAILABLE", message: "Service unavailable." };
+    default:
+      return { code: "INTERNAL_ERROR", message: "Unexpected server error." };
+  }
+}
+
+function refineErrorFromMessage(
+  status: CliErrorStatus,
+  message: string,
+  fallback: CliErrorPayload["error"]
+): CliErrorPayload["error"] {
   const lowered = message.toLowerCase();
 
-  if (status === 401) {
-    return { code: "UNAUTHORIZED", message: "Unauthorized. Please log in again." };
+  if (status === 400 && lowered.includes("device id is required")) {
+    return { code: "INVALID_INPUT", message: "Device id is required." };
   }
 
-  if (status === 400) {
-    if (lowered.includes("device id is required")) {
-      return { code: "INVALID_INPUT", message: "Device id is required." };
-    }
-
-    return { code: "BAD_REQUEST", message: message || "Invalid request." };
+  if (status === 403 && (lowered.includes("fresh spotify re-link") || lowered.includes("insufficient client scope"))) {
+    return {
+      code: "RELINK_REQUIRED",
+      message: "Playback control needs a fresh Spotify re-link.",
+      hint: "Press [l] to re-link Spotify."
+    };
   }
 
-  if (status === 403) {
-    if (lowered.includes("fresh spotify re-link") || lowered.includes("insufficient client scope")) {
-      return {
-        code: "RELINK_REQUIRED",
-        message: "Playback control needs a fresh Spotify re-link.",
-        hint: "Press [l] to re-link Spotify."
-      };
-    }
-
-    if (lowered.includes("premium")) {
-      return {
-        code: "PREMIUM_REQUIRED",
-        message: "Spotify Premium is required for this playback control."
-      };
-    }
-
-    return { code: "FORBIDDEN", message: message || "Forbidden." };
+  if (status === 403 && lowered.includes("premium")) {
+    return {
+      code: "PREMIUM_REQUIRED",
+      message: "Spotify Premium is required for this playback control."
+    };
   }
 
-  if (status === 404) {
-    return { code: "NOT_FOUND", message: message || "Resource not found." };
+  if (status === 409 && lowered.includes("no active spotify device")) {
+    return {
+      code: "NO_ACTIVE_DEVICE",
+      message: "No active Spotify device. Start playback in Spotify first.",
+      hint: "Press [d] to transfer playback or start playback in Spotify."
+    };
   }
 
-  if (status === 409) {
-    if (lowered.includes("no active spotify device")) {
-      return {
-        code: "NO_ACTIVE_DEVICE",
-        message: "No active Spotify device. Start playback in Spotify first.",
-        hint: "Press [d] to transfer playback or start playback in Spotify."
-      };
-    }
-
-    if (lowered.includes("restricted")) {
-      return {
-        code: "DEVICE_RESTRICTED",
-        message: "Playback is restricted on the current Spotify device.",
-        hint: "Pick a different device with [d]."
-      };
-    }
-
-    return { code: "CONFLICT", message: message || "Conflict." };
+  if (status === 409 && lowered.includes("restricted")) {
+    return {
+      code: "DEVICE_RESTRICTED",
+      message: "Playback is restricted on the current Spotify device.",
+      hint: "Pick a different device with [d]."
+    };
   }
 
-  if (status === 503) {
-    return { code: "SERVICE_UNAVAILABLE", message: message || "Service unavailable." };
+  if (message) {
+    return {
+      ...fallback,
+      message
+    };
   }
 
-  if (status === 502) {
-    return { code: "UPSTREAM_FAILURE", message: message || "Upstream request failed." };
-  }
-
-  return { code: "INTERNAL_ERROR", message: message || "Unexpected server error." };
+  return fallback;
 }
 
 async function readResponseErrorPayload(error: Response): Promise<CliErrorPayload["error"] | null> {
@@ -185,6 +202,19 @@ async function readResponseErrorPayload(error: Response): Promise<CliErrorPayloa
   }
 }
 
+async function toCliBffErrorFromResponse(error: Response): Promise<CliBffError> {
+  const status = normalizeErrorStatus(error.status);
+  const parsed = await readResponseErrorPayload(error);
+  if (parsed) {
+    return createCliBffError(status, parsed.code, parsed.message, parsed.hint);
+  }
+
+  const text = await error.text();
+  const fallback = defaultErrorForStatus(status);
+  const resolved = refineErrorFromMessage(status, text.trim(), fallback);
+  return createCliBffError(status, resolved.code, resolved.message, resolved.hint);
+}
+
 export async function toCliErrorPayload(error: unknown): Promise<{ status: CliErrorStatus; body: CliErrorPayload }> {
   if (isCliBffError(error)) {
     return {
@@ -199,55 +229,29 @@ export async function toCliErrorPayload(error: unknown): Promise<{ status: CliEr
     };
   }
 
-  if (error && typeof error === "object" && "error" in error) {
-    const candidate = error as {
-      error?: {
-        code?: CliErrorCode;
-        message?: string;
-        hint?: string;
-      };
-    };
-
-    if (candidate.error?.code && candidate.error?.message) {
-      return {
-        status: 500,
-        body: {
-          error: {
-            code: candidate.error.code,
-            message: candidate.error.message,
-            hint: candidate.error.hint
-          }
-        }
-      };
-    }
-  }
-
   if (error instanceof Response) {
-    const status = normalizeErrorStatus(error.status);
-    const parsed = await readResponseErrorPayload(error);
-    if (parsed) {
-      return {
-        status,
-        body: {
-          error: parsed
-        }
-      };
-    }
-
-    const message = status === 400 || status === 403 || status === 409 ? (await error.text()).trim() : "";
+    const resolved = await toCliBffErrorFromResponse(error);
     return {
-      status,
+      status: resolved.status,
       body: {
-        error: mapErrorCode(status, message)
+        error: {
+          code: resolved.code,
+          message: resolved.message,
+          hint: resolved.hint
+        }
       }
     };
   }
 
-  const message = error instanceof Error ? error.message : "Unexpected server error.";
+  const fallback = defaultErrorForStatus(500);
+  const message = error instanceof Error ? error.message : fallback.message;
   return {
     status: 500,
     body: {
-      error: mapErrorCode(500, message)
+      error: {
+        ...fallback,
+        message
+      }
     }
   };
 }

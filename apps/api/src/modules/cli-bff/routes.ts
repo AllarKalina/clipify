@@ -1,22 +1,13 @@
 import { Elysia } from "elysia";
+import { rateLimit } from "elysia-rate-limit";
 import { requireSession } from "../auth/session";
 import type { AppAuth } from "../auth/service";
 import type { SpotifyService } from "../spotify/service";
 import {
-  cliAuthCallbackQuerySchema,
-  cliAuthStartResponseSchema,
-  cliAuthStatusResponseSchema,
-  cliBootstrapResponseSchema,
-  cliDevicesResponseSchema,
-  cliLibraryViewParamsSchema,
-  cliLibraryViewResponseSchema,
-  cliPlayerActionRequestSchema,
-  cliPlayerActionResponseSchema,
-  cliPlayerSnapshotResponseSchema,
-  cliSearchQuerySchema,
-  cliSearchResponseSchema
+  cliBffModels,
+  cliModelNames
 } from "./schemas";
-import { createCliBffError, cliErrorResponses, toCliErrorPayload } from "./error-response";
+import { cliErrorModelNames, cliErrorModels, createCliBffError, cliErrorResponses, toCliErrorPayload } from "./error-response";
 import { createCliBffService } from "./service";
 
 function renderAuthCallbackHtml(title: string, description: string) {
@@ -84,155 +75,19 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
     return failure.body;
   }
 
-  const protectedCli = new Elysia({ name: "cli-bff-protected" })
-    .derive(async ({ request }) => {
-      try {
-        const session = await requireSession(auth, request);
+  return new Elysia({ name: "cli-bff", prefix: "/v1/cli" })
+    .model(cliErrorModels)
+    .model(cliBffModels)
+    .macro({
+      cliDetail(summary: string) {
         return {
-          session: session.user
+          detail: {
+            tags: ["cli"],
+            summary
+          }
         };
-      } catch (error) {
-        if (error instanceof Response && error.status === 401) {
-          throw createCliBffError(401, "UNAUTHORIZED", "Unauthorized. Please log in again.");
-        }
-
-        throw error;
       }
     })
-    .onError(({ error, set }) => applyCliError(set, error))
-    .get(
-      "/auth/start",
-      async ({ session }) => {
-        return await cli.startAuthorization(session.id);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Start Spotify OAuth authorization flow for CLI"
-        },
-        response: {
-          200: cliAuthStartResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/auth/status",
-      async ({ session }) => {
-        return await cli.getAuthorizationStatus(session.id);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Get Spotify link status for authenticated CLI user"
-        },
-        response: {
-          200: cliAuthStatusResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/bootstrap",
-      async ({ session }) => {
-        return await cli.getBootstrap(session);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Get CLI bootstrap payload with home and browse data"
-        },
-        response: {
-          200: cliBootstrapResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/player/snapshot",
-      async ({ session }) => {
-        return await cli.getPlayerSnapshot(session);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Get CLI player snapshot for polling"
-        },
-        response: {
-          200: cliPlayerSnapshotResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/view/library/:libraryId",
-      async ({ session, params }) => {
-        return await cli.getLibraryView(session.id, params.libraryId);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Get a library detail section for CLI"
-        },
-        params: cliLibraryViewParamsSchema,
-        response: {
-          200: cliLibraryViewResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/search",
-      async ({ session, query }) => {
-        return await cli.search(session.id, query.q);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Search Spotify for the CLI view model"
-        },
-        query: cliSearchQuerySchema,
-        response: {
-          200: cliSearchResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .get(
-      "/devices",
-      async ({ session }) => {
-        return await cli.getDevices(session.id);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Get Spotify devices for CLI"
-        },
-        response: {
-          200: cliDevicesResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    )
-    .post(
-      "/player/action",
-      async ({ session, body }) => {
-        return await cli.runPlayerAction(session.id, body);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Run a normalized player action for CLI"
-        },
-        body: cliPlayerActionRequestSchema,
-        response: {
-          200: cliPlayerActionResponseSchema,
-          ...cliErrorResponses
-        }
-      }
-    );
-
-  return new Elysia({ name: "cli-bff", prefix: "/v1/cli" })
     .onError(({ error, set }) => applyCliError(set, error))
     .get(
       "/auth/callback/public",
@@ -240,12 +95,162 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
         return handlePublicAuthCallback(query, cli.completeAuthorizationFromCallback);
       },
       {
-        detail: {
-          tags: ["cli"],
-          summary: "Public Spotify OAuth callback endpoint for CLI"
-        },
-        query: cliAuthCallbackQuerySchema
+        cliDetail: "Public Spotify OAuth callback endpoint for CLI",
+        query: cliModelNames.authCallbackQuery
       }
     )
-    .use(protectedCli);
+    .guard(
+      {
+        response: {
+          400: cliErrorModelNames.response,
+          401: cliErrorModelNames.response,
+          403: cliErrorModelNames.response,
+          404: cliErrorModelNames.response,
+          409: cliErrorModelNames.response,
+          429: cliErrorModelNames.response,
+          500: cliErrorModelNames.response,
+          502: cliErrorModelNames.response,
+          503: cliErrorModelNames.response
+        }
+      },
+      (protectedCli) =>
+        protectedCli
+          .derive(async ({ request }) => {
+            try {
+              const session = await requireSession(auth, request);
+              return {
+                session: session.user
+              };
+            } catch (error) {
+              if (error instanceof Response && error.status === 401) {
+                throw createCliBffError(401, "UNAUTHORIZED", "Unauthorized. Please log in again.");
+              }
+
+              throw error;
+            }
+          })
+          .get(
+            "/auth/start",
+            async ({ session }) => {
+              return await cli.startAuthorization(session.id);
+            },
+            {
+              cliDetail: "Start Spotify OAuth authorization flow for CLI",
+              response: {
+                200: cliModelNames.authStartResponse
+              }
+            }
+          )
+          .get(
+            "/auth/status",
+            async ({ session }) => {
+              return await cli.getAuthorizationStatus(session.id);
+            },
+            {
+              cliDetail: "Get Spotify link status for authenticated CLI user",
+              response: {
+                200: cliModelNames.authStatusResponse
+              }
+            }
+          )
+          .get(
+            "/bootstrap",
+            async ({ session }) => {
+              return await cli.getBootstrap(session);
+            },
+            {
+              cliDetail: "Get CLI bootstrap payload with home and browse data",
+              response: {
+                200: cliModelNames.bootstrapResponse
+              }
+            }
+          )
+          .get(
+            "/player/snapshot",
+            async ({ session }) => {
+              return await cli.getPlayerSnapshot(session);
+            },
+            {
+              cliDetail: "Get CLI player snapshot for polling",
+              response: {
+                200: cliModelNames.playerSnapshotResponse
+              }
+            }
+          )
+          .get(
+            "/view/library/:libraryId",
+            async ({ session, params }) => {
+              return await cli.getLibraryView(session.id, params.libraryId);
+            },
+            {
+              cliDetail: "Get a library detail section for CLI",
+              params: cliModelNames.libraryViewParams,
+              response: {
+                200: cliModelNames.libraryViewResponse
+              }
+            }
+          )
+          .group(
+            "/search",
+            (searchScope) =>
+              searchScope
+                .use(
+                  rateLimit({
+                    scoping: "local",
+                    duration: 60_000,
+                    max: 30,
+                    generator: (request) =>
+                      request.headers.get("x-forwarded-for") ??
+                      request.headers.get("cf-connecting-ip") ??
+                      request.headers.get("x-real-ip") ??
+                      new URL(request.url).hostname,
+                    responseCode: 429,
+                    responseMessage: {
+                      error: {
+                        code: "RATE_LIMITED",
+                        message: "Too many search requests. Please wait and try again."
+                      }
+                    }
+                  })
+                )
+                .get(
+                  "",
+                  async ({ session, query }: { session: { id: string }; query: { q: string } }) => {
+                    return await cli.search(session.id, query.q);
+                  },
+                  {
+                    cliDetail: "Search Spotify for the CLI view model",
+                    query: cliModelNames.searchQuery,
+                    response: {
+                      200: cliModelNames.searchResponse
+                    }
+                  }
+                )
+          )
+          .get(
+            "/devices",
+            async ({ session }) => {
+              return await cli.getDevices(session.id);
+            },
+            {
+              cliDetail: "Get Spotify devices for CLI",
+              response: {
+                200: cliModelNames.devicesResponse
+              }
+            }
+          )
+          .post(
+            "/player/action",
+            async ({ session, body }) => {
+              return await cli.runPlayerAction(session.id, body);
+            },
+            {
+              cliDetail: "Run a normalized player action for CLI",
+              body: cliModelNames.playerActionRequest,
+              response: {
+                200: cliModelNames.playerActionResponse
+              }
+            }
+          )
+    );
 }
