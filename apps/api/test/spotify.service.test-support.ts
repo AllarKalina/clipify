@@ -44,7 +44,7 @@ export function baseEnv(nodeEnv: AppEnv["NODE_ENV"] = "test"): AppEnv {
     SPOTIFY_CLIENT_ID: "spotify-client-id",
     SPOTIFY_CLIENT_SECRET: "spotify-client-secret",
     SPOTIFY_REDIRECT_URI: "http://127.0.0.1:3000/v1/cli/auth/callback/public",
-    SPOTIFY_TOKEN_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
+    SPOTIFY_TOKEN_ENCRYPTION_KEY: "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE="
   };
 }
 
