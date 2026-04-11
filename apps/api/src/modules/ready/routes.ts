@@ -1,21 +1,20 @@
 import { Elysia, t } from "elysia";
+import { withRequestIdHeader } from "../../plugins/openapi-headers";
 
 export function readyModule(checkReady: () => Promise<boolean>) {
-  return new Elysia({ name: "ready" }).get(
+  return new Elysia({
+    name: "ready",
+    tags: ["system"]
+  }).get(
     "/ready",
-    async () => {
+    async ({ set }) => {
       const ready = await checkReady();
 
       if (!ready) {
-        throw new Response(
-          JSON.stringify({
-            status: "not_ready"
-          }),
-          {
-            status: 503,
-            headers: { "content-type": "application/json" }
-          }
-        );
+        set.status = 503;
+        return {
+          status: "not_ready"
+        };
       }
 
       return {
@@ -24,16 +23,15 @@ export function readyModule(checkReady: () => Promise<boolean>) {
     },
     {
       detail: {
-        tags: ["system"],
         summary: "Readiness check"
       },
       response: {
-        200: t.Object({
+        200: withRequestIdHeader(t.Object({
           status: t.String()
-        }),
-        503: t.Object({
+        })),
+        503: withRequestIdHeader(t.Object({
           status: t.String()
-        })
+        }))
       }
     }
   );

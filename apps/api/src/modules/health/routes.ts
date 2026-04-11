@@ -1,8 +1,12 @@
 import { Elysia, t } from "elysia";
 import type { AppEnv } from "../../config/env";
+import { withRequestIdHeader } from "../../plugins/openapi-headers";
 
 export function healthModule(env: AppEnv) {
-  return new Elysia({ name: "health" }).get(
+  return new Elysia({
+    name: "health",
+    tags: ["system"]
+  }).get(
     "/health",
     () => ({
       name: env.APP_NAME,
@@ -12,15 +16,14 @@ export function healthModule(env: AppEnv) {
     }),
     {
       detail: {
-        tags: ["system"],
         summary: "Liveness check"
       },
-      response: t.Object({
+      response: withRequestIdHeader(t.Object({
         name: t.String(),
         status: t.String(),
         env: t.String(),
         timestamp: t.String()
-      })
+      }))
     }
   );
 }

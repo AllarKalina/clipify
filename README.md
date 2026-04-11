@@ -71,6 +71,8 @@ bun run --cwd apps/api db:studio
 
 ## API Routes (current)
 
+- `GET /openapi` (Scalar UI outside production)
+- `GET /openapi/json` (OpenAPI JSON spec)
 - `GET /health`
 - `GET /ready`
 - `GET /v1/public/meta/version`
@@ -90,6 +92,7 @@ bun run --cwd apps/api db:studio
 
 Auth routes are explicit typed Elysia endpoints that delegate to Better Auth `auth.api` handlers.
 Rate limiting is enabled on auth routes and `/v1/cli/search`.
+OpenAPI documentation includes route tags, response schemas, and cookie-based session security metadata for protected routes, plus Better Auth extracted schema metadata merged under `/api/auth/*`. The runtime also emits `x-request-id` on API responses for traceability.
 
 ## Spotify OAuth Notes
 

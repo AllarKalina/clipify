@@ -461,6 +461,111 @@ describe("app routes", () => {
     expect(response.status).toBe(200);
   });
 
+  test("documents cookie security for protected routes in openapi spec", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/openapi/json"));
+    expect(response.status).toBe(200);
+
+    const spec = (await response.json()) as {
+      tags?: Array<{ name: string; description?: string }>;
+      components?: {
+        securitySchemes?: {
+          apiKeyCookie?: {
+            type: string;
+            in: string;
+            name: string;
+          };
+        };
+      };
+      paths?: {
+        [key: string]: {
+          get?: {
+            responses?: {
+              [status: string]: {
+                headers?: {
+                  [name: string]: unknown;
+                };
+                content?: {
+                  [contentType: string]: {
+                    schema?: {
+                      headers?: {
+                        properties?: Record<string, unknown>;
+                      };
+                    };
+                  };
+                };
+              };
+            };
+            security?: Array<Record<string, unknown>>;
+          };
+          post?: {
+            responses?: {
+              [status: string]: {
+                headers?: {
+                  [name: string]: unknown;
+                };
+                content?: {
+                  [contentType: string]: {
+                    schema?: {
+                      headers?: {
+                        properties?: Record<string, unknown>;
+                      };
+                    };
+                  };
+                };
+              };
+            };
+            tags?: string[];
+          };
+        };
+      };
+    };
+
+    expect(spec.tags?.map((tag) => tag.name)).toEqual(expect.arrayContaining(["system", "public", "auth", "user", "cli"]));
+    expect(spec.components?.securitySchemes?.apiKeyCookie).toMatchObject({
+      type: "apiKey",
+      in: "cookie",
+      name: "better-auth.session_token"
+    });
+    expect(
+      spec.paths?.["/api/auth/sign-in/email"]?.post?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["set-cookie"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/api/auth/sign-up/email"]?.post?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["set-cookie"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/api/auth/sign-out"]?.post?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["set-cookie"]
+    ).toBeTruthy();
+    expect(spec.paths?.["/v1/me"]?.get?.security).toContainEqual({
+      apiKeyCookie: []
+    });
+    expect(spec.paths?.["/v1/cli/bootstrap"]?.get?.security).toContainEqual({
+      apiKeyCookie: []
+    });
+    expect(
+      spec.paths?.["/v1/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/v1/cli/bootstrap"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/health"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/v1/public/meta/version"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
+    ).toBeTruthy();
+    expect(spec.paths?.["/api/auth/sign-in/email"]?.post?.tags).toContain("auth");
+  });
+
   test("blocks openapi ui in production", async () => {
     const env = baseEnv("production");
 
@@ -530,6 +635,36 @@ describe("app routes", () => {
     expect(observed.url).toBe("http://localhost/api/auth/sign-in/email");
     expect(observed.contentType).toBe("application/json");
     expect(observed.body).toBe(JSON.stringify({ email: "a@example.com", password: "secret" }));
+    expect(response.headers.get("x-request-id")).toBeString();
+  });
+
+  test("maps cli validation failures to typed bad-request envelopes", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/search"));
+    expect(response.status).toBe(400);
+
+    const body = (await response.json()) as {
+      error: {
+        code: string;
+        message: string;
+      };
+    };
+
+    expect(body.error.code).toBe("INVALID_INPUT");
+    expect(body.error.message).toBe("Invalid request.");
   });
 
   test("blocks cli auth start route without session", async () => {

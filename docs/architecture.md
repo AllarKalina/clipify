@@ -56,6 +56,8 @@ packages/
 - CLI launcher/auth shell stays in `apps/cli/src/terminal-app.tsx`; authenticated browsing/playback orchestration belongs in dedicated controller/state modules under `apps/cli/src/`.
 - Protected API routes should derive session context once per request and reuse it through helpers instead of repeating auth lookups in every handler.
 - CLI BFF routes should register shared schema models with Elysia `.model(...)` and reuse named refs in route contracts.
+- OpenAPI docs should be generated from route schemas, with module-level tags and per-route/per-guard security metadata.
+- When a route returns meaningful headers, annotate them in OpenAPI with `withHeader`/`withHeaders` rather than leaving them implicit.
 
 ## CLI Shape
 

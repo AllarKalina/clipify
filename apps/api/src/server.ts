@@ -1,7 +1,7 @@
 import { createApp } from "./app";
 import { readEnv } from "./config/env";
 import { createDb } from "./db/client";
-import { createAuth } from "./modules/auth/service";
+import { createAuth, waitForAuthOpenApiSchema } from "./modules/auth/service";
 import { createSpotifyService } from "./modules/spotify/service";
 import { createLogger } from "./plugins/logger";
 
@@ -10,6 +10,8 @@ const logger = createLogger(env);
 const { db, sql } = createDb(env);
 const auth = createAuth(env, db);
 const spotify = createSpotifyService(env, { db });
+
+await waitForAuthOpenApiSchema();
 
 async function checkReadiness(): Promise<boolean> {
   try {

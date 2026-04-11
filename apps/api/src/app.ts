@@ -52,6 +52,18 @@ export function createApp(deps: AppDeps) {
     })
     .onError(({ code, error, request, set }) => {
       const requestId = set.headers["x-request-id"];
+      const path = new URL(request.url).pathname;
+
+      if (code === "VALIDATION" && path.startsWith("/v1/cli")) {
+        set.status = 400;
+        return {
+          error: {
+            code: "INVALID_INPUT",
+            message: "Invalid request."
+          }
+        };
+      }
+
       if (error instanceof Response) {
         return;
       }
@@ -59,7 +71,7 @@ export function createApp(deps: AppDeps) {
       logger.error("request.error", {
         requestId,
         method: request.method,
-        path: new URL(request.url).pathname,
+        path,
         code,
         message: error instanceof Error ? error.message : String(error)
       });

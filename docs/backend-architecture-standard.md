@@ -48,6 +48,7 @@ Every backend should optimize for:
 1. Boundary-first design
    - validate all external input at entry points
    - never pass raw request data into domain/data code
+   - prefer explicit route schemas/OpenAPI over ad hoc doc generation when monorepo typegen is unstable
 2. Thin transport layer
    - route handlers orchestrate; they do not own business logic
 3. Explicit dependencies
@@ -125,7 +126,8 @@ For every route, define:
 
 - request params/query/body schema (if used)
 - response schema for each returned status code
-- OpenAPI metadata: summary + tags
+- OpenAPI metadata: summary + tags (+ security metadata for protected routes)
+- Document important response headers explicitly, especially `x-request-id` and auth/session cookies.
 
 Do not merge route without schemas.
 

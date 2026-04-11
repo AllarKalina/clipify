@@ -1,13 +1,14 @@
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 import { requireSession } from "../auth/session";
 import type { AppAuth } from "../auth/service";
 import type { SpotifyService } from "../spotify/service";
+import { withRequestIdHeader } from "../../plugins/openapi-headers";
 import {
   cliBffModels,
   cliModelNames
 } from "./schemas";
-import { cliErrorModelNames, cliErrorModels, createCliBffError, cliErrorResponses, toCliErrorPayload } from "./error-response";
+import { CliBffError, cliErrorResponseSchema, cliErrorModels, createCliBffError, toCliErrorPayload } from "./error-response";
 import { createCliBffService } from "./service";
 
 function renderAuthCallbackHtml(title: string, description: string) {
@@ -75,20 +76,36 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
     return failure.body;
   }
 
-  return new Elysia({ name: "cli-bff", prefix: "/v1/cli" })
+  return new Elysia({
+    name: "cli-bff",
+    prefix: "/v1/cli",
+    tags: ["cli"]
+  })
     .model(cliErrorModels)
     .model(cliBffModels)
+    .error({
+      CliBffError
+    })
     .macro({
       cliDetail(summary: string) {
         return {
           detail: {
-            tags: ["cli"],
             summary
           }
         };
       }
     })
-    .onError(({ error, set }) => applyCliError(set, error))
+    .onError(async ({ code, error, set }) => {
+      if (code === "VALIDATION") {
+        return applyCliError(set, createCliBffError(400, "INVALID_INPUT", "Invalid request."));
+      }
+
+      if (code === "CliBffError") {
+        return applyCliError(set, error);
+      }
+
+      return applyCliError(set, error);
+    })
     .get(
       "/auth/callback/public",
       async ({ query }) => {
@@ -101,16 +118,24 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
     )
     .guard(
       {
+        detail: {
+          description: "Requires an authenticated Better Auth session.",
+          security: [
+            {
+              apiKeyCookie: []
+            }
+          ]
+        },
         response: {
-          400: cliErrorModelNames.response,
-          401: cliErrorModelNames.response,
-          403: cliErrorModelNames.response,
-          404: cliErrorModelNames.response,
-          409: cliErrorModelNames.response,
-          429: cliErrorModelNames.response,
-          500: cliErrorModelNames.response,
-          502: cliErrorModelNames.response,
-          503: cliErrorModelNames.response
+          400: withRequestIdHeader(cliErrorResponseSchema),
+          401: withRequestIdHeader(cliErrorResponseSchema),
+          403: withRequestIdHeader(cliErrorResponseSchema),
+          404: withRequestIdHeader(cliErrorResponseSchema),
+          409: withRequestIdHeader(cliErrorResponseSchema),
+          429: withRequestIdHeader(cliErrorResponseSchema),
+          500: withRequestIdHeader(cliErrorResponseSchema),
+          502: withRequestIdHeader(cliErrorResponseSchema),
+          503: withRequestIdHeader(cliErrorResponseSchema)
         }
       },
       (protectedCli) =>
@@ -137,7 +162,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
             {
               cliDetail: "Start Spotify OAuth authorization flow for CLI",
               response: {
-                200: cliModelNames.authStartResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.authStartResponse))
               }
             }
           )
@@ -149,7 +174,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
             {
               cliDetail: "Get Spotify link status for authenticated CLI user",
               response: {
-                200: cliModelNames.authStatusResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.authStatusResponse))
               }
             }
           )
@@ -161,7 +186,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
             {
               cliDetail: "Get CLI bootstrap payload with home and browse data",
               response: {
-                200: cliModelNames.bootstrapResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.bootstrapResponse))
               }
             }
           )
@@ -173,7 +198,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
             {
               cliDetail: "Get CLI player snapshot for polling",
               response: {
-                200: cliModelNames.playerSnapshotResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.playerSnapshotResponse))
               }
             }
           )
@@ -186,7 +211,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
               cliDetail: "Get a library detail section for CLI",
               params: cliModelNames.libraryViewParams,
               response: {
-                200: cliModelNames.libraryViewResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.libraryViewResponse))
               }
             }
           )
@@ -222,7 +247,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
                     cliDetail: "Search Spotify for the CLI view model",
                     query: cliModelNames.searchQuery,
                     response: {
-                      200: cliModelNames.searchResponse
+                      200: withRequestIdHeader(t.Ref(cliModelNames.searchResponse))
                     }
                   }
                 )
@@ -235,7 +260,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
             {
               cliDetail: "Get Spotify devices for CLI",
               response: {
-                200: cliModelNames.devicesResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.devicesResponse))
               }
             }
           )
@@ -248,7 +273,7 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
               cliDetail: "Run a normalized player action for CLI",
               body: cliModelNames.playerActionRequest,
               response: {
-                200: cliModelNames.playerActionResponse
+                200: withRequestIdHeader(t.Ref(cliModelNames.playerActionResponse))
               }
             }
           )

@@ -1,6 +1,8 @@
 import { Elysia, t } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
+import { withHeaders } from "@elysiajs/openapi";
 import type { AppAuth } from "./service";
+import { withRequestIdHeader } from "../../plugins/openapi-headers";
 
 const authUserSchema = t.Object(
   {
@@ -70,6 +72,16 @@ const authRateLimitResponseSchema = t.Object({
     message: t.String()
   })
 });
+const authResponseHeaders = t.Object({
+  "x-request-id": t.String({
+    description: "Request correlation identifier."
+  }),
+  "set-cookie": t.Optional(
+    t.String({
+      description: "Better Auth session cookie."
+    })
+  )
+});
 
 type MutableSet = {
   headers: Record<string, string | number>;
@@ -95,7 +107,11 @@ function applyResponseHeaders(
 }
 
 export function authModule(auth: AppAuth) {
-  return new Elysia({ name: "auth", prefix: "/api/auth" })
+  return new Elysia({
+    name: "auth",
+    prefix: "/api/auth",
+    tags: ["auth"]
+  })
     .use(
       rateLimit({
         scoping: "local",
@@ -143,13 +159,12 @@ export function authModule(auth: AppAuth) {
       },
       {
         detail: {
-          tags: ["auth"],
           summary: "Sign in with email and password"
         },
         body: signInBodySchema,
         response: {
-          200: signInResponseSchema,
-          429: authRateLimitResponseSchema
+          200: withHeaders(signInResponseSchema, authResponseHeaders),
+          429: withRequestIdHeader(authRateLimitResponseSchema)
         }
       }
     )
@@ -183,13 +198,12 @@ export function authModule(auth: AppAuth) {
       },
       {
         detail: {
-          tags: ["auth"],
           summary: "Sign up with email and password"
         },
         body: signUpBodySchema,
         response: {
-          200: signUpResponseSchema,
-          429: authRateLimitResponseSchema
+          200: withHeaders(signUpResponseSchema, authResponseHeaders),
+          429: withRequestIdHeader(authRateLimitResponseSchema)
         }
       }
     )
@@ -213,12 +227,11 @@ export function authModule(auth: AppAuth) {
       },
       {
         detail: {
-          tags: ["auth"],
           summary: "Sign out the current user"
         },
         response: {
-          200: signOutResponseSchema,
-          429: authRateLimitResponseSchema
+          200: withHeaders(signOutResponseSchema, authResponseHeaders),
+          429: withRequestIdHeader(authRateLimitResponseSchema)
         }
       }
     );
