@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
 import { buildVisibleListLines } from "../src/app-page-body";
+import { getSearchInputLine, getSearchPromptLine } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
   test("builds home sections as quick launch plus picked for you", () => {
@@ -198,5 +199,13 @@ describe("authenticated app selectors", () => {
       { type: "item", item: expect.objectContaining({ title: "D" }), absoluteIndex: 4 },
       { type: "item", item: expect.objectContaining({ title: "E" }), absoluteIndex: 5 }
     ]);
+  });
+
+  test("top search bar keeps home and playlist prompts distinct", () => {
+    const state = createInitialAuthenticatedAppState("");
+
+    expect(getSearchPromptLine("home", state.homeSnapshot)).toBe("What do you want to play?");
+    expect(getSearchPromptLine("playlist-detail", state.homeSnapshot)).toBe("[h] Home  What do you want to play?");
+    expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe("Type [/] or press [enter] to search");
   });
 });

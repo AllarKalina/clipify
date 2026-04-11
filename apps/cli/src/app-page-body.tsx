@@ -93,10 +93,9 @@ export function AppPageBody({
 }: AppPageBodyProps) {
   const contentWidth = width - 4;
   const rowWidth = Math.max(1, contentWidth - 1);
-  const searchSelected = contentIndex === 0;
   const viewLabel = getMainViewLabel(mainView);
-  const headerLineCount = 4 + (browse.searchError ? 1 : 0) + (browse.searchBusy ? 1 : 0);
-  const listAvailableLines = Math.max(1, height - headerLineCount - 2);
+  const headerLineCount = 1;
+  const listAvailableLines = Math.max(1, height - headerLineCount - 1);
   const visibleListLines = mainView === "home" ? [] : buildVisibleListLines(sections, contentIndex, listAvailableLines);
 
   return (
@@ -105,24 +104,6 @@ export function AppPageBody({
         <Text color="green" bold>
           {clipLine(viewLabel, contentWidth)}
         </Text>
-        <Text color="cyan">
-          {clipLine(
-            player.spotify === "relink-required"
-              ? "Spotify permissions changed"
-              : mainView === "home"
-                ? "What do you want to play?"
-                : "[h] Home  What do you want to play?",
-            contentWidth
-          )}
-        </Text>
-        <Text color={searchSelected && focusRegion === "content" ? "black" : "white"} backgroundColor={searchSelected && focusRegion === "content" ? "green" : undefined}>
-          {clipLine(
-            browse.searchQuery || (player.spotify === "relink-required" ? "Press [l] to re-link Spotify before searching" : "Type [/] or press [enter] to search"),
-            contentWidth
-          )}
-        </Text>
-        {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
-        {browse.searchBusy ? <Text color="yellow">{clipLine("Searching Spotify...", contentWidth)}</Text> : null}
       </Box>
       {player.spotify === "relink-required" ? (
         <Text color="yellow">
