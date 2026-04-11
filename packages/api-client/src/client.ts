@@ -1,9 +1,11 @@
-import { z } from "zod";
+import { treaty } from "@elysiajs/eden";
+import type { ApiApp } from "@clipify/api/client-contract";
 import type {
   CliAuthStartResponse,
   CliAuthStatusResponse,
   CliBootstrapResponse,
   CliDevicesResponse,
+  CliErrorCode,
   CliLibraryViewResponse,
   CliPlayerActionRequest,
   CliPlayerActionResponse,
@@ -11,29 +13,18 @@ import type {
   CliSearchResponse,
   PublicVersionResponse
 } from "@clipify/contracts";
-import {
-  cliAuthStartSchema,
-  cliAuthStatusSchema,
-  cliBootstrapSchema,
-  cliDevicesSchema,
-  cliLibraryViewSchema,
-  cliPlayerActionRequestSchema,
-  cliPlayerActionSchema,
-  cliPlayerSnapshotSchema,
-  cliSearchSchema,
-  meSchema,
-  versionSchema
-} from "@clipify/contracts";
 
 export class ApiClientError extends Error {
   readonly status: number;
   readonly path: string;
+  readonly code?: CliErrorCode;
 
-  constructor(message: string, status: number, path: string) {
+  constructor(message: string, status: number, path: string, code?: CliErrorCode) {
     super(message);
     this.name = "ApiClientError";
     this.status = status;
     this.path = path;
+    this.code = code;
   }
 }
 
@@ -69,15 +60,24 @@ type ClientDeps = {
   sessionCookie?: string;
 };
 
-type RequestOptions<T> = {
-  schema: z.ZodType<T>;
-  query?: Record<string, string>;
-  requireSession?: boolean;
+type FailureInfo = {
+  message: string;
+  code?: CliErrorCode;
+};
+
+type TreatyResult<T> = {
+  data: T | null;
+  error: unknown;
+  status: number;
 };
 
 export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: ClientDeps): ApiClient {
   const authOrigin = new URL(baseUrl).origin;
   const networkRetryDelayMs = 150;
+  const bff = treaty<ApiApp>(baseUrl, {
+    fetcher: requestWithRetry as typeof fetch,
+    throwHttpError: false
+  });
 
   function isRetriableNetworkError(error: unknown): boolean {
     if (!(error instanceof Error)) {
@@ -93,16 +93,16 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     );
   }
 
-  async function requestWithRetry(url: URL, init: RequestInit): Promise<Response> {
+  async function requestWithRetry(input: URL | Request | string, init?: RequestInit): Promise<Response> {
     try {
-      return await fetchImpl(url, init);
+      return await fetchImpl(input, init);
     } catch (error) {
       if (!isRetriableNetworkError(error)) {
         throw error;
       }
 
       await new Promise((resolve) => setTimeout(resolve, networkRetryDelayMs));
-      return fetchImpl(url, init);
+      return fetchImpl(input, init);
     }
   }
 
@@ -118,80 +118,61 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     };
   }
 
-  async function request<T>(path: string, options: RequestOptions<T>): Promise<T> {
-    const url = new URL(path, baseUrl);
-    if (options.query) {
-      for (const [key, value] of Object.entries(options.query)) {
-        url.searchParams.set(key, value);
-      }
+  function requireSessionCookie(path: string) {
+    if (!sessionCookie) {
+      throw new ApiClientError(`Missing session cookie for ${path}`, 401, path, "UNAUTHORIZED");
     }
 
-    const headers = new Headers({
-      accept: "application/json"
-    });
-
-    if (options.requireSession) {
-      if (!sessionCookie) {
-        throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
-      }
-      headers.set("cookie", sessionCookie);
-    }
-
-    const response = await requestWithRetry(url, {
-      method: "GET",
-      headers
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
-    }
-
-    const body = await response.json();
-    const parsed = options.schema.safeParse(body);
-
-    if (!parsed.success) {
-      throw new ApiClientError(`Invalid response for ${path}`, 502, path);
-    }
-
-    return parsed.data;
+    return {
+      cookie: sessionCookie
+    };
   }
 
-  async function post<T>(path: string, schema: z.ZodType<T>, requireSession = true, body?: unknown): Promise<T> {
-    const url = new URL(path, baseUrl);
-    const headers = new Headers({
-      accept: "application/json"
-    });
+  function toFailureInfo(raw: unknown, fallbackStatus: number): FailureInfo {
+    if (raw && typeof raw === "object" && "value" in raw) {
+      const value = (raw as { value?: unknown }).value;
+      return toFailureInfo(value, fallbackStatus);
+    }
 
-    if (requireSession) {
-      if (!sessionCookie) {
-        throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
+    if (typeof raw === "string") {
+      return {
+        message: raw
+      };
+    }
+
+    if (raw && typeof raw === "object") {
+      const candidate = raw as {
+        error?: {
+          code?: CliErrorCode;
+          message?: string;
+        };
+      };
+
+      if (candidate.error?.message) {
+        return {
+          message: candidate.error.message,
+          code: candidate.error.code
+        };
       }
-      headers.set("cookie", sessionCookie);
     }
 
-    if (body !== undefined) {
-      headers.set("content-type", "application/json");
+    return {
+      message: fallbackStatus === 401 ? "Unauthorized" : "Request failed"
+    };
+  }
+
+  function unwrapTreatyResult<T>(path: string, result: TreatyResult<T>): T {
+    if (result.error) {
+      const status = Number(result.status || 500);
+      const failure = toFailureInfo(result.error, status);
+      throw new ApiClientError(`Request failed for ${path}: ${status} ${failure.message}`, status, path, failure.code);
     }
 
-    const response = await fetchImpl(url, {
-      method: "POST",
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
-    }
-
-    const responseBody = await response.json();
-    const parsed = schema.safeParse(responseBody);
-    if (!parsed.success) {
+    if (result.data === null) {
       throw new ApiClientError(`Invalid response for ${path}`, 502, path);
     }
 
-    return parsed.data;
+    return result.data;
   }
 
   async function signInWithEmailPassword(input: {
@@ -251,7 +232,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
   async function signOut(): Promise<void> {
     const path = "/api/auth/sign-out";
     if (!sessionCookie) {
-      throw new ApiClientError(`Missing session cookie for ${path}`, 401, path);
+      throw new ApiClientError(`Missing session cookie for ${path}`, 401, path, "UNAUTHORIZED");
     }
 
     const url = new URL(path, baseUrl);
@@ -271,68 +252,70 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
   }
 
   return {
-    getVersion() {
-      return request("/v1/public/meta/version", { schema: versionSchema });
+    async getVersion() {
+      return unwrapTreatyResult("/v1/public/meta/version", await bff.v1.public.meta.version.get());
     },
-    getMe() {
-      return request("/v1/me", {
-        schema: meSchema,
-        requireSession: true
-      });
+    async getMe() {
+      return unwrapTreatyResult("/v1/me", await bff.v1.me.get({ headers: requireSessionCookie("/v1/me") }));
     },
     signUpWithEmailPassword,
     signInWithEmailPassword,
     signOut,
-    startCliAuthorization() {
-      return request("/v1/cli/auth/start", {
-        schema: cliAuthStartSchema,
-        requireSession: true
-      });
+    async startCliAuthorization() {
+      return unwrapTreatyResult(
+        "/v1/cli/auth/start",
+        await bff.v1.cli.auth.start.get({ headers: requireSessionCookie("/v1/cli/auth/start") })
+      );
     },
-    getCliAuthorizationStatus() {
-      return request("/v1/cli/auth/status", {
-        schema: cliAuthStatusSchema,
-        requireSession: true
-      });
+    async getCliAuthorizationStatus() {
+      return unwrapTreatyResult(
+        "/v1/cli/auth/status",
+        await bff.v1.cli.auth.status.get({ headers: requireSessionCookie("/v1/cli/auth/status") })
+      );
     },
-    getCliBootstrap() {
-      return request("/v1/cli/bootstrap", {
-        schema: cliBootstrapSchema,
-        requireSession: true
-      });
+    async getCliBootstrap() {
+      return unwrapTreatyResult(
+        "/v1/cli/bootstrap",
+        await bff.v1.cli.bootstrap.get({ headers: requireSessionCookie("/v1/cli/bootstrap") })
+      );
     },
-    getCliPlayerSnapshot() {
-      return request("/v1/cli/player/snapshot", {
-        schema: cliPlayerSnapshotSchema,
-        requireSession: true
-      });
+    async getCliPlayerSnapshot() {
+      return unwrapTreatyResult(
+        "/v1/cli/player/snapshot",
+        await bff.v1.cli.player.snapshot.get({ headers: requireSessionCookie("/v1/cli/player/snapshot") })
+      );
     },
-    getCliLibraryView(libraryId) {
-      return request(`/v1/cli/view/library/${encodeURIComponent(libraryId)}`, {
-        schema: cliLibraryViewSchema,
-        requireSession: true
-      });
+    async getCliLibraryView(libraryId) {
+      const encodedLibraryId = encodeURIComponent(libraryId);
+      return unwrapTreatyResult(
+        `/v1/cli/view/library/${encodedLibraryId}`,
+        await bff.v1.cli.view.library({ libraryId: encodedLibraryId }).get({
+          headers: requireSessionCookie("/v1/cli/view/library/:libraryId")
+        })
+      );
     },
-    searchCli(query) {
-      return request("/v1/cli/search", {
-        schema: cliSearchSchema,
-        query: { q: query },
-        requireSession: true
-      });
+    async searchCli(query) {
+      return unwrapTreatyResult(
+        "/v1/cli/search",
+        await bff.v1.cli.search.get({
+          query: { q: query },
+          headers: requireSessionCookie("/v1/cli/search")
+        })
+      );
     },
-    getCliDevices() {
-      return request("/v1/cli/devices", {
-        schema: cliDevicesSchema,
-        requireSession: true
-      });
+    async getCliDevices() {
+      return unwrapTreatyResult(
+        "/v1/cli/devices",
+        await bff.v1.cli.devices.get({ headers: requireSessionCookie("/v1/cli/devices") })
+      );
     },
-    runCliPlayerAction(action) {
-      const parsed = cliPlayerActionRequestSchema.safeParse(action);
-      if (!parsed.success) {
-        throw new ApiClientError("Invalid CLI player action input", 400, "/v1/cli/player/action");
-      }
-
-      return post("/v1/cli/player/action", cliPlayerActionSchema, true, parsed.data);
+    async runCliPlayerAction(action) {
+      return unwrapTreatyResult(
+        "/v1/cli/player/action",
+        await bff.v1.cli.player.action.post(action, {
+          headers: requireSessionCookie("/v1/cli/player/action")
+        })
+      );
     }
   };
 }

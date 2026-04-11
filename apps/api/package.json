@@ -3,6 +3,9 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./client-contract": "./src/client-contract.ts"
+  },
   "scripts": {
     "dev": "bun --watch src/server.ts",
     "start": "bun src/server.ts",

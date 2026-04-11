@@ -17,8 +17,30 @@ import type {
 
 export type CliQueueStatus = "ready" | "no-device" | "relink-required" | "unavailable";
 export type CliSpotifyStatus = "linked" | "not-linked" | "relink-required";
+export type CliErrorCode =
+  | "UNAUTHORIZED"
+  | "INVALID_INPUT"
+  | "RELINK_REQUIRED"
+  | "PREMIUM_REQUIRED"
+  | "NO_ACTIVE_DEVICE"
+  | "DEVICE_RESTRICTED"
+  | "NOT_FOUND"
+  | "FORBIDDEN"
+  | "CONFLICT"
+  | "UPSTREAM_FAILURE"
+  | "SERVICE_UNAVAILABLE"
+  | "BAD_REQUEST"
+  | "INTERNAL_ERROR";
 export type CliAuthStartResponse = SpotifyStartAuthResponse;
 export type CliAuthStatusResponse = SpotifyAuthStatusResponse;
+
+export type CliErrorResponse = {
+  error: {
+    code: CliErrorCode;
+    message: string;
+    hint?: string;
+  };
+};
 
 export type CliBootstrapHome = {
   spotify: CliSpotifyStatus;

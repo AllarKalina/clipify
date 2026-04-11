@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { requireSession } from "../auth/session";
 import type { AppAuth } from "../auth/service";
 import type { SpotifyService } from "../spotify/service";
+import { cliErrorResponses, toCliErrorPayload } from "./error-response";
 import { createCliBffService } from "./service";
 
 function renderAuthCallbackHtml(title: string, description: string) {
@@ -57,6 +58,17 @@ async function handlePublicAuthCallback(
 
 export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
   const cli = createCliBffService(spotify);
+
+  async function applyCliError(
+    set: {
+      status?: number | string;
+    },
+    error: unknown
+  ) {
+    const failure = await toCliErrorPayload(error);
+    set.status = failure.status;
+    return failure.body;
+  }
 
   const playlistSummary = t.Object({
     id: t.String(),
@@ -175,36 +187,50 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
   return new Elysia({ name: "cli-bff", prefix: "/v1/cli" })
     .get(
       "/auth/start",
-      async ({ request }) => {
-        const session = await requireSession(auth, request);
-        return cli.startAuthorization(session.user.id);
+      async ({ request, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.startAuthorization(session.user.id);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
           tags: ["cli"],
           summary: "Start Spotify OAuth authorization flow for CLI"
         },
-        response: t.Object({
-          authorizeUrl: t.String(),
-          state: t.String()
-        })
+        response: {
+          200: t.Object({
+            authorizeUrl: t.String(),
+            state: t.String()
+          }),
+          ...cliErrorResponses
+        }
       }
     )
     .get(
       "/auth/status",
-      async ({ request }) => {
-        const session = await requireSession(auth, request);
-        return cli.getAuthorizationStatus(session.user.id);
+      async ({ request, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.getAuthorizationStatus(session.user.id);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
           tags: ["cli"],
           summary: "Get Spotify link status for authenticated CLI user"
         },
-        response: t.Object({
-          linked: t.Boolean(),
-          relinkRequired: t.Boolean()
-        })
+        response: {
+          200: t.Object({
+            linked: t.Boolean(),
+            relinkRequired: t.Boolean()
+          }),
+          ...cliErrorResponses
+        }
       }
     )
     .get(
@@ -227,37 +253,55 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
     )
     .get(
       "/bootstrap",
-      async ({ request }) => {
-        const session = await requireSession(auth, request);
-        return cli.getBootstrap(session.user);
+      async ({ request, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.getBootstrap(session.user);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
           tags: ["cli"],
           summary: "Get CLI bootstrap payload with home and browse data"
         },
-        response: bootstrapResponse
+        response: {
+          200: bootstrapResponse,
+          ...cliErrorResponses
+        }
       }
     )
     .get(
       "/player/snapshot",
-      async ({ request }) => {
-        const session = await requireSession(auth, request);
-        return cli.getPlayerSnapshot(session.user);
+      async ({ request, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.getPlayerSnapshot(session.user);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
           tags: ["cli"],
           summary: "Get CLI player snapshot for polling"
         },
-        response: playerSnapshotResponse
+        response: {
+          200: playerSnapshotResponse,
+          ...cliErrorResponses
+        }
       }
     )
     .get(
       "/view/library/:libraryId",
-      async ({ request, params }) => {
-        const session = await requireSession(auth, request);
-        return cli.getLibraryView(session.user.id, params.libraryId);
+      async ({ request, params, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.getLibraryView(session.user.id, params.libraryId);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
@@ -267,33 +311,40 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
         params: t.Object({
           libraryId: t.String()
         }),
-        response: t.Object({
-          section: t.Nullable(
-            t.Object({
-              id: t.String(),
-              title: t.String(),
-              items: t.Array(
-                t.Object({
-                  id: t.String(),
-                  title: t.String(),
-                  subtitle: t.String(),
-                  meta: t.Optional(t.String()),
-                  action: t.Object({
-                    type: t.Literal("play-track"),
-                    uri: t.String()
+        response: {
+          200: t.Object({
+            section: t.Nullable(
+              t.Object({
+                id: t.String(),
+                title: t.String(),
+                items: t.Array(
+                  t.Object({
+                    id: t.String(),
+                    title: t.String(),
+                    subtitle: t.String(),
+                    meta: t.Optional(t.String()),
+                    action: t.Object({
+                      type: t.Literal("play-track"),
+                      uri: t.String()
+                    })
                   })
-                })
-              )
-            })
-          )
-        })
+                )
+              })
+            )
+          }),
+          ...cliErrorResponses
+        }
       }
     )
     .get(
       "/search",
-      async ({ request, query }) => {
-        const session = await requireSession(auth, request);
-        return cli.search(session.user.id, query.q);
+      async ({ request, query, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.search(session.user.id, query.q);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
@@ -303,50 +354,64 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
         query: t.Object({
           q: t.String({ minLength: 1 })
         }),
-        response: t.Object({
-          tracks: t.Array(trackSummary),
-          playlists: t.Array(playlistSummary),
-          albums: t.Array(
-            t.Object({
-              id: t.String(),
-              name: t.String(),
-              artistName: t.String(),
-              imageUrl: t.String(),
-              uri: t.String()
-            })
-          ),
-          artists: t.Array(
-            t.Object({
-              id: t.String(),
-              name: t.String(),
-              imageUrl: t.String(),
-              uri: t.String()
-            })
-          )
-        })
+        response: {
+          200: t.Object({
+            tracks: t.Array(trackSummary),
+            playlists: t.Array(playlistSummary),
+            albums: t.Array(
+              t.Object({
+                id: t.String(),
+                name: t.String(),
+                artistName: t.String(),
+                imageUrl: t.String(),
+                uri: t.String()
+              })
+            ),
+            artists: t.Array(
+              t.Object({
+                id: t.String(),
+                name: t.String(),
+                imageUrl: t.String(),
+                uri: t.String()
+              })
+            )
+          }),
+          ...cliErrorResponses
+        }
       }
     )
     .get(
       "/devices",
-      async ({ request }) => {
-        const session = await requireSession(auth, request);
-        return cli.getDevices(session.user.id);
+      async ({ request, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.getDevices(session.user.id);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
           tags: ["cli"],
           summary: "Get Spotify devices for CLI"
         },
-        response: t.Object({
-          items: t.Array(deviceSummary)
-        })
+        response: {
+          200: t.Object({
+            items: t.Array(deviceSummary)
+          }),
+          ...cliErrorResponses
+        }
       }
     )
     .post(
       "/player/action",
-      async ({ request, body }) => {
-        const session = await requireSession(auth, request);
-        return cli.runPlayerAction(session.user.id, body);
+      async ({ request, body, set }) => {
+        try {
+          const session = await requireSession(auth, request);
+          return await cli.runPlayerAction(session.user.id, body);
+        } catch (error) {
+          return applyCliError(set, error);
+        }
       },
       {
         detail: {
@@ -365,7 +430,10 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
           t.Object({ action: t.Literal("play-track"), uri: t.String() }),
           t.Object({ action: t.Literal("play-context"), contextUri: t.String() })
         ]),
-        response: playerActionResponse
+        response: {
+          200: playerActionResponse,
+          ...cliErrorResponses
+        }
       }
     );
 }

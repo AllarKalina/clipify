@@ -24,14 +24,12 @@ export type AppDeps = {
 export function createApp(deps: AppDeps) {
   const { env, logger, auth, spotify, checkReadiness } = deps;
 
-  const app = new Elysia({ aot: env.NODE_ENV === "production" }).use(requestIdPlugin).use(createOpenApiPlugin(env));
+  const baseApp = new Elysia({ aot: env.NODE_ENV === "production" }).use(requestIdPlugin).use(createOpenApiPlugin(env));
 
   const otelPlugin = createOtelPlugin(env);
-  if (otelPlugin) {
-    app.use(otelPlugin);
-  }
+  const appWithPlugins = otelPlugin ? baseApp.use(otelPlugin) : baseApp;
 
-  app
+  return appWithPlugins
     .onRequest(({ request, set }) => {
       const requestId = set.headers["x-request-id"];
       logger.info("request.start", {
@@ -69,6 +67,4 @@ export function createApp(deps: AppDeps) {
     .use(readyModule(checkReadiness))
     .use(cliBffModule(auth, spotify))
     .use(userModule(auth));
-
-  return app;
 }

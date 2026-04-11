@@ -23,6 +23,22 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string)
     return `${fallbackLabel} failed: ${toMessage(error)}`;
   }
 
+  if (apiError.code === "RELINK_REQUIRED") {
+    return "Playback control needs a fresh Spotify re-link. Press [l].";
+  }
+
+  if (apiError.code === "PREMIUM_REQUIRED") {
+    return "Spotify Premium is required for this playback control.";
+  }
+
+  if (apiError.code === "NO_ACTIVE_DEVICE") {
+    return "No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.";
+  }
+
+  if (apiError.code === "DEVICE_RESTRICTED") {
+    return "Playback is restricted on the current Spotify device. Pick a different device with [d].";
+  }
+
   if (apiError.status === 403 && apiError.message.includes("fresh Spotify re-link")) {
     return "Playback control needs a fresh Spotify re-link. Press [l].";
   }
