@@ -12,7 +12,7 @@ function renderRow(content: string, selected: boolean, activeRegion: boolean) {
   );
 }
 
-function getVisibleSidebarItems<T>(items: T[], selectedIndex: number, availableLines: number): T[] {
+export function getVisibleSidebarItems<T>(items: T[], selectedIndex: number, availableLines: number): T[] {
   if (availableLines <= 0 || items.length <= availableLines) {
     return items;
   }
@@ -20,6 +20,20 @@ function getVisibleSidebarItems<T>(items: T[], selectedIndex: number, availableL
   const clampedSelected = Math.max(0, Math.min(selectedIndex, items.length - 1));
   const windowStart = Math.max(0, Math.min(clampedSelected, items.length - availableLines));
   return items.slice(windowStart, windowStart + availableLines);
+}
+
+export function getSidebarListHeight(height: number): number {
+  // Sidebar has title + list margin + profile margin + profile line.
+  return Math.max(1, height - 6);
+}
+
+function normalizeProfileValue(value: string, fallback: string): string {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+export function buildProfileName(userName: string) {
+  return normalizeProfileValue(userName, "unknown user");
 }
 
 type AppSidebarProps = {
@@ -33,7 +47,8 @@ type AppSidebarProps = {
 
 export function AppSidebar({ width, height, focusRegion, userName, items, selectedIndex }: AppSidebarProps) {
   const rowWidth = Math.max(1, width - 5);
-  const listHeight = Math.max(1, height - 6);
+  const listHeight = getSidebarListHeight(height);
+  const profileName = buildProfileName(userName);
   const visibleItems = getVisibleSidebarItems(items, selectedIndex, listHeight);
   const visibleStartIndex = items.indexOf(visibleItems[0] ?? items[0]);
 
@@ -42,7 +57,6 @@ export function AppSidebar({ width, height, focusRegion, userName, items, select
       <Text color="green" bold>
         {iconLabel(NERD_ICONS.playlists, "Your Library")}
       </Text>
-      <Text color="white">{clipLine(userName, width - 4)}</Text>
       <Box marginTop={1} flexDirection="column" height={listHeight}>
         {items.length === 0 ? (
           <Text color="white">{clipLine("Library is loading...", width - 4)}</Text>
@@ -57,6 +71,9 @@ export function AppSidebar({ width, height, focusRegion, userName, items, select
             </React.Fragment>
           ))
         )}
+      </Box>
+      <Box marginTop={1}>
+        <Text color="cyan">{clipLine(iconLabel(NERD_ICONS.artist, profileName), width - 4)}</Text>
       </Box>
     </Box>
   );
