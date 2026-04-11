@@ -4,7 +4,7 @@ import React from "react";
 import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
 import { AppPageBody } from "./app-page-body";
 import { AppSidebar } from "./app-sidebar";
-import { AppTopBar } from "./app-top-bar";
+import { AppTopBar, getTopBarHeight } from "./app-top-bar";
 import { BottomPlayer } from "./bottom-player";
 import { DevicePickerOverlay } from "./device-picker-overlay";
 import type { HomeSnapshot } from "./home-state";
@@ -33,7 +33,7 @@ type AppShellProps = {
 export function AuthenticatedShell(props: AppShellProps) {
   const sidebarWidth = Math.max(28, Math.floor(props.width * 0.24));
   const shellWidth = props.width;
-  const topBarHeight = 4 + (props.browse.searchError ? 1 : 0) + (props.browse.searchBusy ? 1 : 0);
+  const topBarHeight = getTopBarHeight(props.browse);
   const mainRowHeight = Math.max(8, props.height - 8);
   const bodyHeight = Math.max(4, mainRowHeight - topBarHeight - 1);
   const contentWidth = shellWidth - sidebarWidth - 3;
@@ -48,12 +48,12 @@ export function AuthenticatedShell(props: AppShellProps) {
           items={props.sidebarItems}
           selectedIndex={props.sidebarIndex}
         />
-        <Box marginLeft={1} flexDirection="column" width={contentWidth}>
+        <Box marginLeft={1} flexDirection="column" width={contentWidth} height={mainRowHeight}>
           <AppTopBar
-            mainView={props.mainView}
             browse={props.browse}
             focusRegion={props.focusRegion}
             contentIndex={props.contentIndex}
+            height={topBarHeight}
             width={contentWidth}
             player={props.player}
           />

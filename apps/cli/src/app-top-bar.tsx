@@ -1,24 +1,24 @@
 import { Box, Text } from "ink";
 import React from "react";
-import type { AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
+import type { AppFocusRegion, ShellBrowseState } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 
 type AppTopBarProps = {
-  mainView: MainView;
   browse: ShellBrowseState;
   focusRegion: AppFocusRegion;
   contentIndex: number;
+  height: number;
   width: number;
   player: HomeSnapshot;
 };
 
-export function getSearchPromptLine(mainView: MainView, player: HomeSnapshot) {
+export function getSearchPromptLine(player: HomeSnapshot) {
   if (player.spotify === "relink-required") {
     return "Spotify permissions changed";
   }
 
-  return mainView === "home" ? "What do you want to play?" : "[h] Home  What do you want to play?";
+  return "What do you want to play?";
 }
 
 export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapshot) {
@@ -31,13 +31,17 @@ export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapsho
     : "Type [/] or press [enter] to search";
 }
 
-export function AppTopBar({ mainView, browse, focusRegion, contentIndex, width, player }: AppTopBarProps) {
+export function getTopBarHeight(browse: ShellBrowseState) {
+  return 4 + (browse.searchError ? 1 : 0) + (browse.searchBusy ? 1 : 0);
+}
+
+export function AppTopBar({ browse, focusRegion, contentIndex, height, width, player }: AppTopBarProps) {
   const contentWidth = width - 4;
   const searchSelected = contentIndex === 0;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} marginBottom={1}>
-      <Text color="cyan">{clipLine(getSearchPromptLine(mainView, player), contentWidth)}</Text>
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height} flexShrink={0} marginBottom={1}>
+      <Text color="cyan">{clipLine(getSearchPromptLine(player), contentWidth)}</Text>
       <Text color={searchSelected && focusRegion === "content" ? "black" : "white"} backgroundColor={searchSelected && focusRegion === "content" ? "green" : undefined}>
         {clipLine(getSearchInputLine(browse, player), contentWidth)}
       </Text>
