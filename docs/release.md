@@ -41,8 +41,9 @@ Required checks before merge:
 
 1. Validate deploy config vars/secrets.
 2. Run DB migrations through `railway run ... bun run --cwd apps/api db:migrate`.
-3. Deploy API through `railway up apps/api --path-as-root ...`.
-4. Run smoke checks with `scripts/smoke-api.sh` against environment base URL.
+3. Build a monorepo-safe deploy bundle with `bash scripts/prepare-railway-api-deploy.sh`.
+4. Deploy API through `railway up .railway-api-deploy --path-as-root ... --ci` (without `--detach`).
+5. Run smoke checks with `scripts/smoke-api.sh` against environment base URL (`/v1/cli/bootstrap` should return `401`).
 
 ### Required GitHub configuration
 

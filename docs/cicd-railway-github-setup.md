@@ -55,7 +55,7 @@ Jobs:
    - starts ephemeral Postgres service in Actions,
    - runs migrations,
    - starts API,
-   - runs `scripts/smoke-api.sh` against `http://localhost:3000`.
+   - runs `scripts/smoke-api.sh` against `http://localhost:3000` (`/health`, `/ready`, version metadata, and `/v1/cli/bootstrap` 401 check).
 
 Concurrency:
 
@@ -78,7 +78,8 @@ Runtime steps:
 1. install Bun + Node + Railway CLI
 2. validate required env/secret presence
 3. run migrations using `MIGRATION_DATABASE_URL`
-4. deploy with `railway up apps/api --path-as-root ...`
+4. prepare monorepo-safe deploy context with `scripts/prepare-railway-api-deploy.sh`
+5. deploy with `railway up .railway-api-deploy --path-as-root ... --ci` (no detach; build failure fails workflow)
 5. smoke check deployed URL
 
 ### Preview deploy
@@ -190,6 +191,7 @@ Relevant files:
 2. `scripts/dev-up.sh`
 3. `scripts/dev-down.sh`
 4. `scripts/smoke-api.sh`
+5. `scripts/prepare-railway-api-deploy.sh`
 
 Main commands:
 
@@ -217,6 +219,7 @@ After any CI/CD setup change:
    - `/health`
    - `/ready`
    - `/v1/public/meta/version`
+   - `/v1/cli/bootstrap` (expect `401` without session cookie)
 
 ## 7) Troubleshooting
 

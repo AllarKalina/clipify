@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - "apps/api/**"
+      - "scripts/prepare-railway-api-deploy.sh"
       - "scripts/smoke-api.sh"
       - ".github/workflows/deploy-api-dev.yml"
 
@@ -57,15 +58,17 @@ jobs:
       - name: Run migrations
         run: DATABASE_URL="$MIGRATION_DATABASE_URL" bun run --cwd apps/api db:migrate
 
+      - name: Prepare deploy context
+        run: bash scripts/prepare-railway-api-deploy.sh
+
       - name: Deploy API service
         run: >
-          railway up apps/api
+          railway up .railway-api-deploy
           --path-as-root
           --project "$RAILWAY_PROJECT_ID"
           --environment "$RAILWAY_ENVIRONMENT_NAME"
           --service "$RAILWAY_SERVICE_NAME"
           --ci
-          --detach
 
       - name: Smoke check deployed API
         run: bash scripts/smoke-api.sh "$API_BASE_URL"
