@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 import { createApiClient } from "@clipify/api-client";
-import { clearSessionCookie, loadSessionCookie, saveSessionCookie } from "./config";
+import { clearSessionCookie, loadPinnedPlaylistNames, loadSessionCookie, saveSessionCookie } from "./config";
 import { runTerminalApp } from "./terminal-app";
 
 export type CliCommand = "app" | "auth-set-cookie" | "auth-clear-cookie" | "help";
@@ -10,13 +10,27 @@ export type CliOptions = {
   apiBaseUrl: string;
   sessionCookie?: string;
   openBrowser: boolean;
+  pinnedPlaylistNames: string[];
 };
+
+function parsePinnedPlaylistNames(input: string | undefined): string[] {
+  if (!input) {
+    return [];
+  }
+
+  return input
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+}
 
 export function parseOptions(args: string[]): { command: CliCommand; options: CliOptions } {
   const positionals: string[] = [];
   let apiBaseUrl = process.env.CLIPIFY_API_URL || "http://localhost:3000";
   let sessionCookie = process.env.CLIPIFY_SESSION_COOKIE || loadSessionCookie();
   let openBrowser = true;
+  const pinnedPlaylistNames = parsePinnedPlaylistNames(process.env.CLIPIFY_PINNED_PLAYLISTS);
+  const resolvedPinnedPlaylistNames = pinnedPlaylistNames.length > 0 ? pinnedPlaylistNames : loadPinnedPlaylistNames();
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -52,7 +66,8 @@ export function parseOptions(args: string[]): { command: CliCommand; options: Cl
     options: {
       apiBaseUrl,
       sessionCookie,
-      openBrowser
+      openBrowser,
+      pinnedPlaylistNames: resolvedPinnedPlaylistNames
     }
   };
 }
@@ -70,6 +85,7 @@ Options:
   --api <url>   Override API base URL (default: CLIPIFY_API_URL or http://localhost:3000)
   --cookie      Raw Cookie header for backend session auth
   --no-open     In app mode, do not auto-open Spotify authorization URL
+  env CLIPIFY_PINNED_PLAYLISTS=Name1,Name2 marks playlists as pinned in sidebar
 `);
 }
 
@@ -101,6 +117,7 @@ async function run() {
     apiBaseUrl: options.apiBaseUrl,
     initialSessionCookie: options.sessionCookie,
     openBrowser: options.openBrowser,
+    pinnedPlaylistNames: options.pinnedPlaylistNames,
     makeClient(sessionCookie) {
       return createApiClient({
         baseUrl: options.apiBaseUrl,

@@ -9,6 +9,7 @@ export type PlaylistSummary = {
   description: string;
   imageUrl: string;
   ownerName: string;
+  isPinned?: boolean;
   trackCount: number;
   uri: string;
 };
@@ -130,8 +131,73 @@ export function flattenSections(sections: ContentSection[]): ContentItem[] {
   return sections.flatMap((section) => section.items);
 }
 
-export function buildLibrarySidebarItems(state: ShellBrowseState): ContentItem[] {
+let pinnedPlaylistNameOverrides = new Set<string>();
+let pinnedPlaylistNamePriority = new Map<string, number>();
+
+function normalizeSortKey(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function isPinnedPlaylist(playlist: PlaylistSummary) {
+  if (playlist.isPinned === true) {
+    return true;
+  }
+
+  return pinnedPlaylistNameOverrides.has(normalizeSortKey(playlist.name));
+}
+
+export function setPinnedPlaylistNameOverrides(playlistNames: string[]) {
+  const normalized = playlistNames.map((name) => normalizeSortKey(name)).filter(Boolean);
+  pinnedPlaylistNameOverrides = new Set(normalized);
+  pinnedPlaylistNamePriority = new Map(normalized.map((name, index) => [name, index]));
+}
+
+export function sortPlaylistsForLibrary(playlists: PlaylistSummary[], ownerNames: string[] = []): PlaylistSummary[] {
+  const ownerNameKeys = new Set(ownerNames.map((ownerName) => normalizeSortKey(ownerName)).filter(Boolean));
+  const isOwnedByCurrentUser = (playlist: PlaylistSummary) =>
+    ownerNameKeys.size > 0 && ownerNameKeys.has(normalizeSortKey(playlist.ownerName));
+
+  return playlists
+    .map((playlist, index) => ({ playlist, index }))
+    .sort((left, right) => {
+    const pinRank = Number(isPinnedPlaylist(right.playlist)) - Number(isPinnedPlaylist(left.playlist));
+    if (pinRank !== 0) {
+      return pinRank;
+    }
+
+    if (isPinnedPlaylist(left.playlist) && isPinnedPlaylist(right.playlist)) {
+      const leftPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(left.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(right.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+    }
+
+    const ownershipRank = Number(isOwnedByCurrentUser(right.playlist)) - Number(isOwnedByCurrentUser(left.playlist));
+    if (ownershipRank !== 0) {
+      return ownershipRank;
+    }
+
+    // Keep Spotify library order when rank is equal.
+    return left.index - right.index;
+  })
+    .map((entry) => entry.playlist);
+}
+
+export function buildLibrarySidebarItems(state: ShellBrowseState, ownerNames: string[] = []): ContentItem[] {
+  const sortedPlaylists = sortPlaylistsForLibrary(state.playlists, ownerNames);
+  const pinnedPlaylists = sortedPlaylists.filter((playlist) => isPinnedPlaylist(playlist));
+  const unpinnedPlaylists = sortedPlaylists.filter((playlist) => !isPinnedPlaylist(playlist));
+  const toLibraryPlaylistItem = (playlist: PlaylistSummary): ContentItem => ({
+    id: `library-playlist-${playlist.id}`,
+    title: isPinnedPlaylist(playlist) ? `[PIN] ${playlist.name}` : playlist.name,
+    subtitle: playlist.ownerName,
+    meta: `${playlist.trackCount} tracks`,
+    action: { type: "open-playlist", playlistId: playlist.id } as const
+  });
+
   return [
+    ...pinnedPlaylists.map(toLibraryPlaylistItem),
     {
       id: "library-liked",
       title: "Liked songs",
@@ -139,13 +205,7 @@ export function buildLibrarySidebarItems(state: ShellBrowseState): ContentItem[]
       meta: "library",
       action: { type: "open-liked-tracks" } as const
     },
-    ...state.playlists.map((playlist) => ({
-      id: `library-playlist-${playlist.id}`,
-      title: playlist.name,
-      subtitle: playlist.ownerName,
-      meta: `${playlist.trackCount} tracks`,
-      action: { type: "open-playlist", playlistId: playlist.id } as const
-    }))
+    ...unpinnedPlaylists.map(toLibraryPlaylistItem)
   ];
 }
 

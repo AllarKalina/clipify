@@ -29,7 +29,6 @@ export function AppSidebar({ width, height, focusRegion, userName, items, select
         Your Library
       </Text>
       <Text color="white">{clipLine(userName, width - 4)}</Text>
-      <Text color="cyan">{clipLine("Liked songs + playlists", width - 4)}</Text>
       <Box marginTop={1} flexDirection="column">
         {items.length === 0 ? (
           <Text color="white">{clipLine("Library is loading...", width - 4)}</Text>

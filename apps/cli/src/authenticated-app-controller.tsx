@@ -1,7 +1,8 @@
 import type { ApiClient } from "@clipify/api-client";
 import { useInput } from "ink";
-import React, { useMemo, useReducer, useRef } from "react";
+import React, { useEffect, useMemo, useReducer, useRef } from "react";
 import { AuthenticatedShell } from "./app-shell";
+import { setPinnedPlaylistNameOverrides } from "./app-shell-state";
 import {
   applyProgressPreview,
   executeContentAction,
@@ -30,6 +31,7 @@ type AuthenticatedAppControllerProps = {
   initialStatusLine: string;
   openBrowserOnLink: boolean;
   autoStartLink: boolean;
+  pinnedPlaylistNames: string[];
   onLogoutComplete: (successLine: string) => void;
   onExit: () => void;
 };
@@ -41,6 +43,7 @@ export function AuthenticatedAppController({
   initialStatusLine,
   openBrowserOnLink,
   autoStartLink,
+  pinnedPlaylistNames,
   onLogoutComplete,
   onExit
 }: AuthenticatedAppControllerProps) {
@@ -80,6 +83,10 @@ export function AuthenticatedAppController({
 
   const displayedHomeSnapshot = useMemo(() => applyProgressPreview(state), [state]);
   const shell = useMemo(() => selectShellViewModel(state), [state]);
+
+  useEffect(() => {
+    setPinnedPlaylistNameOverrides(pinnedPlaylistNames);
+  }, [pinnedPlaylistNames]);
 
   useInput((input, key) => {
     const intent = resolveAuthenticatedIntent(state, input, key);

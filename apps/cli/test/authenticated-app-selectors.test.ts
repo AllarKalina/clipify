@@ -84,6 +84,108 @@ describe("authenticated app selectors", () => {
     expect(viewModel.sidebarItems[1]?.title).toBe("Roadtrip");
   });
 
+  test("orders sidebar playlists with pinned first, then liked songs, then owned-by-user", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const,
+        userName: "Allar",
+        spotifyDisplayName: "Allar Kalina"
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-z",
+            name: "Zoo",
+            description: "",
+            imageUrl: "",
+            ownerName: "Another User",
+            isPinned: false,
+            trackCount: 5,
+            uri: "spotify:playlist:z"
+          },
+          {
+            id: "playlist-a",
+            name: "Alpha",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar Kalina",
+            isPinned: false,
+            trackCount: 10,
+            uri: "spotify:playlist:a"
+          },
+          {
+            id: "playlist-p",
+            name: "Pinned Mix",
+            description: "",
+            imageUrl: "",
+            ownerName: "Another User",
+            isPinned: true,
+            trackCount: 20,
+            uri: "spotify:playlist:p"
+          }
+        ]
+      }
+    };
+
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual(["[PIN] Pinned Mix", "Liked songs", "Alpha", "Zoo"]);
+  });
+
+  test("preserves spotify playlist order when priority rank is equal", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const,
+        userName: "Allar",
+        spotifyDisplayName: "Allar Kalina"
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-hah",
+            name: "Hah",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar Kalina",
+            isPinned: false,
+            trackCount: 10,
+            uri: "spotify:playlist:hah"
+          },
+          {
+            id: "playlist-mud",
+            name: "Mud",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar Kalina",
+            isPinned: false,
+            trackCount: 10,
+            uri: "spotify:playlist:mud"
+          },
+          {
+            id: "playlist-hrr",
+            name: "Hrr",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar Kalina",
+            isPinned: false,
+            trackCount: 10,
+            uri: "spotify:playlist:hrr"
+          }
+        ]
+      }
+    };
+
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual(["Liked songs", "Hah", "Mud", "Hrr"]);
+  });
+
   test("search bar is the only search-edit entry point", () => {
     const emptyMain = {
       ...createInitialAuthenticatedAppState(""),

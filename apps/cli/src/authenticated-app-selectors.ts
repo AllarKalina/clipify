@@ -15,7 +15,7 @@ export function selectSidebarItems(state: AuthenticatedAppState) {
     return buildRelinkRequiredSidebarItems();
   }
 
-  return buildLibrarySidebarItems(state.browseState);
+  return buildLibrarySidebarItems(state.browseState, [state.homeSnapshot.spotifyDisplayName, state.homeSnapshot.userName]);
 }
 
 export function selectSidebarItem(state: AuthenticatedAppState) {

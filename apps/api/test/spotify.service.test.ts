@@ -317,6 +317,7 @@ describe("spotify service", () => {
       description: "",
       imageUrl: "",
       ownerName: "Allar",
+      isPinned: undefined,
       trackCount: 3,
       uri: "spotify:playlist:1",
       tracks: [

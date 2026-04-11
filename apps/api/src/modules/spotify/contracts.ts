@@ -76,6 +76,7 @@ export type SpotifyPlaylistSummary = {
   description: string;
   imageUrl: string;
   ownerName: string;
+  isPinned?: boolean;
   trackCount: number;
   uri: string;
 };
@@ -109,6 +110,7 @@ export type SpotifyPlaylistDetailResponse = {
   description: string;
   imageUrl: string;
   ownerName: string;
+  isPinned?: boolean;
   trackCount: number;
   uri: string;
   tracks: SpotifyTrackSummary[];

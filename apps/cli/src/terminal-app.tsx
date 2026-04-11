@@ -24,6 +24,7 @@ export type AppDeps = {
   apiBaseUrl: string;
   initialSessionCookie?: string;
   openBrowser: boolean;
+  pinnedPlaylistNames: string[];
   makeClient: (sessionCookie?: string) => ApiClient;
 };
 
@@ -388,6 +389,7 @@ function App(props: AppDeps) {
       initialStatusLine={statusLine}
       openBrowserOnLink={props.openBrowser}
       autoStartLink={autoStartLink}
+      pinnedPlaylistNames={props.pinnedPlaylistNames}
       onLogoutComplete={completeLocalLogout}
       onExit={exit}
     />

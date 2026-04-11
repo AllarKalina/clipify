@@ -282,16 +282,22 @@ function summarizePlaylist(item: {
   description?: string | null;
   images?: Array<{ url?: string }>;
   owner?: { display_name?: string | null };
+  is_pinned?: boolean | null;
+  isPinned?: boolean | null;
+  pinned?: boolean | null;
   items?: { total?: number };
   tracks?: { total?: number };
   uri?: string;
 }): SpotifyPlaylistSummary {
+  const pinnedFlag = item.is_pinned ?? item.isPinned ?? item.pinned;
+
   return {
     id: item.id ?? "",
     name: item.name ?? "",
     description: item.description ?? "",
     imageUrl: item.images?.[0]?.url ?? "",
     ownerName: item.owner?.display_name ?? "",
+    isPinned: typeof pinnedFlag === "boolean" ? pinnedFlag : undefined,
     trackCount: item.items?.total ?? item.tracks?.total ?? 0,
     uri: item.uri ?? ""
   };
@@ -1047,7 +1053,14 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const { response } = await fetchSpotifyWithRetry(userId, "https://api.spotify.com/v1/me/playlists?limit=20");
+      const playlistsUrl = new URL("https://api.spotify.com/v1/me/playlists");
+      playlistsUrl.searchParams.set("limit", "20");
+      playlistsUrl.searchParams.set(
+        "fields",
+        "items(id,name,description,images,owner(display_name),is_pinned,isPinned,pinned,tracks(total),uri)"
+      );
+
+      const { response } = await fetchSpotifyWithRetry(userId, playlistsUrl.toString());
 
       if (!response.ok) {
         const text = await response.text();
@@ -1063,6 +1076,9 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
           description?: string | null;
           images?: Array<{ url?: string }>;
           owner?: { display_name?: string | null };
+          is_pinned?: boolean | null;
+          isPinned?: boolean | null;
+          pinned?: boolean | null;
           tracks?: { total?: number };
           uri?: string;
         }>;
@@ -1108,10 +1124,13 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         throw new Response("Spotify is not configured", { status: 503 });
       }
 
-      const { response } = await fetchSpotifyWithRetry(
-        userId,
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,owner(display_name),tracks(total),uri`
+      const playlistUrl = new URL(`https://api.spotify.com/v1/playlists/${playlistId}`);
+      playlistUrl.searchParams.set(
+        "fields",
+        "id,name,description,images,owner(display_name),is_pinned,isPinned,pinned,tracks(total),uri"
       );
+
+      const { response } = await fetchSpotifyWithRetry(userId, playlistUrl.toString());
 
       if (!response.ok) {
         const text = await response.text();
@@ -1126,6 +1145,9 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         description?: string | null;
         images?: Array<{ url?: string }>;
         owner?: { display_name?: string | null };
+        is_pinned?: boolean | null;
+        isPinned?: boolean | null;
+        pinned?: boolean | null;
         tracks?: {
           total?: number;
         };

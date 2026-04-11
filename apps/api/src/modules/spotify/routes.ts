@@ -10,6 +10,7 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
     description: t.String(),
     imageUrl: t.String(),
     ownerName: t.String(),
+    isPinned: t.Optional(t.Boolean()),
     trackCount: t.Number(),
     uri: t.String()
   });

@@ -115,6 +115,7 @@ const spotifyPlaylistSummarySchema = z.object({
   description: z.string(),
   imageUrl: z.string(),
   ownerName: z.string(),
+  isPinned: z.boolean().optional(),
   trackCount: z.number(),
   uri: z.string()
 });
