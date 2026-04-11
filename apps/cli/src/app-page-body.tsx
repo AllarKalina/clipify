@@ -69,14 +69,35 @@ export function AppPageBody({
         <Text color="green" bold>
           {clipLine(viewLabel, contentWidth)}
         </Text>
-        <Text color="cyan">{clipLine(mainView === "home" ? "What do you want to play?" : "[h] Home  What do you want to play?", contentWidth)}</Text>
+        <Text color="cyan">
+          {clipLine(
+            player.spotify === "relink-required"
+              ? "Spotify permissions changed"
+              : mainView === "home"
+                ? "What do you want to play?"
+                : "[h] Home  What do you want to play?",
+            contentWidth
+          )}
+        </Text>
         <Text color={searchSelected && focusRegion === "content" ? "black" : "white"} backgroundColor={searchSelected && focusRegion === "content" ? "green" : undefined}>
-          {clipLine(browse.searchQuery || "Type [/] or press [enter] to search", contentWidth)}
+          {clipLine(
+            browse.searchQuery || (player.spotify === "relink-required" ? "Press [l] to re-link Spotify before searching" : "Type [/] or press [enter] to search"),
+            contentWidth
+          )}
         </Text>
         {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
         {browse.searchBusy ? <Text color="yellow">{clipLine("Searching Spotify...", contentWidth)}</Text> : null}
       </Box>
-      {player.spotify !== "linked" ? (
+      {player.spotify === "relink-required" ? (
+        <Text color="yellow">
+          {clipLine(
+            linkPending
+              ? "Completing Spotify re-link..."
+              : "Spotify permissions changed. Press [l] to re-link and restore Home, search, and your library.",
+            contentWidth
+          )}
+        </Text>
+      ) : player.spotify !== "linked" ? (
         <Text color="white">
           {clipLine(
             linkPending

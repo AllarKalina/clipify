@@ -63,7 +63,8 @@ export function spotifyModule(auth: AppAuth, spotify: SpotifyService) {
           summary: "Get Spotify link status for authenticated user"
         },
         response: t.Object({
-          linked: t.Boolean()
+          linked: t.Boolean(),
+          relinkRequired: t.Boolean()
         })
       }
     )

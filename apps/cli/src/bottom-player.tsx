@@ -31,6 +31,8 @@ export function BottomPlayer({
     player.spotify !== "linked"
       ? linkPending
         ? "Spotify linking in progress"
+        : player.spotify === "relink-required"
+          ? "Spotify re-link required"
         : "Spotify not linked"
       : player.playbackState === "idle"
         ? "No active playback"

@@ -128,7 +128,7 @@ export function useAuthenticatedAppEffects({
       void (async () => {
         try {
           const status = await client.getSpotifyAuthorizationStatus();
-          if (!status.linked) {
+          if (!status.linked || status.relinkRequired) {
             return;
           }
 

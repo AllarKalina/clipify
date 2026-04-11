@@ -90,7 +90,7 @@ bun run --cwd apps/api db:studio
 - API exchanges OAuth code for access/refresh token at Spotify Accounts API.
 - OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
 - Linked tokens are stored encrypted in `spotify_connection`.
-- OAuth scopes requested: `user-read-private user-read-email user-read-playback-state`.
+- OAuth scopes requested: `user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read`.
 - Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`).
 - Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
@@ -105,6 +105,9 @@ bun run --cwd apps/api db:studio
   - Regenerate key and restart API.
 - `GET /v1/spotify/me` returns `503`
   - One or more Spotify env vars are missing/empty.
+- Home shows a re-link prompt after login
+  - Older Spotify links may be missing the playlist/library scopes used by the current Home shell.
+  - Press `l` in the authenticated shell to re-link and refresh permissions.
 
 ## Release + Deploy
 

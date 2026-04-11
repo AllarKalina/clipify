@@ -32,11 +32,32 @@ describe("authenticated app input", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
       focusRegion: "content" as const,
-      contentIndex: 0
+      contentIndex: 0,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      }
     };
 
     expect(resolveAuthenticatedIntent(state, "/", {})).toEqual({ type: "start-search-editing" });
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "start-search-editing" });
+  });
+
+  test("blocks search editing when spotify relink is required", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      focusRegion: "content" as const,
+      contentIndex: 0,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "relink-required" as const
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "/", {})).toEqual({ type: "relink-required" });
+    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "relink-required" });
   });
 
   test("sidebar arrows navigate library entries", () => {

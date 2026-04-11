@@ -20,6 +20,10 @@ export function describePlayerDevice(player: Pick<HomeSnapshot, "deviceName" | "
 
 export function getPlayerDeviceHint(player: Pick<HomeSnapshot, "spotify" | "deviceName" | "deviceStatus">): string {
   if (player.spotify !== "linked") {
+    if (player.spotify === "relink-required") {
+      return "Spotify permissions changed. Press [l] to re-link and unlock Home and library.";
+    }
+
     return "Link Spotify to unlock device control.";
   }
 

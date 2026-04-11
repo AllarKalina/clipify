@@ -149,6 +149,18 @@ export function buildLibrarySidebarItems(state: ShellBrowseState): ContentItem[]
   ];
 }
 
+export function buildRelinkRequiredSidebarItems(): ContentItem[] {
+  return [
+    {
+      id: "library-relink",
+      title: "Spotify re-link required",
+      subtitle: "Press [l] to refresh permissions",
+      meta: "library locked",
+      action: { type: "noop" } as const
+    }
+  ];
+}
+
 export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowseState): ContentSection[] {
   if (homeSnapshot.spotify !== "linked") {
     return [];

@@ -103,6 +103,9 @@ describe("spotify service", () => {
     expect(url.searchParams.get("scope")).toContain("user-read-private");
     expect(url.searchParams.get("scope")).toContain("user-read-playback-state");
     expect(url.searchParams.get("scope")).toContain("user-modify-playback-state");
+    expect(url.searchParams.get("scope")).toContain("playlist-read-private");
+    expect(url.searchParams.get("scope")).toContain("playlist-read-collaborative");
+    expect(url.searchParams.get("scope")).toContain("user-library-read");
     expect(url.searchParams.get("show_dialog")).toBe("true");
     expect(store.oauthStates).toHaveLength(1);
     expect(store.oauthStates[0]?.stateHash).toBe(createStateHash(result.state));
@@ -180,6 +183,55 @@ describe("spotify service", () => {
     expect(result.linked).toBeTrue();
     expect(result.userId).toBe("user-1");
     expect(store.connections).toHaveLength(1);
+  });
+
+  test("reports relink required when stored scopes are stale", async () => {
+    const oldDate = new Date("2026-02-18T00:00:00.000Z");
+    const store = createMemoryStore([
+      {
+        id: "conn-1",
+        userId: "user-1",
+        spotifyUserId: "spotify-user-1",
+        accessToken: "encrypted-access",
+        refreshToken: "encrypted-refresh",
+        scope: "user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state",
+        tokenType: "Bearer",
+        expiresAt: oldDate,
+        createdAt: oldDate,
+        updatedAt: oldDate
+      }
+    ]);
+    const service = createSpotifyService(baseEnv(), { store });
+
+    await expect(service.getAuthorizationStatus("user-1")).resolves.toEqual({
+      linked: true,
+      relinkRequired: true
+    });
+  });
+
+  test("reports current scope grants without relink requirement", async () => {
+    const oldDate = new Date("2026-02-18T00:00:00.000Z");
+    const store = createMemoryStore([
+      {
+        id: "conn-1",
+        userId: "user-1",
+        spotifyUserId: "spotify-user-1",
+        accessToken: "encrypted-access",
+        refreshToken: "encrypted-refresh",
+        scope:
+          "user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read",
+        tokenType: "Bearer",
+        expiresAt: oldDate,
+        createdAt: oldDate,
+        updatedAt: oldDate
+      }
+    ]);
+    const service = createSpotifyService(baseEnv(), { store });
+
+    await expect(service.getAuthorizationStatus("user-1")).resolves.toEqual({
+      linked: true,
+      relinkRequired: false
+    });
   });
 
   test("refreshes expired token before currently playing request", async () => {

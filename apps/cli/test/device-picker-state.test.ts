@@ -44,6 +44,14 @@ describe("device picker state", () => {
         deviceStatus: "none"
       })
     ).toBe("No active Spotify device. Start playback in Spotify or press [d] to transfer.");
+
+    expect(
+      getPlayerDeviceHint({
+        spotify: "relink-required",
+        deviceName: "",
+        deviceStatus: "none"
+      })
+    ).toBe("Spotify permissions changed. Press [l] to re-link and unlock Home and library.");
   });
 
   test("describes available devices for picker rows", () => {

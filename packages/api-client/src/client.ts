@@ -52,7 +52,8 @@ const spotifyCallbackSchema = z.object({
 });
 
 const spotifyAuthStatusSchema = z.object({
-  linked: z.boolean()
+  linked: z.boolean(),
+  relinkRequired: z.boolean()
 });
 
 const spotifyCurrentlyPlayingSchema = z.object({

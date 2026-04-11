@@ -20,7 +20,7 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
     signOut: async () => undefined,
     startSpotifyAuthorization: async () => ({ authorizeUrl: "https://accounts.spotify.com/authorize?state=abc", state: "abc" }),
     completeSpotifyAuthorization: async () => ({ linked: true, userId: "user-1" }),
-    getSpotifyAuthorizationStatus: async () => ({ linked: true }),
+    getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: false }),
     getSpotifyProfile: async () => ({
       id: "spotify-user-1",
       displayName: "Allar",
@@ -124,7 +124,7 @@ describe("home state", () => {
   test("returns not-linked state without calling playback endpoints", async () => {
     const snapshot = await computeHomeSnapshot(
       createClient({
-        getSpotifyAuthorizationStatus: async () => ({ linked: false }),
+        getSpotifyAuthorizationStatus: async () => ({ linked: false, relinkRequired: false }),
         getSpotifyProfile: async () => {
           throw new Error("should not be called");
         }
@@ -148,6 +148,22 @@ describe("home state", () => {
     expect(snapshot.spotify).toBe("linked");
     expect(snapshot.recent).toHaveLength(0);
     expect(snapshot.recentUnavailable).toBeTrue();
+  });
+
+  test("returns relink-required state without calling spotify profile or browse endpoints", async () => {
+    const snapshot = await computeHomeSnapshot(
+      createClient({
+        getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: true }),
+        getSpotifyProfile: async () => {
+          throw new Error("should not be called");
+        }
+      })
+    );
+
+    expect(snapshot.spotify).toBe("relink-required");
+    expect(snapshot.userName).toBe("Allar");
+    expect(snapshot.spotifyDisplayName).toBe("relink required");
+    expect(snapshot.recent).toHaveLength(0);
   });
 
   test("maps queue no-device failure to queue status", async () => {

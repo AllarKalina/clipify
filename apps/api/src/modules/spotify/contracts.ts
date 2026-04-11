@@ -14,6 +14,7 @@ export type SpotifyCallbackResponse = {
 
 export type SpotifyAuthStatusResponse = {
   linked: boolean;
+  relinkRequired: boolean;
 };
 
 export type SpotifyCurrentlyPlayingResponse = {

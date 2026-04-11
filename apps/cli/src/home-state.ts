@@ -2,7 +2,7 @@ import type { ApiClient, ApiClientError, SpotifyDeviceSummary } from "@clipify/a
 
 export type HomeSnapshot = {
   backend: "connected" | "offline";
-  spotify: "linked" | "not-linked" | "unknown";
+  spotify: "linked" | "not-linked" | "relink-required" | "unknown";
   userName: string;
   userEmail: string;
   spotifyDisplayName: string;
@@ -232,6 +232,34 @@ export async function computeHomeSnapshot(client: ApiClient): Promise<HomeSnapsh
         userName: me.user.name,
         userEmail: me.user.email,
         spotifyDisplayName: "not linked",
+        deviceId: "",
+        deviceName: "",
+        deviceType: "",
+        deviceStatus: "none",
+        supportsVolume: false,
+        volumePercent: 0,
+        playbackState: "idle",
+        shuffleEnabled: false,
+        repeatMode: "off",
+        trackName: "",
+        artistName: "",
+        albumName: "",
+        progressMs: 0,
+        durationMs: 0,
+        queueStatus: "ready",
+        queue: [],
+        recentUnavailable: false,
+        recent: []
+      };
+    }
+
+    if (authStatus.relinkRequired) {
+      return {
+        backend: "connected",
+        spotify: "relink-required",
+        userName: me.user.name,
+        userEmail: me.user.email,
+        spotifyDisplayName: "relink required",
         deviceId: "",
         deviceName: "",
         deviceType: "",

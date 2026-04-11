@@ -135,6 +135,12 @@ export function AuthenticatedAppController({
         dispatch({ type: "set-content-index", contentIndex: 0 });
         dispatch({ type: "set-search-editing", searchEditing: true });
         return;
+      case "relink-required":
+        dispatch({
+          type: "set-status-line",
+          statusLine: "Spotify permissions changed. Press [l] to re-link before using Home or search."
+        });
+        return;
       case "stop-search-editing":
         if (!state.browseState.searchQuery.trim()) {
           dispatch({ type: "set-main-view", mainView: "home" });

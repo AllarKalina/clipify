@@ -28,7 +28,8 @@ export type AuthenticatedIntent =
   | { type: "toggle-shuffle"; enabled: boolean }
   | { type: "cycle-repeat"; mode: AuthenticatedAppState["homeSnapshot"]["repeatMode"] }
   | { type: "set-volume"; volumePercent: number }
-  | { type: "start-link" };
+  | { type: "start-link" }
+  | { type: "relink-required" };
 
 export function resolveAuthenticatedIntent(
   state: AuthenticatedAppState,
@@ -137,8 +138,12 @@ export function resolveAuthenticatedIntent(
       return { type: "move-content-selection", direction: "down" };
     }
 
-    if (input === "/" || (key.return && selectCanStartSearchEditing(state))) {
+    if ((input === "/" || key.return) && selectCanStartSearchEditing(state)) {
       return { type: "start-search-editing" };
+    }
+
+    if ((input === "/" || key.return) && state.homeSnapshot.spotify === "relink-required") {
+      return { type: "relink-required" };
     }
 
     if (key.return && selectSelectedItem(state)) {

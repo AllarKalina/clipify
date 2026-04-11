@@ -73,7 +73,12 @@ export async function refreshAuthenticatedApp(
   dispatch({ type: "set-busy", busy: false });
   dispatch({
     type: "set-status-line",
-    statusLine: next.backend === "connected" ? successLine : "Backend unreachable or unauthorized"
+    statusLine:
+      next.backend !== "connected"
+        ? "Backend unreachable or unauthorized"
+        : next.spotify === "relink-required"
+          ? "Spotify permissions changed. Press [l] to re-link."
+          : successLine
   });
 
   if (next.backend === "connected" && next.spotify === "linked") {

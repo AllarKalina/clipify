@@ -15,7 +15,7 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
     signOut: async () => undefined,
     startSpotifyAuthorization: async () => ({ authorizeUrl: "https://accounts.spotify.com/authorize?state=abc", state: "abc" }),
     completeSpotifyAuthorization: async () => ({ linked: true, userId: "user-1" }),
-    getSpotifyAuthorizationStatus: async () => ({ linked: true }),
+    getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: false }),
     getSpotifyProfile: async () => ({
       id: "spotify-user-1",
       displayName: "Allar",
@@ -185,5 +185,36 @@ describe("authenticated app commands", () => {
         "Started playback"
       )
     ).toBe("No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.");
+  });
+
+  test("refresh shows relink-required status without loading browse data", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: true }),
+          getSpotifyProfile: async () => {
+            throw new Error("should not be called");
+          }
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const statusActions = actions.filter((action) => action.type === "set-status-line");
+    expect(statusActions.at(-1)).toEqual({
+      type: "set-status-line",
+      statusLine: "Spotify permissions changed. Press [l] to re-link."
+    });
   });
 });

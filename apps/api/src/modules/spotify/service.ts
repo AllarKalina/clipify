@@ -102,8 +102,18 @@ type SpotifyTokenResponse = {
   refresh_token?: string;
 };
 
-const REQUIRED_SCOPE =
-  "user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state";
+const requiredScopes = [
+  "user-read-private",
+  "user-read-email",
+  "user-read-playback-state",
+  "user-read-recently-played",
+  "user-modify-playback-state",
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "user-library-read"
+] as const;
+
+const REQUIRED_SCOPE = requiredScopes.join(" ");
 
 type SpotifyApiCallResult = {
   connection: SpotifyConnection;
@@ -219,6 +229,15 @@ async function readSpotifyError(response: Response): Promise<string> {
 
 function clampVolume(volumePercent: number): number {
   return Math.max(0, Math.min(100, Math.round(volumePercent)));
+}
+
+function parseScopeSet(scope: string | null | undefined): Set<string> {
+  return new Set((scope ?? "").split(/\s+/u).filter(Boolean));
+}
+
+function isScopeFresh(scope: string | null | undefined): boolean {
+  const granted = parseScopeSet(scope);
+  return requiredScopes.every((requiredScope) => granted.has(requiredScope));
 }
 
 function summarizeDevice(device: SpotifyDevicePayload): SpotifyDeviceSummary {
@@ -720,8 +739,16 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
     },
     async getAuthorizationStatus(userId: string) {
       const existing = await connectionStore.findByUserId(userId);
+      if (!existing) {
+        return {
+          linked: false,
+          relinkRequired: false
+        };
+      }
+
       return {
-        linked: Boolean(existing)
+        linked: true,
+        relinkRequired: !isScopeFresh(existing.scope)
       };
     },
     async getDevices(userId: string) {

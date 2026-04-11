@@ -65,7 +65,8 @@ function createSpotifyMock() {
     },
     async getAuthorizationStatus() {
       return {
-        linked: true
+        linked: true,
+        relinkRequired: false
       };
     },
     async getCurrentlyPlaying() {
@@ -621,6 +622,29 @@ describe("app routes", () => {
 
     const response = await app.handle(new Request("http://localhost/v1/spotify/auth/status"));
     expect(response.status).toBe(401);
+  });
+
+  test("returns spotify auth status shape when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/spotify/auth/status"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { linked: boolean; relinkRequired: boolean };
+    expect(body.linked).toBeTrue();
+    expect(body.relinkRequired).toBeFalse();
   });
 
   test("forwards auth post body to auth handler", async () => {

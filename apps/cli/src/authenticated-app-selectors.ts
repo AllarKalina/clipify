@@ -1,5 +1,6 @@
 import {
   buildHomeSections,
+  buildRelinkRequiredSidebarItems,
   buildLibrarySidebarItems,
   buildLikedTracksSections,
   buildPlaylistDetailSections,
@@ -10,6 +11,10 @@ import {
 import type { AuthenticatedAppState } from "./authenticated-app-state";
 
 export function selectSidebarItems(state: AuthenticatedAppState) {
+  if (state.homeSnapshot.spotify === "relink-required") {
+    return buildRelinkRequiredSidebarItems();
+  }
+
   return buildLibrarySidebarItems(state.browseState);
 }
 
@@ -40,7 +45,7 @@ export function selectSelectedItem(state: AuthenticatedAppState) {
 }
 
 export function selectCanStartSearchEditing(state: AuthenticatedAppState) {
-  return state.focusRegion === "content" && state.contentIndex === 0;
+  return state.homeSnapshot.spotify === "linked" && state.focusRegion === "content" && state.contentIndex === 0;
 }
 
 export function selectInputBlocked(state: AuthenticatedAppState) {

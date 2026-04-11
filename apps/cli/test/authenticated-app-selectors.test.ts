@@ -83,7 +83,14 @@ describe("authenticated app selectors", () => {
   });
 
   test("search bar is the only search-edit entry point", () => {
-    const emptyMain = createInitialAuthenticatedAppState("");
+    const emptyMain = {
+      ...createInitialAuthenticatedAppState(""),
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      }
+    };
     const populatedMain = {
       ...emptyMain,
       contentIndex: 1,
@@ -110,5 +117,20 @@ describe("authenticated app selectors", () => {
 
     expect(selectCanStartSearchEditing(emptyMain)).toBeTrue();
     expect(selectCanStartSearchEditing(populatedMain)).toBeFalse();
+  });
+
+  test("shows relink-required library placeholder and blocks search editing", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "relink-required" as const
+      }
+    };
+
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.sidebarItems[0]?.title).toBe("Spotify re-link required");
+    expect(selectCanStartSearchEditing(state)).toBeFalse();
   });
 });

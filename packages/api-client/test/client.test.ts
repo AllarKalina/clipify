@@ -179,7 +179,8 @@ describe("api client", () => {
         requestedUrl = String(url);
         cookieHeader = new Headers(init?.headers).get("cookie") ?? "";
         return Response.json({
-          linked: true
+          linked: true,
+          relinkRequired: false
         });
       }
     });
@@ -187,6 +188,7 @@ describe("api client", () => {
     const payload = await client.getSpotifyAuthorizationStatus();
 
     expect(payload.linked).toBeTrue();
+    expect(payload.relinkRequired).toBeFalse();
     expect(requestedUrl).toContain("/v1/spotify/auth/status");
     expect(cookieHeader).toBe("better-auth.session_token=abc123");
   });
