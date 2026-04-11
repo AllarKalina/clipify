@@ -42,8 +42,8 @@ packages/
 ## Versioning Contract
 
 - All business endpoints remain versioned under `/v1/*`.
-- Backend exposes compatibility metadata at `/v1/public/meta/version`.
-- Backend keeps compatibility for current CLI and one previous CLI release (`N`, `N-1`).
+- Backend exposes version metadata at `/v1/public/meta/version`.
+- During development, prefer clean contract updates over compatibility shims. Keep API and CLI in lockstep.
 
 ## Scaling Rules
 

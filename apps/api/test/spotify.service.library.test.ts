@@ -96,7 +96,7 @@ describe("spotify service library", () => {
     });
   });
 
-  test("keeps supporting legacy playlist track payloads", async () => {
+  test("supports alternate playlist track payload shape", async () => {
     const store = createMemoryStore();
     await createLinkedSpotifyService({
       store,

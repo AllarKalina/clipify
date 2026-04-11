@@ -2,7 +2,7 @@ import { Elysia } from "elysia";
 import type { AppEnv } from "./config/env";
 import { authModule } from "./modules/auth/routes";
 import type { AppAuth } from "./modules/auth/service";
-import { cliBffModule, cliLegacySpotifyCallbackModule } from "./modules/cli-bff/routes";
+import { cliBffModule } from "./modules/cli-bff/routes";
 import { healthModule } from "./modules/health/routes";
 import { publicModule } from "./modules/public/routes";
 import { readyModule } from "./modules/ready/routes";
@@ -68,7 +68,6 @@ export function createApp(deps: AppDeps) {
     .use(healthModule(env))
     .use(readyModule(checkReadiness))
     .use(cliBffModule(auth, spotify))
-    .use(cliLegacySpotifyCallbackModule(spotify))
     .use(userModule(auth));
 
   return app;

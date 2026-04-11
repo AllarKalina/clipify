@@ -369,24 +369,3 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
       }
     );
 }
-
-export function cliLegacySpotifyCallbackModule(spotify: SpotifyService) {
-  const cli = createCliBffService(spotify);
-
-  return new Elysia({ name: "cli-bff-legacy-spotify-callback" }).get(
-    "/v1/spotify/auth/callback/public",
-    async ({ query }) => handlePublicAuthCallback(query, cli.completeAuthorizationFromCallback),
-    {
-      detail: {
-        tags: ["cli", "compatibility"],
-        summary: "Legacy Spotify OAuth callback endpoint (compatibility alias)"
-      },
-      query: t.Object({
-        code: t.Optional(t.String()),
-        state: t.Optional(t.String()),
-        error: t.Optional(t.String()),
-        error_description: t.Optional(t.String())
-      })
-    }
-  );
-}

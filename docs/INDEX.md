@@ -1,6 +1,6 @@
 ---
 owner: platform
-last_updated: 2026-04-08
+last_updated: 2026-04-11
 read_when:
   - starting work in this repository
   - choosing which docs to read before implementation
@@ -11,6 +11,11 @@ read_when:
 
 Canonical docs map for Clipify.
 Use this file first, then follow `read_when` hints in linked docs.
+Clipify is in active development: do not keep compatibility layers; remove obsolete behavior instead.
+
+Quick command:
+
+- `bun run docs:list` (or `bin/docs-list`) prints the same read-order map and `read_when` hints in terminal-friendly format.
 
 ## Read Order (Session Start)
 

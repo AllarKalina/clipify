@@ -110,7 +110,9 @@ bash scripts/smoke-api.sh <base-url>
 
 1. `INVALID_CLIENT: Invalid redirect URI`
    - Dashboard URI and `SPOTIFY_REDIRECT_URI` do not match exactly.
-2. `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
+2. OAuth callback `NOT_FOUND`
+   - Use `http://127.0.0.1:3000/v1/cli/auth/callback/public`.
+3. `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
    - Invalid key format/length.
-3. `GET /v1/cli/bootstrap` returns `503`
+4. `GET /v1/cli/bootstrap` returns `503`
    - Spotify env is incomplete.

@@ -288,7 +288,7 @@ describe("app routes", () => {
     expect(response.status).toBe(503);
   });
 
-  test("returns public api compatibility metadata", async () => {
+  test("returns public api version metadata", async () => {
     const env = baseEnv();
 
     const app = createApp({
@@ -459,23 +459,6 @@ describe("app routes", () => {
 
     const response = await app.handle(
       new Request("http://localhost/v1/cli/auth/callback/public?code=code-1&state=state-1")
-    );
-    expect(response.status).toBe(200);
-  });
-
-  test("allows legacy spotify public callback route without session", async () => {
-    const env = baseEnv();
-
-    const app = createApp({
-      env,
-      logger: createLogger(env),
-      auth: createAuthMock(null) as never,
-      spotify: createSpotifyMock() as never,
-      checkReadiness: async () => true
-    });
-
-    const response = await app.handle(
-      new Request("http://localhost/v1/spotify/auth/callback/public?code=code-1&state=state-1")
     );
     expect(response.status).toBe(200);
   });

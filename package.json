@@ -13,6 +13,7 @@
     "dev:up": "bash scripts/dev-up.sh",
     "dev:down": "bash scripts/dev-down.sh",
     "dev:smoke": "bash scripts/smoke-api.sh",
+    "docs:list": "bun scripts/docs-list.ts",
     "dev:check": "bun run typecheck && bun run test && bun run dev:smoke",
     "dev:api": "bun run --cwd apps/api dev",
     "start:api": "bun run --cwd apps/api start",

@@ -60,7 +60,7 @@ curl -sf http://127.0.0.1:3000/v1/public/meta/version
 Expected results:
 
 1. `/health` returns JSON with `status: "ok"`.
-2. `/v1/public/meta/version` returns app/api/CLI compatibility metadata.
+2. `/v1/public/meta/version` returns app/api/CLI version metadata.
 
 ## Local TUI Checks
 
@@ -138,9 +138,10 @@ Local TUI was verified with live PTY interaction, including:
 
 If a future session needs to "continue working on Clipify", do this first:
 
-1. read `docs/INDEX.md`
-2. read this file
-3. run `colima start`
-4. run `bun run dev:up`
-5. run `bun run dev:api`
-6. launch the CLI TUI
+1. run `bun run docs:list`
+2. read `docs/INDEX.md`
+3. read this file
+4. run `colima start`
+5. run `bun run dev:up`
+6. run `bun run dev:api`
+7. launch the CLI TUI

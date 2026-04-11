@@ -22,6 +22,7 @@ bun run dev:api
 bun run typecheck
 bun run test
 bun run build:cli
+bun run docs:list
 ```
 
 ### Local Development
@@ -90,7 +91,7 @@ bun run --cwd apps/api db:studio
 - OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
 - Linked tokens are stored encrypted in `spotify_connection`.
 - OAuth scopes requested: `user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read`.
-- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/cli/auth/callback/public`).
+- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (canonical default: `http://127.0.0.1:3000/v1/cli/auth/callback/public`).
 - Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for CLI Spotify integration routes.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY` must be base64-encoded 32 bytes (`openssl rand -base64 32`).
@@ -100,6 +101,8 @@ bun run --cwd apps/api db:studio
 - `INVALID_CLIENT: Invalid redirect URI`
   - Ensure Spotify dashboard redirect URI and `SPOTIFY_REDIRECT_URI` match exactly.
   - Recommended local value: `http://127.0.0.1:3000/v1/cli/auth/callback/public`.
+- OAuth callback `NOT_FOUND`
+  - Ensure the Spotify app uses `http://127.0.0.1:3000/v1/cli/auth/callback/public`.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
   - Regenerate key and restart API.
 - `GET /v1/cli/bootstrap` returns `503`
@@ -120,5 +123,5 @@ bun run --cwd apps/api db:studio
 
 - Backend standards: `docs/backend-architecture-standard.md`
 - Monorepo architecture: `docs/architecture.md`
-- API compatibility policy: `docs/api-compatibility.md`
+- API evolution policy (development): `docs/api-compatibility.md`
 - Release/deploy notes: `docs/release.md`

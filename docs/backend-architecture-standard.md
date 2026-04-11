@@ -187,10 +187,7 @@ If tenant context is introduced later:
 
 - Every schema change ships with migration.
 - No manual prod DB edits without migration artifact.
-- Backward-compatible rollout for destructive changes:
-  1. additive migration
-  2. dual-read/write window (if needed)
-  3. cleanup migration
+- In development phase, prefer direct schema cleanup over long-lived compatibility layers.
 
 ## Error Handling Standard
 
@@ -333,7 +330,7 @@ Use this checklist before merge:
 
 When requirements are unclear, prefer:
 
-- additive changes over breaking changes
+- cleaner boundaries over preserving temporary compatibility
 - feature flags over hard switches for risky behavior
 - explicit interfaces over implicit shared utilities
 - smaller modules over large multi-responsibility files

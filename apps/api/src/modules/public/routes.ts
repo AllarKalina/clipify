@@ -14,7 +14,7 @@ export function publicModule(env: AppEnv) {
       {
         detail: {
           tags: ["public"],
-          summary: "Public API and CLI compatibility metadata"
+          summary: "Public API and CLI version metadata"
         },
         response: t.Object({
           appName: t.String(),
