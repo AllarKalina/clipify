@@ -463,6 +463,23 @@ describe("app routes", () => {
     expect(response.status).toBe(200);
   });
 
+  test("allows legacy spotify public callback route without session", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/v1/spotify/auth/callback/public?code=code-1&state=state-1")
+    );
+    expect(response.status).toBe(200);
+  });
+
   test("returns cli bootstrap payload when session is present", async () => {
     const env = baseEnv();
 
@@ -517,6 +534,40 @@ describe("app routes", () => {
     expect(body.home.spotify).toBe("linked");
     expect(body.home.userName).toBe("Allar");
     expect(body.home.queueStatus).toBe("ready");
+  });
+
+  test("returns snapshot with warning when player state call fails", async () => {
+    const env = baseEnv();
+    const spotify = {
+      ...createSpotifyMock(),
+      async getCurrentlyPlaying() {
+        throw new Response("rate limited", { status: 429 });
+      }
+    };
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: spotify as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/player/snapshot"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      home: { spotify: string; deviceName: string };
+      warning: string;
+    };
+
+    expect(body.home.spotify).toBe("linked");
+    expect(body.home.deviceName).toBe("MacBook Pro");
+    expect(body.warning).toContain("player state unavailable");
   });
 
   test("returns 404 for removed cli home view route", async () => {

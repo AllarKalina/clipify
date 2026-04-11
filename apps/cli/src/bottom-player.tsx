@@ -61,7 +61,7 @@ export function BottomPlayer({
         </Text>
       </Box>
       <Text color="white">
-        {clipLine("[tab] focus  [↑↓] move  [enter] select/edit  [/] search  [h] home  [space] play  [,/.] prev/next", width - 4)}
+        {clipLine("[tab] focus  [↑↓] move  [←→] lateral  [enter] select/edit  [/] search  [h] home  [space] play  [,/.] prev/next", width - 4)}
       </Text>
       <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit  [s/t] shuffle/repeat  [-/=] volume", width - 4)}</Text>
       <Text color="white">{clipLine(getPlayerDeviceHint(player), width - 4)}</Text>

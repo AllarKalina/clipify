@@ -77,6 +77,9 @@ export function handleAuthenticatedIntent({
     case "move-content-selection":
       dispatch({ type: "move-content-selection", direction: intent.direction });
       return;
+    case "set-content-index":
+      dispatch({ type: "set-content-index", contentIndex: intent.contentIndex });
+      return;
     case "start-search-editing":
       dispatch({ type: "set-focus-region", focusRegion: "content" });
       dispatch({ type: "set-content-index", contentIndex: 0 });

@@ -148,4 +148,91 @@ describe("authenticated app state", () => {
 
     expect(next.mainView).toBe("home");
   });
+
+  test("selection movement is bounded at list edges", () => {
+    const withSidebar = {
+      ...createInitialAuthenticatedAppState(""),
+      sidebarIndex: 0,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "One",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 12,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      }
+    };
+
+    const sidebarUp = authenticatedAppReducer(withSidebar, {
+      type: "move-sidebar-selection",
+      direction: "up"
+    });
+    expect(sidebarUp.sidebarIndex).toBe(0);
+
+    const withContent = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      contentIndex: 1,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 1,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000
+            }
+          ]
+        }
+      }
+    };
+
+    const contentDown = authenticatedAppReducer(withContent, {
+      type: "move-content-selection",
+      direction: "down"
+    });
+    expect(contentDown.contentIndex).toBe(1);
+
+    const withDevice = {
+      ...createInitialAuthenticatedAppState(""),
+      devicePicker: {
+        open: true,
+        loading: false,
+        devices: [
+          {
+            id: "device-1",
+            name: "MacBook Pro",
+            type: "Computer",
+            isActive: true,
+            isRestricted: false,
+            supportsVolume: true,
+            volumePercent: 60
+          }
+        ],
+        selectedIndex: 0
+      }
+    };
+
+    const deviceUp = authenticatedAppReducer(withDevice, {
+      type: "move-device-selection",
+      direction: "up"
+    });
+    expect(deviceUp.devicePicker.selectedIndex).toBe(0);
+  });
 });

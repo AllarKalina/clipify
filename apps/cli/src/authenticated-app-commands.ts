@@ -20,6 +20,18 @@ export type AuthenticatedCommandContext = {
   openBrowserOnLink: boolean;
 };
 
+function formatBootstrapWarning(warning: string): string {
+  if (!warning) {
+    return warning;
+  }
+
+  if (!warning.includes("|")) {
+    return warning;
+  }
+
+  return "Spotify returned partial data. Press [r] to refresh.";
+}
+
 function mapCliSnapshotToHome(
   snapshotHome: CliPlayerSnapshotResponse["home"]
 ): HomeSnapshot {
@@ -122,7 +134,7 @@ export async function refreshAuthenticatedApp(
       statusLine:
         next.spotify === "relink-required"
           ? "Spotify permissions changed. Press [l] to re-link."
-          : bootstrap.warning || successLine
+          : formatBootstrapWarning(bootstrap.warning) || successLine
     });
     dispatch({ type: "set-busy", busy: false });
     return next;

@@ -124,10 +124,10 @@ export function moveSelection(current: number, direction: "up" | "down", itemCou
   }
 
   if (direction === "up") {
-    return (current - 1 + itemCount) % itemCount;
+    return Math.max(0, current - 1);
   }
 
-  return (current + 1) % itemCount;
+  return Math.min(itemCount - 1, current + 1);
 }
 
 export function flattenSections(sections: ContentSection[]): ContentItem[] {

@@ -62,10 +62,60 @@ export function createCliBffService(spotify: SpotifyService) {
       }
 
       const warnings: string[] = [];
-      const [profile, currentlyPlaying] = await Promise.all([
+      const [profileResult, currentlyPlayingResult] = await Promise.allSettled([
         spotify.getProfile(session.id),
         spotify.getCurrentlyPlaying(session.id)
       ]);
+
+      const profile = profileResult.status === "fulfilled" ? profileResult.value : null;
+      if (profileResult.status === "rejected") {
+        warnings.push("profile unavailable");
+      }
+
+      let currentlyPlaying =
+        currentlyPlayingResult.status === "fulfilled"
+          ? currentlyPlayingResult.value
+          : {
+              playbackState: "idle" as const,
+              isPlaying: false,
+              trackName: "",
+              artistName: "",
+              albumName: "",
+              albumImageUrl: "",
+              deviceId: "",
+              deviceName: "",
+              deviceType: "",
+              deviceStatus: "none" as const,
+              supportsVolume: false,
+              volumePercent: 0,
+              shuffleEnabled: false,
+              repeatMode: "off" as const,
+              progressMs: 0,
+              durationMs: 0
+            };
+
+      if (currentlyPlayingResult.status === "rejected") {
+        warnings.push("player state unavailable");
+
+        try {
+          const devices = (await spotify.getDevices(session.id)).items;
+          const primaryDevice = devices.find((device) => device.isActive) ?? devices.find((device) => !device.isRestricted) ?? devices[0];
+
+          if (primaryDevice) {
+            currentlyPlaying = {
+              ...currentlyPlaying,
+              deviceId: primaryDevice.id,
+              deviceName: primaryDevice.name,
+              deviceType: primaryDevice.type,
+              deviceStatus: primaryDevice.isRestricted ? "restricted" : primaryDevice.isActive ? "active" : "available",
+              supportsVolume: primaryDevice.supportsVolume,
+              volumePercent: primaryDevice.volumePercent
+            };
+          }
+        } catch {
+          warnings.push("devices unavailable");
+        }
+      }
 
       let queue: CliBootstrapResponse["home"]["queue"] = [];
       const queueStatus = await (async () => {
@@ -106,7 +156,7 @@ export function createCliBffService(spotify: SpotifyService) {
           spotify: "linked",
           userName: session.name,
           userEmail: session.email,
-          spotifyDisplayName: profile.displayName,
+          spotifyDisplayName: profile?.displayName || session.name,
           deviceId: currentlyPlaying.deviceId,
           deviceName: currentlyPlaying.deviceName,
           deviceType: currentlyPlaying.deviceType,

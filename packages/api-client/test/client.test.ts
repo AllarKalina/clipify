@@ -318,6 +318,46 @@ describe("api client", () => {
     expect(client.getCliBootstrap()).rejects.toBeInstanceOf(ApiClientError);
   });
 
+  test("retries once on transient GET network failure", async () => {
+    let callCount = 0;
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      fetchImpl: async () => {
+        callCount += 1;
+        if (callCount === 1) {
+          throw new TypeError("Unable to connect. Is the computer able to access the url?");
+        }
+
+        return Response.json({
+          appName: "clipify-api",
+          apiVersion: "v1",
+          minCliVersion: "0.1.0",
+          latestCliVersion: "0.1.0"
+        });
+      }
+    });
+
+    const payload = await client.getVersion();
+    expect(payload.apiVersion).toBe("v1");
+    expect(callCount).toBe(2);
+  });
+
+  test("encodes library id when fetching library view", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({ section: null });
+      }
+    });
+
+    await client.getCliLibraryView("spotify:playlist:abc/def");
+
+    expect(requestedUrl).toContain("/v1/cli/view/library/spotify%3Aplaylist%3Aabc%2Fdef");
+  });
+
   test("throws when sign-out is called without session cookie", async () => {
     const client = createApiClient({
       baseUrl: "https://example.com",

@@ -77,6 +77,34 @@ type RequestOptions<T> = {
 
 export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: ClientDeps): ApiClient {
   const authOrigin = new URL(baseUrl).origin;
+  const networkRetryDelayMs = 150;
+
+  function isRetriableNetworkError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const message = error.message.toLowerCase();
+    return (
+      message.includes("unable to connect") ||
+      message.includes("failed to fetch") ||
+      message.includes("fetch failed") ||
+      message.includes("connection refused")
+    );
+  }
+
+  async function requestWithRetry(url: URL, init: RequestInit): Promise<Response> {
+    try {
+      return await fetchImpl(url, init);
+    } catch (error) {
+      if (!isRetriableNetworkError(error)) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, networkRetryDelayMs));
+      return fetchImpl(url, init);
+    }
+  }
 
   function parseSessionCookie(setCookie: string, path: string): { sessionCookie: string } {
     const match = setCookie.match(/(?:^|,\s*)better-auth\.session_token=([^;,\s]+)/);
@@ -109,7 +137,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       headers.set("cookie", sessionCookie);
     }
 
-    const response = await fetchImpl(url, {
+    const response = await requestWithRetry(url, {
       method: "GET",
       headers
     });
@@ -280,7 +308,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       });
     },
     getCliLibraryView(libraryId) {
-      return request(`/v1/cli/view/library/${libraryId}`, {
+      return request(`/v1/cli/view/library/${encodeURIComponent(libraryId)}`, {
         schema: cliLibraryViewSchema,
         requireSession: true
       });

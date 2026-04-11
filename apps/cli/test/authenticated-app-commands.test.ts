@@ -204,6 +204,68 @@ describe("authenticated app commands", () => {
     });
   });
 
+  test("refresh collapses multi-source bootstrap warnings to a concise message", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getCliBootstrap: async () => ({
+            home: {
+              spotify: "linked",
+              userName: "Allar",
+              userEmail: "allar@example.com",
+              spotifyDisplayName: "Allar",
+              deviceId: "device-1",
+              deviceName: "MacBook Air",
+              deviceType: "Computer",
+              deviceStatus: "active",
+              supportsVolume: true,
+              volumePercent: 50,
+              playbackState: "paused",
+              shuffleEnabled: false,
+              repeatMode: "off",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              progressMs: 120000,
+              durationMs: 257000,
+              queueStatus: "ready",
+              queue: [],
+              recentUnavailable: false,
+              recent: [],
+              linked: true,
+              relinkRequired: false,
+              profile: null
+            },
+            browse: {
+              featuredPlaylists: [],
+              playlists: [],
+              likedTracks: []
+            },
+            warning: "profile unavailable | recent playback unavailable | liked songs unavailable"
+          })
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const statusActions = actions.filter((action) => action.type === "set-status-line");
+    expect(statusActions.at(-1)).toEqual({
+      type: "set-status-line",
+      statusLine: "Spotify returned partial data. Press [r] to refresh."
+    });
+  });
+
   test("refresh reconciles ready device details from device list", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
     const actions: AuthenticatedAppAction[] = [];
