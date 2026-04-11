@@ -4,13 +4,36 @@ import { requireSession } from "../auth/session";
 import { withRequestIdHeader } from "../../plugins/openapi-headers";
 
 export function userModule(auth: AppAuth) {
+  const unauthorizedResponseSchema = t.Object({
+    error: t.Object({
+      code: t.Literal("UNAUTHORIZED"),
+      message: t.String()
+    })
+  });
+
   return new Elysia({
     name: "user",
     tags: ["user"]
   }).get(
     "/v1/me",
-    async ({ request }) => {
-      const session = await requireSession(auth, request);
+    async ({ request, set }) => {
+      let session;
+
+      try {
+        session = await requireSession(auth, request);
+      } catch (error) {
+        if (error instanceof Response && error.status === 401) {
+          set.status = 401;
+          return {
+            error: {
+              code: "UNAUTHORIZED" as const,
+              message: "Unauthorized. Please log in again."
+            }
+          };
+        }
+
+        throw error;
+      }
 
       return {
         user: {
@@ -37,7 +60,7 @@ export function userModule(auth: AppAuth) {
             name: t.String()
           })
         })),
-        401: withRequestIdHeader(t.String())
+        401: withRequestIdHeader(unauthorizedResponseSchema)
       }
     }
   );

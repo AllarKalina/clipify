@@ -3,6 +3,7 @@
 import { createApiClient } from "@clipify/api-client";
 import { clearSessionCookie, loadPinnedPlaylistNames, loadSessionCookie, saveSessionCookie } from "./config";
 import { runTerminalApp } from "./terminal-app";
+import { checkCliVersionGate, getCliVersion } from "./version-gate";
 
 export type CliCommand = "app" | "auth-set-cookie" | "auth-clear-cookie" | "help";
 
@@ -111,6 +112,19 @@ async function run() {
   if (command === "help") {
     printHelp();
     return;
+  }
+
+  const gateClient = createApiClient({
+    baseUrl: options.apiBaseUrl,
+    sessionCookie: options.sessionCookie
+  });
+  const versionGate = await checkCliVersionGate(gateClient, getCliVersion());
+  if (versionGate.message) {
+    if (versionGate.blocked) {
+      throw new Error(versionGate.message);
+    }
+
+    console.warn(versionGate.message);
   }
 
   await runTerminalApp({

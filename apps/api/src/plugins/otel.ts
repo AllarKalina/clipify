@@ -7,7 +7,6 @@ export function createOtelPlugin(env: AppEnv) {
   }
 
   return opentelemetry({
-    serviceName: env.OTEL_SERVICE_NAME ?? env.APP_NAME,
-    spanProcessors: []
+    serviceName: env.OTEL_SERVICE_NAME ?? env.APP_NAME
   });
 }

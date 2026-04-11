@@ -52,6 +52,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify API Docker build
+        run: docker build -f apps/api/Dockerfile -t clipify-api-ci .
+
       - name: Build CLI binary
         run: bun run build:cli
 
@@ -89,7 +92,7 @@ jobs:
       BETTER_AUTH_URL: http://localhost:3000
       SPOTIFY_CLIENT_ID: test-client-id
       SPOTIFY_CLIENT_SECRET: test-client-secret
-      SPOTIFY_REDIRECT_URI: http://localhost:3000/v1/spotify/auth/callback/public
+      SPOTIFY_REDIRECT_URI: http://127.0.0.1:3000/v1/cli/auth/callback/public
       SPOTIFY_TOKEN_ENCRYPTION_KEY: test-token-encryption-key
       OTEL_ENABLED: "false"
       OTEL_SERVICE_NAME: clipify-api

@@ -24,6 +24,7 @@ export type AppDeps = {
 
 export function createApp(deps: AppDeps) {
   const { env, logger, auth, spotify, checkReadiness } = deps;
+  const trustProxyHeaders = env.RATE_LIMIT_TRUST_PROXY_HEADERS === true;
 
   const baseApp = new Elysia({ aot: env.NODE_ENV === "production" }).use(requestIdPlugin).use(createOpenApiPlugin(env));
 
@@ -76,10 +77,10 @@ export function createApp(deps: AppDeps) {
         message: error instanceof Error ? error.message : String(error)
       });
     })
-    .use(authModule(auth))
+    .use(authModule(auth, { trustProxyHeaders }))
     .use(publicModule(env))
     .use(healthModule(env))
     .use(readyModule(checkReadiness))
-    .use(cliBffModule(auth, spotify))
+    .use(cliBffModule(auth, spotify, { trustProxyHeaders }))
     .use(userModule(auth));
 }

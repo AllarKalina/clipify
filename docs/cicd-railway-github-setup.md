@@ -250,7 +250,8 @@ Symptom:
 
 Fix:
 
-1. ensure `apps/api/Dockerfile` runner stage includes `COPY package.json ./package.json`.
+1. ensure image build uses repo root context with `-f apps/api/Dockerfile`.
+2. ensure Dockerfile copies workspace manifests (`package.json`, `bun.lock`, `apps/api/package.json`, `packages/contracts/package.json`) before `bun install`.
 
 ## 8) Operational Constraints
 

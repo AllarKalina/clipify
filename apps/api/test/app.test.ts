@@ -422,6 +422,12 @@ describe("app routes", () => {
 
     const response = await app.handle(new Request("http://localhost/v1/me"));
     expect(response.status).toBe(401);
+
+    const body = (await response.json()) as {
+      error: { code: string; message: string };
+    };
+    expect(body.error.code).toBe("UNAUTHORIZED");
+    expect(body.error.message).toContain("log in again");
   });
 
   test("returns protected me route with session", async () => {
@@ -497,6 +503,7 @@ describe("app routes", () => {
                 content?: {
                   [contentType: string]: {
                     schema?: {
+                      properties?: Record<string, unknown>;
                       headers?: {
                         properties?: Record<string, unknown>;
                       };
@@ -516,6 +523,7 @@ describe("app routes", () => {
                 content?: {
                   [contentType: string]: {
                     schema?: {
+                      properties?: Record<string, unknown>;
                       headers?: {
                         properties?: Record<string, unknown>;
                       };
@@ -553,6 +561,9 @@ describe("app routes", () => {
     });
     expect(
       spec.paths?.["/v1/me"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
+    ).toBeTruthy();
+    expect(
+      spec.paths?.["/v1/me"]?.get?.responses?.["401"]?.content?.["application/json"]?.schema?.properties?.["error"]
     ).toBeTruthy();
     expect(
       spec.paths?.["/v1/cli/bootstrap"]?.get?.responses?.["200"]?.content?.["application/json"]?.schema?.headers?.properties?.["x-request-id"]
@@ -739,6 +750,29 @@ describe("app routes", () => {
       new Request("http://localhost/v1/cli/auth/callback/public?code=code-1&state=state-1")
     );
     expect(response.status).toBe(200);
+  });
+
+  test("escapes untrusted oauth callback values in html response", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request(
+        "http://localhost/v1/cli/auth/callback/public?error=access_denied&error_description=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
+      )
+    );
+    expect(response.status).toBe(400);
+
+    const html = await response.text();
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>alert(1)</script>");
   });
 
   test("returns cli bootstrap payload when session is present", async () => {

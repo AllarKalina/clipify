@@ -3,6 +3,7 @@ import { rateLimit } from "elysia-rate-limit";
 import { withHeaders } from "@elysiajs/openapi";
 import type { AppAuth } from "./service";
 import { withRequestIdHeader } from "../../plugins/openapi-headers";
+import { buildRateLimitKey } from "../../plugins/rate-limit-key";
 
 const authUserSchema = t.Object(
   {
@@ -106,7 +107,11 @@ function applyResponseHeaders(
   });
 }
 
-export function authModule(auth: AppAuth) {
+type AuthModuleOptions = {
+  trustProxyHeaders?: boolean;
+};
+
+export function authModule(auth: AppAuth, options: AuthModuleOptions = {}) {
   return new Elysia({
     name: "auth",
     prefix: "/api/auth",
@@ -118,10 +123,10 @@ export function authModule(auth: AppAuth) {
         duration: 60_000,
         max: 10,
         generator: (request) =>
-          request.headers.get("x-forwarded-for") ??
-          request.headers.get("cf-connecting-ip") ??
-          request.headers.get("x-real-ip") ??
-          new URL(request.url).hostname,
+          buildRateLimitKey(request, {
+            scope: "auth",
+            trustProxyHeaders: options.trustProxyHeaders
+          }),
         responseCode: 429,
         responseMessage: {
           error: {

@@ -23,6 +23,7 @@ bun run typecheck
 bun run test
 bun run build:cli
 bun run docs:list
+docker build -f apps/api/Dockerfile -t clipify-api .
 ```
 
 ### Local Development
@@ -55,6 +56,7 @@ After successful sign up/login, Spotify linking starts automatically (browser ca
 After Spotify is linked, the terminal app displays your Spotify profile and now-playing state.
 Press `d` in the authenticated shell to inspect Spotify Connect devices and transfer control to one without autoplay.
 CLI-facing API errors are normalized as `{ error: { code, message, hint? } }` envelopes.
+On startup, CLI checks `GET /v1/public/meta/version` and hard-fails if local CLI is below `minCliVersion`.
 
 ### Database Tools
 
@@ -103,6 +105,7 @@ OpenAPI documentation includes route tags, response schemas, and cookie-based se
 - Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (canonical default: `http://127.0.0.1:3000/v1/cli/auth/callback/public`).
 - Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
 - `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for CLI Spotify integration routes.
+- `RATE_LIMIT_TRUST_PROXY_HEADERS=false` by default. Keep it disabled unless requests pass through trusted infrastructure that sanitizes forwarding headers.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY` must be base64-encoded 32 bytes (`openssl rand -base64 32`).
 
 ### Spotify Troubleshooting

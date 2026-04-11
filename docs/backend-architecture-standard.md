@@ -244,6 +244,7 @@ Do not collapse readiness into liveness.
 - Never log secrets, tokens, raw credentials, or full auth headers.
 - Keep auth, database, and telemetry secrets in env only.
 - Add rate limiting for public auth-sensitive endpoints.
+- Trust forwarded IP headers for rate limiting only behind explicitly trusted/sanitizing infrastructure.
 
 ## Testing Contract
 

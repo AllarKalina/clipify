@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
@@ -25,7 +25,13 @@ function writeConfig(next: CliConfig): void {
   const path = getConfigPath();
   const dir = dirname(path);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path, JSON.stringify(next, null, 2));
+  writeFileSync(path, JSON.stringify(next, null, 2), { mode: 0o600 });
+
+  try {
+    chmodSync(path, 0o600);
+  } catch {
+    // noop
+  }
 }
 
 export function loadSessionCookie(): string | undefined {

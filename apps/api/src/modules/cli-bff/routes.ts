@@ -4,6 +4,7 @@ import { requireSession } from "../auth/session";
 import type { AppAuth } from "../auth/service";
 import type { SpotifyService } from "../spotify/service";
 import { withRequestIdHeader } from "../../plugins/openapi-headers";
+import { buildRateLimitKey } from "../../plugins/rate-limit-key";
 import {
   cliBffModels,
   cliModelNames
@@ -11,8 +12,28 @@ import {
 import { CliBffError, cliErrorResponseSchema, cliErrorModels, createCliBffError, toCliErrorPayload } from "./error-response";
 import { createCliBffService } from "./service";
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function normalizeHtmlMessage(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 500) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 500)}…`;
+}
+
 function renderAuthCallbackHtml(title: string, description: string) {
-  return `<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title></head><body><h1>${title}</h1><p>${description}</p></body></html>`;
+  const safeTitle = escapeHtml(normalizeHtmlMessage(title));
+  const safeDescription = escapeHtml(normalizeHtmlMessage(description));
+  return `<!doctype html><html><head><meta charset="utf-8" /><title>${safeTitle}</title></head><body><h1>${safeTitle}</h1><p>${safeDescription}</p></body></html>`;
 }
 
 async function handlePublicAuthCallback(
@@ -62,7 +83,11 @@ async function handlePublicAuthCallback(
   }
 }
 
-export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
+type CliBffModuleOptions = {
+  trustProxyHeaders?: boolean;
+};
+
+export function cliBffModule(auth: AppAuth, spotify: SpotifyService, options: CliBffModuleOptions = {}) {
   const cli = createCliBffService(spotify);
 
   async function applyCliError(
@@ -226,10 +251,11 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
                     duration: 60_000,
                     max: 30,
                     generator: (request) =>
-                      request.headers.get("x-forwarded-for") ??
-                      request.headers.get("cf-connecting-ip") ??
-                      request.headers.get("x-real-ip") ??
-                      new URL(request.url).hostname,
+                      buildRateLimitKey(request, {
+                        scope: "search",
+                        allowSessionCookie: true,
+                        trustProxyHeaders: options.trustProxyHeaders
+                      }),
                     responseCode: 429,
                     responseMessage: {
                       error: {

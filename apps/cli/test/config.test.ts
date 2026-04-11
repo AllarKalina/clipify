@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
@@ -48,5 +48,15 @@ describe("cli config", () => {
     clearSessionCookie();
     expect(loadSessionCookie()).toBeUndefined();
     expect(loadPinnedPlaylistNames()).toEqual(["Na", "Po", "Mud", "Hrr"]);
+  });
+
+  test("writes config file with restricted permissions", () => {
+    const configRoot = mkdtempSync(join(tmpdir(), "clipify-config-"));
+    process.env.XDG_CONFIG_HOME = configRoot;
+
+    saveSessionCookie("better-auth.session_token=abc123");
+
+    const mode = statSync(join(configRoot, "clipify", "config.json")).mode & 0o777;
+    expect(mode).toBe(0o600);
   });
 });

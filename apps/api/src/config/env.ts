@@ -59,6 +59,11 @@ const envSchema = z.object({
   SPOTIFY_CLIENT_SECRET: optionalNonEmptyString,
   SPOTIFY_REDIRECT_URI: optionalSpotifyRedirectUrl,
   SPOTIFY_TOKEN_ENCRYPTION_KEY: optionalNonEmptyString,
+  RATE_LIMIT_TRUST_PROXY_HEADERS: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true")
+    .optional(),
   OTEL_ENABLED: z
     .string()
     .optional()

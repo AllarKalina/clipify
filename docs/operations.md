@@ -47,6 +47,7 @@ For each environment, set:
 16. `OTEL_SERVICE_NAME`
 17. `OTEL_EXPORTER_OTLP_ENDPOINT`
 18. `OTEL_EXPORTER_OTLP_HEADERS`
+19. `RATE_LIMIT_TRUST_PROXY_HEADERS` (`false` unless trusted proxy headers are sanitized)
 
 ## GitHub Environment Setup
 
