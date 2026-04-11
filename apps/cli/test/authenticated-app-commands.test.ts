@@ -115,6 +115,36 @@ describe("authenticated app commands", () => {
     });
   });
 
+  test("refresh ignores featured playlist 403 warnings", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getSpotifyFeaturedPlaylists: async () => {
+            throw new ApiClientError("Request failed for /v1/spotify/browse/featured-playlists: 403 forbidden", 403, "/v1/spotify/browse/featured-playlists");
+          }
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const statusActions = actions.filter((action) => action.type === "set-status-line");
+    expect(statusActions.at(-1)).toEqual({
+      type: "set-status-line",
+      statusLine: "Refreshed"
+    });
+  });
+
   test("refresh reconciles ready device details from the device list", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
     const actions: AuthenticatedAppAction[] = [];

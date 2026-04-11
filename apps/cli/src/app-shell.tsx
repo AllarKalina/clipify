@@ -53,6 +53,7 @@ export function AuthenticatedShell(props: AppShellProps) {
             contentIndex={props.contentIndex}
             focusRegion={props.focusRegion}
             width={contentWidth}
+            height={bodyHeight}
             searchEditing={props.searchEditing}
             player={props.player}
             linkPending={props.linkPending}

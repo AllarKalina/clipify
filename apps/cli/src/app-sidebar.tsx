@@ -20,6 +20,8 @@ type AppSidebarProps = {
 };
 
 export function AppSidebar({ width, focusRegion, userName, items, selectedIndex }: AppSidebarProps) {
+  const rowWidth = Math.max(1, width - 5);
+
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width}>
       <Text color="green" bold>
@@ -34,7 +36,7 @@ export function AppSidebar({ width, focusRegion, userName, items, selectedIndex 
           items.map((item, index) => (
             <React.Fragment key={item.id}>
               {renderRow(
-                clipLine(item.meta ? `${item.title} · ${item.subtitle}` : item.title, width - 4),
+                clipLine(item.meta ? `${item.title} · ${item.subtitle}` : item.title, rowWidth),
                 selectedIndex === index,
                 focusRegion === "sidebar"
               )}

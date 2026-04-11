@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
+import { buildVisibleListLines } from "../src/app-page-body";
 
 describe("authenticated app selectors", () => {
   test("builds home sections as quick launch plus picked for you", () => {
@@ -132,5 +133,70 @@ describe("authenticated app selectors", () => {
     const viewModel = selectShellViewModel(state);
     expect(viewModel.sidebarItems[0]?.title).toBe("Spotify re-link required");
     expect(selectCanStartSearchEditing(state)).toBeFalse();
+  });
+
+  test("builds playlist detail rows from loaded playlist tracks", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 1,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000
+            }
+          ]
+        }
+      }
+    };
+
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.activeSections.map((section) => section.title)).toEqual(["Roadtrip"]);
+    expect(viewModel.activeSections[0]?.items[0]?.title).toBe("Dreams");
+  });
+
+  test("list viewport keeps consecutive playlist rows around the selection", () => {
+    const lines = buildVisibleListLines(
+      [
+        {
+          id: "playlist-tracks",
+          title: "Na",
+          items: [
+            { id: "1", title: "A", subtitle: "artist", action: { type: "noop" } },
+            { id: "2", title: "B", subtitle: "artist", action: { type: "noop" } },
+            { id: "3", title: "C", subtitle: "artist", action: { type: "noop" } },
+            { id: "4", title: "D", subtitle: "artist", action: { type: "noop" } },
+            { id: "5", title: "E", subtitle: "artist", action: { type: "noop" } }
+          ]
+        }
+      ],
+      4,
+      4
+    );
+
+    expect(lines).toEqual([
+      { type: "item", item: expect.objectContaining({ title: "B" }), absoluteIndex: 2 },
+      { type: "item", item: expect.objectContaining({ title: "C" }), absoluteIndex: 3 },
+      { type: "item", item: expect.objectContaining({ title: "D" }), absoluteIndex: 4 },
+      { type: "item", item: expect.objectContaining({ title: "E" }), absoluteIndex: 5 }
+    ]);
   });
 });

@@ -272,7 +272,7 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ),
         mainView: "playlist-detail",
         focusRegion: "content",
-        contentIndex: 0
+        contentIndex: action.detail.tracks.length > 0 ? 1 : 0
       };
     case "open-device-picker":
       return {

@@ -1,4 +1,4 @@
-import type { ApiClient, SpotifyDeviceSummary } from "@clipify/api-client";
+import { ApiClientError, type ApiClient, type SpotifyDeviceSummary } from "@clipify/api-client";
 import type { Dispatch } from "react";
 import type { ContentAction, ShellBrowseState } from "./app-shell-state";
 import type { AuthenticatedAppAction, AuthenticatedAppState, LinkFlow } from "./authenticated-app-state";
@@ -20,15 +20,28 @@ export type AuthenticatedCommandContext = {
   openBrowserOnLink: boolean;
 };
 
+function toBrowseFailure(source: "featured picks" | "playlists" | "liked songs", result: PromiseSettledResult<unknown>) {
+  if (result.status !== "rejected") {
+    return null;
+  }
+
+  const error = result.reason;
+  if (source === "featured picks" && error instanceof ApiClientError && error.status === 403) {
+    return null;
+  }
+
+  return `${source}: ${toMessage(error)}`;
+}
+
 function getBrowseWarning(
   featured: PromiseSettledResult<unknown>,
   playlists: PromiseSettledResult<unknown>,
   liked: PromiseSettledResult<unknown>
 ): string {
   const failures = [
-    featured.status === "rejected" ? `featured picks: ${toMessage(featured.reason)}` : null,
-    playlists.status === "rejected" ? `playlists: ${toMessage(playlists.reason)}` : null,
-    liked.status === "rejected" ? `liked songs: ${toMessage(liked.reason)}` : null
+    toBrowseFailure("featured picks", featured),
+    toBrowseFailure("playlists", playlists),
+    toBrowseFailure("liked songs", liked)
   ].filter(Boolean);
 
   return failures.length > 0 ? `Browse data incomplete: ${failures.join(" | ")}` : "";

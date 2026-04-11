@@ -79,7 +79,7 @@ describe("authenticated app state", () => {
     expect(next.browseState.searchResults.tracks[0]?.trackName).toBe("Dreams");
   });
 
-  test("opening playlist detail switches the main pane and resets selection", () => {
+  test("opening playlist detail switches the main pane and selects the first track", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),
       contentIndex: 3
@@ -95,13 +95,40 @@ describe("authenticated app state", () => {
         ownerName: "Allar",
         trackCount: 1,
         uri: "spotify:playlist:1",
-        tracks: []
+        tracks: [
+          {
+            id: "track-1",
+            trackName: "Dreams",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            uri: "spotify:track:1",
+            durationMs: 257000
+          }
+        ]
       }
     });
 
     expect(next.mainView).toBe("playlist-detail");
-    expect(next.contentIndex).toBe(0);
+    expect(next.contentIndex).toBe(1);
     expect(next.browseState.playlistDetail?.name).toBe("Roadtrip");
+  });
+
+  test("opening an empty playlist detail leaves the search row selected", () => {
+    const next = authenticatedAppReducer(createInitialAuthenticatedAppState(""), {
+      type: "open-playlist-detail",
+      detail: {
+        id: "playlist-1",
+        name: "Roadtrip",
+        description: "",
+        imageUrl: "",
+        ownerName: "Allar",
+        trackCount: 0,
+        uri: "spotify:playlist:1",
+        tracks: []
+      }
+    });
+
+    expect(next.contentIndex).toBe(0);
   });
 
   test("set search query transitions empty search-results back home", () => {

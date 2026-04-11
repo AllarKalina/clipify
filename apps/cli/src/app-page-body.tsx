@@ -42,10 +42,42 @@ type AppPageBodyProps = {
   contentIndex: number;
   focusRegion: AppFocusRegion;
   width: number;
+  height: number;
   searchEditing: boolean;
   player: HomeSnapshot;
   linkPending: boolean;
 };
+
+type ListRenderLine =
+  | { type: "section"; id: string; title: string }
+  | { type: "item"; item: ContentItem; absoluteIndex: number };
+
+export function buildVisibleListLines(sections: ContentSection[], contentIndex: number, availableLines: number): ListRenderLine[] {
+  const allLines: ListRenderLine[] = [];
+  let absoluteIndex = 1;
+
+  for (const section of sections) {
+    allLines.push({ type: "section", id: section.id, title: section.title });
+
+    for (const item of section.items) {
+      allLines.push({
+        type: "item",
+        item,
+        absoluteIndex
+      });
+      absoluteIndex += 1;
+    }
+  }
+
+  if (allLines.length <= availableLines) {
+    return allLines;
+  }
+
+  const selectedLineIndex = allLines.findIndex((line) => line.type === "item" && line.absoluteIndex === contentIndex);
+  const targetIndex = selectedLineIndex >= 0 ? selectedLineIndex : 0;
+  const windowStart = Math.max(0, Math.min(targetIndex, allLines.length - availableLines));
+  return allLines.slice(windowStart, windowStart + availableLines);
+}
 
 export function AppPageBody({
   mainView,
@@ -54,14 +86,18 @@ export function AppPageBody({
   contentIndex,
   focusRegion,
   width,
+  height,
   searchEditing,
   player,
   linkPending
 }: AppPageBodyProps) {
   const contentWidth = width - 4;
+  const rowWidth = Math.max(1, contentWidth - 1);
   const searchSelected = contentIndex === 0;
-  let absoluteIndex = 1;
   const viewLabel = getMainViewLabel(mainView);
+  const headerLineCount = 4 + (browse.searchError ? 1 : 0) + (browse.searchBusy ? 1 : 0);
+  const listAvailableLines = Math.max(1, height - headerLineCount - 2);
+  const visibleListLines = mainView === "home" ? [] : buildVisibleListLines(sections, contentIndex, listAvailableLines);
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
@@ -109,21 +145,23 @@ export function AppPageBody({
       ) : sections.length === 0 ? (
         <Text color="white">
           {clipLine(
-            mainView === "search-results" && browse.searchQuery
+            mainView === "playlist-detail"
+              ? "This playlist has no playable tracks yet."
+              : mainView === "search-results" && browse.searchQuery
               ? "No results for this query."
               : `Nothing to show in ${getMainViewLabel(mainView)} yet.`,
             contentWidth
           )}
         </Text>
       ) : (
-        sections.map((section) => {
-          const tileMode = mainView === "home";
-          const tileWidth = Math.max(24, Math.floor((contentWidth - 2) / 2));
+        mainView === "home" ? (
+          (() => {
+            const tileWidth = Math.max(24, Math.floor((contentWidth - 2) / 2));
+            let absoluteIndex = 1;
 
-          return (
-            <Box key={section.id} flexDirection="column" marginBottom={1}>
-              <Text color="cyan">{section.title}</Text>
-              {tileMode ? (
+            return sections.map((section) => (
+              <Box key={section.id} flexDirection="column" marginBottom={1}>
+                <Text color="cyan">{section.title}</Text>
                 <Box flexWrap="wrap">
                   {section.items.map((item) => {
                     const selected = absoluteIndex === contentIndex;
@@ -131,20 +169,31 @@ export function AppPageBody({
                     return renderTile(item, selected, focusRegion === "content", tileWidth);
                   })}
                 </Box>
-              ) : (
-                section.items.map((item) => {
-                  const selected = absoluteIndex === contentIndex;
-                  const row = clipLine(
-                    item.meta ? `${item.title} · ${item.subtitle} · ${item.meta}` : `${item.title} · ${item.subtitle}`,
-                    contentWidth
-                  );
-                  absoluteIndex += 1;
-                  return <React.Fragment key={item.id}>{renderRow(row, selected, focusRegion === "content")}</React.Fragment>;
-                })
-              )}
-            </Box>
-          );
-        })
+              </Box>
+            ));
+          })()
+        ) : (
+          visibleListLines.map((line) =>
+            line.type === "section" ? (
+              <Text key={`section-${line.id}`} color="cyan">
+                {clipLine(line.title, contentWidth)}
+              </Text>
+            ) : (
+              <React.Fragment key={line.item.id}>
+                {renderRow(
+                  clipLine(
+                    line.item.meta
+                      ? `${line.item.title} · ${line.item.subtitle} · ${line.item.meta}`
+                      : `${line.item.title} · ${line.item.subtitle}`,
+                    rowWidth
+                  ),
+                  line.absoluteIndex === contentIndex,
+                  focusRegion === "content"
+                )}
+              </React.Fragment>
+            )
+          )
+        )
       )}
       {!searchEditing && mainView === "home" ? (
         <Text color="white">{clipLine("Quick launch starts playback. Sidebar opens library detail. Featured picks open detail.", contentWidth)}</Text>

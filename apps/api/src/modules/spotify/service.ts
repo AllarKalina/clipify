@@ -282,6 +282,7 @@ function summarizePlaylist(item: {
   description?: string | null;
   images?: Array<{ url?: string }>;
   owner?: { display_name?: string | null };
+  items?: { total?: number };
   tracks?: { total?: number };
   uri?: string;
 }): SpotifyPlaylistSummary {
@@ -291,7 +292,7 @@ function summarizePlaylist(item: {
     description: item.description ?? "",
     imageUrl: item.images?.[0]?.url ?? "",
     ownerName: item.owner?.display_name ?? "",
-    trackCount: item.tracks?.total ?? 0,
+    trackCount: item.items?.total ?? item.tracks?.total ?? 0,
     uri: item.uri ?? ""
   };
 }
@@ -312,6 +313,62 @@ function summarizeTrack(item: {
     uri: item.uri ?? "",
     durationMs: item.duration_ms ?? 0
   };
+}
+
+type SpotifyPlaylistTrackEntry = {
+  track?: {
+    id?: string;
+    name?: string;
+    artists?: Array<{ name?: string }>;
+    album?: { name?: string };
+    uri?: string;
+    duration_ms?: number;
+    type?: string;
+  } | null;
+  item?: {
+    id?: string;
+    name?: string;
+    artists?: Array<{ name?: string }>;
+    album?: { name?: string };
+    uri?: string;
+    duration_ms?: number;
+    type?: string;
+  } | null;
+};
+
+type SpotifyPlaylistTrackPayload = SpotifyPlaylistTrackEntry | null;
+
+type SpotifyPlayableTrackPayload = NonNullable<SpotifyPlaylistTrackEntry["track"]>;
+
+type SpotifyPlaylistItemsPagePayload = {
+  items?: SpotifyPlaylistTrackPayload[];
+  next?: string | null;
+};
+
+function isPlayableTrack(track: SpotifyPlaylistTrackEntry["track"] | SpotifyPlaylistTrackEntry["item"]): track is SpotifyPlayableTrackPayload {
+  if (!track) {
+    return false;
+  }
+
+  return track.type === undefined || track.type === "track";
+}
+
+function summarizePlaylistTracks(items: SpotifyPlaylistTrackPayload[] | undefined) {
+  return (items ?? [])
+    .map((entry) => entry?.track ?? entry?.item ?? null)
+    .filter(isPlayableTrack)
+    .map((track) => summarizeTrack(track));
+}
+
+function buildPlaylistItemsUrl(playlistId: string, offset = 0) {
+  const url = new URL(`https://api.spotify.com/v1/playlists/${playlistId}/items`);
+  url.searchParams.set("limit", "50");
+  url.searchParams.set("offset", String(offset));
+  url.searchParams.set(
+    "fields",
+    "items(item(id,name,artists(name),album(name),uri,duration_ms,type),track(id,name,artists(name),album(name),uri,duration_ms,type)),next"
+  );
+  return url.toString();
 }
 
 function summarizeAlbum(item: {
@@ -1053,7 +1110,7 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
 
       const { response } = await fetchSpotifyWithRetry(
         userId,
-        `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,owner(display_name),tracks(total,items(track(id,name,artists(name),album(name),uri,duration_ms))),uri`
+        `https://api.spotify.com/v1/playlists/${playlistId}?fields=id,name,description,images,owner(display_name),tracks(total),uri`
       );
 
       if (!response.ok) {
@@ -1071,23 +1128,31 @@ export function createSpotifyService(env: AppEnv, deps: SpotifyServiceDeps): Spo
         owner?: { display_name?: string | null };
         tracks?: {
           total?: number;
-          items?: Array<{
-            track?: {
-              id?: string;
-              name?: string;
-              artists?: Array<{ name?: string }>;
-              album?: { name?: string };
-              uri?: string;
-              duration_ms?: number;
-            };
-          }>;
         };
         uri?: string;
       };
 
+      const tracks: SpotifyPlaylistDetailResponse["tracks"] = [];
+      let nextPageUrl: string | null = buildPlaylistItemsUrl(playlistId);
+
+      while (nextPageUrl) {
+        const { response: itemsResponse } = await fetchSpotifyWithRetry(userId, nextPageUrl);
+
+        if (!itemsResponse.ok) {
+          const text = await itemsResponse.text();
+          throw new Response(`Spotify playlist items request failed (${itemsResponse.status}): ${text || "empty response"}`, {
+            status: itemsResponse.status
+          });
+        }
+
+        const itemsPayload = (await itemsResponse.json()) as SpotifyPlaylistItemsPagePayload;
+        tracks.push(...summarizePlaylistTracks(itemsPayload.items));
+        nextPageUrl = itemsPayload.next ?? null;
+      }
+
       return {
         ...summarizePlaylist(payload),
-        tracks: (payload.tracks?.items ?? []).map((item) => summarizeTrack(item.track ?? {}))
+        tracks
       };
     },
     async search(userId: string, query: string) {

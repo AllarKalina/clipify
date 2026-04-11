@@ -60,6 +60,44 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "relink-required" });
   });
 
+  test("pressing enter on a selected playlist track activates it", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      focusRegion: "content" as const,
+      contentIndex: 1,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 1,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000
+            }
+          ]
+        }
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "activate-selected-item" });
+  });
+
   test("sidebar arrows navigate library entries", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
