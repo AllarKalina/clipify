@@ -1,0 +1,292 @@
+import type {
+  CliBootstrapResponse,
+  CliDevicesResponse,
+  CliHomeViewSection,
+  CliHomeViewResponse,
+  CliLibraryViewResponse,
+  CliPlayerActionRequest,
+  CliPlayerActionResponse,
+  CliSearchResponse
+} from "@clipify/contracts/cli";
+import type { AuthSession } from "../auth/session";
+import type { SpotifyService } from "../spotify/service";
+
+function createDefaultHome(session: AuthSession["user"], spotify: CliBootstrapResponse["home"]["spotify"]): CliBootstrapResponse["home"] {
+  const linked = spotify === "linked";
+  const relinkRequired = spotify === "relink-required";
+
+  return {
+    spotify,
+    userName: session.name,
+    userEmail: session.email,
+    spotifyDisplayName: spotify === "not-linked" ? "not linked" : relinkRequired ? "relink required" : "",
+    deviceId: "",
+    deviceName: "",
+    deviceType: "",
+    deviceStatus: "none",
+    supportsVolume: false,
+    volumePercent: 0,
+    playbackState: "idle",
+    shuffleEnabled: false,
+    repeatMode: "off",
+    trackName: "",
+    artistName: "",
+    albumName: "",
+    progressMs: 0,
+    durationMs: 0,
+    queueStatus: "ready",
+    queue: [],
+    recentUnavailable: false,
+    recent: [],
+    linked,
+    relinkRequired,
+    profile: null
+  };
+}
+
+export function createCliBffService(spotify: SpotifyService) {
+  return {
+    async getBootstrap(session: AuthSession["user"]): Promise<CliBootstrapResponse> {
+      const auth = await spotify.getAuthorizationStatus(session.id);
+
+      if (!auth.linked) {
+        return {
+          home: createDefaultHome(session, "not-linked"),
+          browse: {
+            featuredPlaylists: [],
+            playlists: [],
+            likedTracks: []
+          },
+          warning: ""
+        };
+      }
+
+      if (auth.relinkRequired) {
+        return {
+          home: createDefaultHome(session, "relink-required"),
+          browse: {
+            featuredPlaylists: [],
+            playlists: [],
+            likedTracks: []
+          },
+          warning: ""
+        };
+      }
+
+      const warnings: string[] = [];
+      const [profile, currentlyPlaying] = await Promise.all([
+        spotify.getProfile(session.id),
+        spotify.getCurrentlyPlaying(session.id)
+      ]);
+
+      let queue: CliBootstrapResponse["home"]["queue"] = [];
+      const queueStatus = await (async () => {
+        try {
+          queue = (await spotify.getQueue(session.id)).items;
+          return "ready" as const;
+        } catch (error) {
+          if (error instanceof Response) {
+            if (error.status === 403) {
+              return "relink-required" as const;
+            }
+
+            if (error.status === 409) {
+              return "no-device" as const;
+            }
+          }
+
+          warnings.push("queue unavailable");
+          return "unavailable" as const;
+        }
+      })();
+
+      let recent: CliBootstrapResponse["home"]["recent"] = [];
+      let recentUnavailable = false;
+      try {
+        recent = (await spotify.getRecentlyPlayed(session.id)).items;
+      } catch (error) {
+        if (error instanceof Response && error.status === 403) {
+          recentUnavailable = true;
+        } else {
+          recentUnavailable = true;
+          warnings.push("recent playback unavailable");
+        }
+      }
+
+      const [featuredResult, playlistsResult, likedResult] = await Promise.allSettled([
+        spotify.getFeaturedPlaylists(session.id),
+        spotify.getPlaylists(session.id),
+        spotify.getSavedTracks(session.id)
+      ]);
+
+      const featuredPlaylists =
+        featuredResult.status === "fulfilled"
+          ? featuredResult.value.items
+          : [];
+      const playlists =
+        playlistsResult.status === "fulfilled"
+          ? playlistsResult.value.items
+          : [];
+      const likedTracks =
+        likedResult.status === "fulfilled"
+          ? likedResult.value.items
+          : [];
+
+      if (
+        featuredResult.status === "rejected" &&
+        !(featuredResult.reason instanceof Response && featuredResult.reason.status === 403)
+      ) {
+        warnings.push("featured picks unavailable");
+      }
+
+      if (playlistsResult.status === "rejected") {
+        warnings.push("playlists unavailable");
+      }
+
+      if (likedResult.status === "rejected") {
+        warnings.push("liked songs unavailable");
+      }
+
+      return {
+        home: {
+          spotify: "linked",
+          userName: session.name,
+          userEmail: session.email,
+          spotifyDisplayName: profile.displayName,
+          deviceId: currentlyPlaying.deviceId,
+          deviceName: currentlyPlaying.deviceName,
+          deviceType: currentlyPlaying.deviceType,
+          deviceStatus: currentlyPlaying.deviceStatus,
+          supportsVolume: currentlyPlaying.supportsVolume,
+          volumePercent: currentlyPlaying.volumePercent,
+          playbackState: currentlyPlaying.playbackState,
+          shuffleEnabled: currentlyPlaying.shuffleEnabled,
+          repeatMode: currentlyPlaying.repeatMode,
+          trackName: currentlyPlaying.trackName,
+          artistName: currentlyPlaying.artistName,
+          albumName: currentlyPlaying.albumName,
+          progressMs: currentlyPlaying.progressMs,
+          durationMs: currentlyPlaying.durationMs,
+          queueStatus,
+          queue,
+          recentUnavailable,
+          recent,
+          linked: true,
+          relinkRequired: false,
+          profile
+        },
+        browse: {
+          featuredPlaylists,
+          playlists,
+          likedTracks
+        },
+        warning: warnings.join(" | ")
+      };
+    },
+
+    async getHomeView(userId: string): Promise<CliHomeViewResponse> {
+      const [playlists, featured] = await Promise.all([
+        spotify.getPlaylists(userId),
+        spotify.getFeaturedPlaylists(userId)
+      ]);
+
+      const sections: CliHomeViewSection[] = [
+        {
+          id: "quick-launch",
+          title: "Quick launch",
+          items: playlists.items.slice(0, 6).map((playlist) => ({
+            id: playlist.id,
+            title: playlist.name,
+            subtitle: playlist.ownerName,
+            meta: `${playlist.trackCount} tracks`,
+            action: { type: "play-context", uri: playlist.uri }
+          }))
+        },
+        {
+          id: "picked",
+          title: "Picked for you",
+          items: featured.items.slice(0, 6).map((playlist) => ({
+            id: playlist.id,
+            title: playlist.name,
+            subtitle: playlist.description || playlist.ownerName,
+            meta: `${playlist.trackCount} tracks`,
+            action: { type: "open-playlist", playlistId: playlist.id }
+          }))
+        }
+      ];
+
+      return {
+        sections: sections.filter((section) => section.items.length > 0)
+      };
+    },
+
+    async getLibraryView(userId: string, libraryId: string): Promise<CliLibraryViewResponse> {
+      if (libraryId === "liked") {
+        const liked = await spotify.getSavedTracks(userId);
+        return {
+          section: {
+            id: "liked-tracks",
+            title: "Liked songs",
+            items: liked.items.map((track) => ({
+              id: track.id || track.uri,
+              title: track.trackName,
+              subtitle: track.artistName,
+              meta: track.albumName,
+              action: { type: "play-track", uri: track.uri }
+            }))
+          }
+        };
+      }
+
+      const playlist = await spotify.getPlaylist(userId, libraryId);
+      return {
+        section: {
+          id: `playlist-${playlist.id}`,
+          title: playlist.name,
+          items: playlist.tracks.map((track) => ({
+            id: track.id || track.uri,
+            title: track.trackName,
+            subtitle: track.artistName,
+            meta: track.albumName,
+            action: { type: "play-track", uri: track.uri }
+          }))
+        }
+      };
+    },
+
+    async search(userId: string, query: string): Promise<CliSearchResponse> {
+      return spotify.search(userId, query);
+    },
+
+    async getDevices(userId: string): Promise<CliDevicesResponse> {
+      return spotify.getDevices(userId);
+    },
+
+    async runPlayerAction(userId: string, request: CliPlayerActionRequest): Promise<CliPlayerActionResponse> {
+      switch (request.action) {
+        case "play":
+          return spotify.play(userId);
+        case "pause":
+          return spotify.pause(userId);
+        case "next":
+          return spotify.next(userId);
+        case "previous":
+          return spotify.previous(userId);
+        case "shuffle":
+          return spotify.setShuffle(userId, request.enabled);
+        case "repeat":
+          return spotify.setRepeatMode(userId, request.mode);
+        case "volume":
+          return spotify.setVolume(userId, request.volumePercent);
+        case "transfer":
+          return spotify.transferPlayback(userId, request.deviceId);
+        case "play-track":
+          return spotify.playTrack(userId, request.uri);
+        case "play-context":
+          return spotify.playContext(userId, request.contextUri);
+        default:
+          throw new Response("Unsupported player action", { status: 400 });
+      }
+    }
+  };
+}

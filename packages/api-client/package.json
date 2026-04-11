@@ -8,6 +8,7 @@
     "typecheck": "bunx tsc --noEmit"
   },
   "dependencies": {
+    "@clipify/contracts": "workspace:*",
     "zod": "^4.1.5"
   },
   "devDependencies": {

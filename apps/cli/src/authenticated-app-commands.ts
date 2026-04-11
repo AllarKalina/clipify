@@ -69,12 +69,94 @@ async function loadPlaylistDetail(client: ApiClient, playlistId: string) {
   return client.getSpotifyPlaylist(playlistId);
 }
 
+function mapCliBootstrapToHome(
+  bootstrap: Awaited<ReturnType<NonNullable<ApiClient["getCliBootstrap"]>>>
+): HomeSnapshot {
+  return {
+    backend: "connected",
+    spotify: bootstrap.home.spotify,
+    userName: bootstrap.home.userName,
+    userEmail: bootstrap.home.userEmail,
+    spotifyDisplayName: bootstrap.home.spotifyDisplayName,
+    deviceId: bootstrap.home.deviceId,
+    deviceName: bootstrap.home.deviceName,
+    deviceType: bootstrap.home.deviceType,
+    deviceStatus: bootstrap.home.deviceStatus,
+    supportsVolume: bootstrap.home.supportsVolume,
+    volumePercent: bootstrap.home.volumePercent,
+    playbackState: bootstrap.home.playbackState,
+    shuffleEnabled: bootstrap.home.shuffleEnabled,
+    repeatMode: bootstrap.home.repeatMode,
+    trackName: bootstrap.home.trackName,
+    artistName: bootstrap.home.artistName,
+    albumName: bootstrap.home.albumName,
+    progressMs: bootstrap.home.progressMs,
+    durationMs: bootstrap.home.durationMs,
+    queueStatus: bootstrap.home.queueStatus,
+    queue: bootstrap.home.queue,
+    recentUnavailable: bootstrap.home.recentUnavailable,
+    recent: bootstrap.home.recent
+  };
+}
+
 export async function refreshAuthenticatedApp(
   context: AuthenticatedCommandContext,
   successLine: string
 ): Promise<HomeSnapshot> {
   const { client, dispatch, getState, onLogoutComplete } = context;
   dispatch({ type: "set-busy", busy: true });
+
+  if (client.getCliBootstrap) {
+    try {
+      const bootstrap = await client.getCliBootstrap();
+      const next = mapCliBootstrapToHome(bootstrap);
+
+      dispatch({ type: "replace-home-snapshot", snapshot: next });
+      dispatch({
+        type: "replace-browse-state",
+        browseState: {
+          ...getState().browseState,
+          recentTracks: next.recent,
+          featuredPlaylists: bootstrap.browse.featuredPlaylists,
+          playlists: bootstrap.browse.playlists,
+          likedTracks: bootstrap.browse.likedTracks
+        }
+      });
+      dispatch({ type: "reset-progress-tick" });
+      dispatch({ type: "set-busy", busy: false });
+
+      if (next.spotify === "linked") {
+        try {
+          const nextDevices = client.getCliDevices
+            ? (await client.getCliDevices()).items
+            : (await client.getSpotifyDevices()).items;
+          dispatch({ type: "set-device-list", devices: nextDevices });
+          dispatch({
+            type: "replace-home-snapshot",
+            snapshot: reconcilePlayerDevice(next, nextDevices)
+          });
+        } catch {}
+      }
+
+      dispatch({
+        type: "set-status-line",
+        statusLine:
+          next.spotify === "relink-required"
+            ? "Spotify permissions changed. Press [l] to re-link."
+            : bootstrap.warning || successLine
+      });
+      return next;
+    } catch (error) {
+      if (error instanceof ApiClientError && error.status === 401) {
+        onLogoutComplete("Session expired");
+        return {
+          ...getState().homeSnapshot,
+          failureReason: "unauthorized"
+        };
+      }
+    }
+  }
+
   const next = await computeHomeSnapshot(client);
   if (next.failureReason === "unauthorized") {
     onLogoutComplete("Session expired");
@@ -167,17 +249,18 @@ export function openDevicePicker(context: AuthenticatedCommandContext) {
   dispatch({ type: "open-device-picker" });
   dispatch({ type: "set-device-picker-loading", loading: true });
 
-  void client
-    .getSpotifyDevices()
-    .then(({ items }) => {
-      dispatch({ type: "set-device-list", devices: items });
-    })
-    .catch((error) => {
+  void (async () => {
+    try {
+      const response = client.getCliDevices
+        ? await client.getCliDevices()
+        : await client.getSpotifyDevices();
+      dispatch({ type: "set-device-list", devices: response.items });
+    } catch (error) {
       dispatch({ type: "set-status-line", statusLine: `Device list failed: ${toMessage(error)}` });
-    })
-    .finally(() => {
+    } finally {
       dispatch({ type: "set-device-picker-loading", loading: false });
-    });
+    }
+  })();
 }
 
 export function runPlaybackAction(

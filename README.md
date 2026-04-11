@@ -7,6 +7,7 @@ Spotify terminal app + hosted backend monorepo, built on Bun.
 - `apps/api`: Elysia backend, auth, DB, Spotify integration layer
 - `apps/cli`: user-facing terminal app
 - `packages/api-client`: typed HTTP client used by terminal app
+- `packages/contracts`: shared API contracts for api + client
 - `packages/tsconfig`: shared TypeScript base config
 
 ## Commands
@@ -83,6 +84,12 @@ bun run --cwd apps/api db:studio
 - `GET /v1/spotify/me/player/queue`
 - `GET /v1/spotify/me/player/recently-played`
 - `PUT /v1/spotify/me/player/transfer`
+- `GET /v1/cli/bootstrap`
+- `GET /v1/cli/view/home`
+- `GET /v1/cli/view/library/:libraryId`
+- `GET /v1/cli/search`
+- `GET /v1/cli/devices`
+- `POST /v1/cli/player/action`
 - `ALL /api/auth/*`
 
 ## Spotify OAuth Notes

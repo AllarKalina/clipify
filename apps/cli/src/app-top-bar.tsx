@@ -3,6 +3,7 @@ import React from "react";
 import type { AppFocusRegion, ShellBrowseState } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
+import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
 type AppTopBarProps = {
   browse: ShellBrowseState;
@@ -15,20 +16,20 @@ type AppTopBarProps = {
 
 export function getSearchPromptLine(player: HomeSnapshot) {
   if (player.spotify === "relink-required") {
-    return "Spotify permissions changed";
+    return iconLabel(NERD_ICONS.search, "Spotify permissions changed");
   }
 
-  return "What do you want to play?";
+  return iconLabel(NERD_ICONS.search, "What do you want to play?");
 }
 
 export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapshot) {
   if (browse.searchQuery) {
-    return browse.searchQuery;
+    return iconLabel(NERD_ICONS.search, browse.searchQuery);
   }
 
   return player.spotify === "relink-required"
-    ? "Press [l] to re-link Spotify before searching"
-    : "Type [/] or press [enter] to search";
+    ? iconLabel(NERD_ICONS.search, "Press [l] to re-link Spotify before searching")
+    : iconLabel(NERD_ICONS.search, "Type [/] or press [enter] to search");
 }
 
 export function getTopBarHeight(browse: ShellBrowseState) {
@@ -46,7 +47,7 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
         {clipLine(getSearchInputLine(browse, player), contentWidth)}
       </Text>
       {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
-      {browse.searchBusy ? <Text color="yellow">{clipLine("Searching Spotify...", contentWidth)}</Text> : null}
+      {browse.searchBusy ? <Text color="yellow">{clipLine(iconLabel(NERD_ICONS.search, "Searching Spotify..."), contentWidth)}</Text> : null}
     </Box>
   );
 }

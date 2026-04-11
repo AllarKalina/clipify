@@ -1,6 +1,14 @@
 import { z } from "zod";
-import type { PublicExampleResponse, PublicVersionResponse } from "../../../apps/api/src/modules/public/contracts";
 import type {
+  CliBootstrapResponse,
+  CliDevicesResponse,
+  CliHomeViewResponse,
+  CliLibraryViewResponse,
+  CliPlayerActionRequest,
+  CliPlayerActionResponse,
+  CliSearchResponse,
+  PublicExampleResponse,
+  PublicVersionResponse,
   SpotifyAlbumSummary,
   SpotifyAuthStatusResponse,
   SpotifyCallbackResponse,
@@ -18,7 +26,7 @@ import type {
   SpotifyRepeatMode,
   SpotifyRecentlyPlayedResponse,
   SpotifyStartAuthResponse
-} from "../../../apps/api/src/modules/spotify/contracts";
+} from "@clipify/contracts";
 
 const versionSchema = z.object({
   appName: z.string(),
@@ -185,6 +193,103 @@ const spotifyPlayerActionSchema = z.object({
   action: z.enum(["play", "pause", "next", "previous", "shuffle", "repeat", "volume", "transfer", "play-track", "play-context"])
 });
 
+const cliBootstrapSchema = z.object({
+  home: z.object({
+    spotify: z.enum(["linked", "not-linked", "relink-required"]),
+    userName: z.string(),
+    userEmail: z.string(),
+    spotifyDisplayName: z.string(),
+    deviceId: z.string(),
+    deviceName: z.string(),
+    deviceType: z.string(),
+    deviceStatus: z.enum(["active", "available", "restricted", "none"]),
+    supportsVolume: z.boolean(),
+    volumePercent: z.number(),
+    playbackState: z.enum(["playing", "paused", "idle"]),
+    shuffleEnabled: z.boolean(),
+    repeatMode: z.enum(["off", "track", "context"]),
+    trackName: z.string(),
+    artistName: z.string(),
+    albumName: z.string(),
+    progressMs: z.number(),
+    durationMs: z.number(),
+    queueStatus: z.enum(["ready", "no-device", "relink-required", "unavailable"]),
+    queue: spotifyQueueSchema.shape.items,
+    recentUnavailable: z.boolean(),
+    recent: spotifyRecentlyPlayedSchema.shape.items,
+    linked: z.boolean(),
+    relinkRequired: z.boolean(),
+    profile: spotifyProfileSchema.nullable()
+  }),
+  browse: z.object({
+    featuredPlaylists: spotifyFeaturedPlaylistsSchema.shape.items,
+    playlists: spotifyPlaylistsSchema.shape.items,
+    likedTracks: spotifySavedTracksSchema.shape.items
+  }),
+  warning: z.string()
+});
+
+const cliHomeViewSectionSchema = z.object({
+  id: z.enum(["quick-launch", "picked"]),
+  title: z.string(),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      subtitle: z.string(),
+      meta: z.string(),
+      action: z.union([
+        z.object({
+          type: z.literal("play-context"),
+          uri: z.string()
+        }),
+        z.object({
+          type: z.literal("open-playlist"),
+          playlistId: z.string()
+        })
+      ])
+    })
+  )
+});
+
+const cliHomeViewSchema = z.object({
+  sections: z.array(cliHomeViewSectionSchema)
+});
+
+const cliLibraryViewSchema = z.object({
+  section: z
+    .object({
+      id: z.string(),
+      title: z.string(),
+      items: z.array(
+        z.object({
+          id: z.string(),
+          title: z.string(),
+          subtitle: z.string(),
+          meta: z.string().optional(),
+          action: z.object({
+            type: z.literal("play-track"),
+            uri: z.string()
+          })
+        })
+      )
+    })
+    .nullable()
+});
+
+const cliPlayerActionRequestSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("play") }),
+  z.object({ action: z.literal("pause") }),
+  z.object({ action: z.literal("next") }),
+  z.object({ action: z.literal("previous") }),
+  z.object({ action: z.literal("shuffle"), enabled: z.boolean() }),
+  z.object({ action: z.literal("repeat"), mode: z.enum(["off", "track", "context"]) }),
+  z.object({ action: z.literal("volume"), volumePercent: z.number() }),
+  z.object({ action: z.literal("transfer"), deviceId: z.string() }),
+  z.object({ action: z.literal("play-track"), uri: z.string() }),
+  z.object({ action: z.literal("play-context"), contextUri: z.string() })
+]);
+
 export class ApiClientError extends Error {
   readonly status: number;
   readonly path: string;
@@ -235,6 +340,12 @@ export type ApiClient = {
   setSpotifyRepeatMode: (mode: SpotifyRepeatMode) => Promise<SpotifyPlayerActionResponse>;
   setSpotifyVolume: (volumePercent: number) => Promise<SpotifyPlayerActionResponse>;
   transferSpotifyPlayback: (deviceId: string) => Promise<SpotifyPlayerActionResponse>;
+  getCliBootstrap?: () => Promise<CliBootstrapResponse>;
+  getCliHomeView?: () => Promise<CliHomeViewResponse>;
+  getCliLibraryView?: (libraryId: string) => Promise<CliLibraryViewResponse>;
+  searchCli?: (query: string) => Promise<CliSearchResponse>;
+  getCliDevices?: () => Promise<CliDevicesResponse>;
+  runCliPlayerAction?: (request: CliPlayerActionRequest) => Promise<CliPlayerActionResponse>;
 };
 
 type FetchLike = (input: URL | Request | string, init?: RequestInit) => Promise<Response>;
@@ -305,7 +416,7 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     return parsed.data;
   }
 
-  async function post<T>(path: string, schema: z.ZodType<T>, requireSession = true): Promise<T> {
+  async function post<T>(path: string, schema: z.ZodType<T>, requireSession = true, body?: unknown): Promise<T> {
     const url = new URL(path, baseUrl);
     const headers = new Headers({
       accept: "application/json"
@@ -318,9 +429,14 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       headers.set("cookie", sessionCookie);
     }
 
+    if (body !== undefined) {
+      headers.set("content-type", "application/json");
+    }
+
     const response = await fetchImpl(url, {
       method: "POST",
-      headers
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body)
     });
 
     if (!response.ok) {
@@ -328,8 +444,8 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       throw new ApiClientError(`Request failed for ${path}: ${response.status} ${text}`, response.status, path);
     }
 
-    const body = await response.json();
-    const parsed = schema.safeParse(body);
+    const responseBody = await response.json();
+    const parsed = schema.safeParse(responseBody);
     if (!parsed.success) {
       throw new ApiClientError(`Invalid response for ${path}`, 502, path);
     }
@@ -633,6 +749,45 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       return put("/v1/spotify/me/player/transfer", spotifyPlayerActionSchema, {
         deviceId
       });
+    },
+    getCliBootstrap() {
+      return request("/v1/cli/bootstrap", {
+        schema: cliBootstrapSchema,
+        requireSession: true
+      });
+    },
+    getCliHomeView() {
+      return request("/v1/cli/view/home", {
+        schema: cliHomeViewSchema,
+        requireSession: true
+      });
+    },
+    getCliLibraryView(libraryId) {
+      return request(`/v1/cli/view/library/${libraryId}`, {
+        schema: cliLibraryViewSchema,
+        requireSession: true
+      });
+    },
+    searchCli(query) {
+      return request("/v1/cli/search", {
+        schema: spotifySearchSchema,
+        query: { q: query },
+        requireSession: true
+      });
+    },
+    getCliDevices() {
+      return request("/v1/cli/devices", {
+        schema: spotifyDevicesSchema,
+        requireSession: true
+      });
+    },
+    runCliPlayerAction(action) {
+      const parsed = cliPlayerActionRequestSchema.safeParse(action);
+      if (!parsed.success) {
+        throw new ApiClientError("Invalid CLI player action input", 400, "/v1/cli/player/action");
+      }
+
+      return post("/v1/cli/player/action", spotifyPlayerActionSchema, true, parsed.data);
     }
   };
 }

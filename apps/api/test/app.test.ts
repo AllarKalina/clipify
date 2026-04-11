@@ -647,6 +647,68 @@ describe("app routes", () => {
     expect(body.relinkRequired).toBeFalse();
   });
 
+  test("returns cli bootstrap payload when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/bootstrap"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      home: { spotify: string; userName: string; queueStatus: string };
+      browse: { playlists: unknown[]; likedTracks: unknown[] };
+    };
+    expect(body.home.spotify).toBe("linked");
+    expect(body.home.userName).toBe("Allar");
+    expect(body.home.queueStatus).toBe("ready");
+    expect(body.browse.playlists.length).toBeGreaterThan(0);
+    expect(body.browse.likedTracks.length).toBeGreaterThan(0);
+  });
+
+  test("runs cli player action endpoint", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/v1/cli/player/action", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          action: "play-context",
+          contextUri: "spotify:playlist:2"
+        })
+      })
+    );
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { action: string };
+    expect(body.action).toBe("play-context");
+  });
+
   test("forwards auth post body to auth handler", async () => {
     const env = baseEnv();
     let receivedEmail = "";

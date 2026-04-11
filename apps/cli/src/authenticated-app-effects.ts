@@ -62,15 +62,18 @@ export function useAuthenticatedAppEffects({
     const timeout = setTimeout(() => {
       dispatch({ type: "search-started" });
 
-      void client
-        .searchSpotify(state.browseState.searchQuery.trim())
-        .then((results) => {
+      void (async () => {
+        try {
+          const query = state.browseState.searchQuery.trim();
+          const results = client.searchCli
+            ? await client.searchCli(query)
+            : await client.searchSpotify(query);
           dispatch({ type: "search-completed", results });
           dispatch({ type: "set-content-index", contentIndex: 0 });
-        })
-        .catch((error) => {
+        } catch (error) {
           dispatch({ type: "search-failed", error: toMessage(error) });
-        });
+        }
+      })();
     }, 250);
 
     return () => clearTimeout(timeout);

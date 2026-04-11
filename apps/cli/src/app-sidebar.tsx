@@ -2,6 +2,7 @@ import { Box, Text } from "ink";
 import React from "react";
 import type { ContentItem, AppFocusRegion } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
+import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
 function renderRow(content: string, selected: boolean, activeRegion: boolean) {
   return (
@@ -26,7 +27,7 @@ export function AppSidebar({ width, height, focusRegion, userName, items, select
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width} height={height} minHeight={height}>
       <Text color="green" bold>
-        Your Library
+        {iconLabel(NERD_ICONS.playlists, "Your Library")}
       </Text>
       <Text color="white">{clipLine(userName, width - 4)}</Text>
       <Box marginTop={1} flexDirection="column">

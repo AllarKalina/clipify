@@ -439,6 +439,90 @@ describe("api client", () => {
     expect(requestedUrl).toContain("/v1/spotify/me/player/queue");
   });
 
+  test("returns cli bootstrap payload for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          home: {
+            spotify: "linked",
+            userName: "Allar",
+            userEmail: "allar@example.com",
+            spotifyDisplayName: "Allar",
+            deviceId: "device-1",
+            deviceName: "MacBook Pro",
+            deviceType: "Computer",
+            deviceStatus: "active",
+            supportsVolume: true,
+            volumePercent: 60,
+            playbackState: "playing",
+            shuffleEnabled: false,
+            repeatMode: "off",
+            trackName: "Dreams",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            progressMs: 120000,
+            durationMs: 257000,
+            queueStatus: "ready",
+            queue: [],
+            recentUnavailable: false,
+            recent: [],
+            linked: true,
+            relinkRequired: false,
+            profile: {
+              id: "spotify-user-1",
+              displayName: "Allar",
+              email: "allar@spotify.test",
+              profileUrl: "https://open.spotify.com/user/allar",
+              imageUrl: "https://i.scdn.co/image/avatar-1"
+            }
+          },
+          browse: {
+            featuredPlaylists: [],
+            playlists: [],
+            likedTracks: []
+          },
+          warning: ""
+        });
+      }
+    });
+
+    const payload = await client.getCliBootstrap?.();
+    expect(payload?.home.spotify).toBe("linked");
+    expect(requestedUrl).toContain("/v1/cli/bootstrap");
+  });
+
+  test("posts normalized cli player action payload", async () => {
+    const calls: Array<{ url: string; method: string; contentType: string; body: string }> = [];
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url, init) => {
+        calls.push({
+          url: String(url),
+          method: init?.method ?? "GET",
+          contentType: new Headers(init?.headers).get("content-type") ?? "",
+          body: String(init?.body ?? "")
+        });
+        return Response.json({ ok: true, action: "play-context" });
+      }
+    });
+
+    const payload = await client.runCliPlayerAction?.({
+      action: "play-context",
+      contextUri: "spotify:playlist:1"
+    });
+
+    expect(payload?.action).toBe("play-context");
+    expect(calls[0]?.url).toBe("https://example.com/v1/cli/player/action");
+    expect(calls[0]?.method).toBe("POST");
+    expect(calls[0]?.contentType).toBe("application/json");
+    expect(calls[0]?.body).toContain("\"action\":\"play-context\"");
+  });
+
   test("posts spotify playback and mode actions for authenticated user", async () => {
     const calls: Array<{ url: string; method: string; cookie: string }> = [];
     const client = createApiClient({

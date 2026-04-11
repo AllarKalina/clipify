@@ -1,4 +1,5 @@
 import type { HomeSnapshot } from "./home-state";
+import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
 export type AppFocusRegion = "sidebar" | "content";
 export type MainView = "home" | "search-results" | "liked-tracks" | "playlist-detail";
@@ -107,12 +108,12 @@ export function createInitialShellBrowseState(): ShellBrowseState {
 
 export function getMainViewLabel(mainView: MainView): string {
   return mainView === "home"
-    ? "Home"
+    ? iconLabel(NERD_ICONS.home, "Home")
     : mainView === "search-results"
-      ? "Search"
+      ? iconLabel(NERD_ICONS.search, "Search")
       : mainView === "liked-tracks"
-        ? "Liked songs"
-        : "Playlist";
+        ? iconLabel(NERD_ICONS.liked, "Liked songs")
+        : iconLabel(NERD_ICONS.playlists, "Playlist");
 }
 
 export function moveSelection(current: number, direction: "up" | "down", itemCount: number): number {
@@ -190,7 +191,7 @@ export function buildLibrarySidebarItems(state: ShellBrowseState, ownerNames: st
   const unpinnedPlaylists = sortedPlaylists.filter((playlist) => !isPinnedPlaylist(playlist));
   const toLibraryPlaylistItem = (playlist: PlaylistSummary): ContentItem => ({
     id: `library-playlist-${playlist.id}`,
-    title: isPinnedPlaylist(playlist) ? `[PIN] ${playlist.name}` : playlist.name,
+    title: isPinnedPlaylist(playlist) ? iconLabel(NERD_ICONS.pin, playlist.name) : playlist.name,
     subtitle: playlist.ownerName,
     meta: `${playlist.trackCount} tracks`,
     action: { type: "open-playlist", playlistId: playlist.id } as const
@@ -200,7 +201,7 @@ export function buildLibrarySidebarItems(state: ShellBrowseState, ownerNames: st
     ...pinnedPlaylists.map(toLibraryPlaylistItem),
     {
       id: "library-liked",
-      title: "Liked songs",
+      title: iconLabel(NERD_ICONS.liked, "Liked songs"),
       subtitle: `${state.likedTracks.length} saved tracks`,
       meta: "library",
       action: { type: "open-liked-tracks" } as const
@@ -229,7 +230,7 @@ export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowse
   return [
     {
       id: "quick-launch",
-      title: "Quick launch",
+      title: iconLabel(NERD_ICONS.quickLaunch, "Quick launch"),
       items: state.playlists.slice(0, 6).map((playlist) => ({
         id: `quick-launch-${playlist.id}`,
         title: playlist.name,
@@ -240,7 +241,7 @@ export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowse
     },
     {
       id: "picked",
-      title: "Picked for you",
+      title: iconLabel(NERD_ICONS.picked, "Picked for you"),
       items: state.featuredPlaylists.slice(0, 6).map((playlist) => ({
         id: `picked-${playlist.id}`,
         title: playlist.name,
@@ -256,7 +257,7 @@ export function buildLikedTracksSections(state: ShellBrowseState): ContentSectio
   return [
     {
       id: "liked-tracks",
-      title: "Liked songs",
+      title: iconLabel(NERD_ICONS.liked, "Liked songs"),
       items: state.likedTracks.map((track) => ({
         id: `liked-${track.id || track.uri}`,
         title: track.trackName,
@@ -292,7 +293,7 @@ export function buildSearchSections(state: ShellBrowseState): ContentSection[] {
   return [
     {
       id: "tracks",
-      title: "Tracks",
+      title: iconLabel(NERD_ICONS.tracks, "Tracks"),
       items: state.searchResults.tracks.map((track) => ({
         id: `search-track-${track.id || track.uri}`,
         title: track.trackName,
@@ -303,7 +304,7 @@ export function buildSearchSections(state: ShellBrowseState): ContentSection[] {
     },
     {
       id: "playlists",
-      title: "Playlists",
+      title: iconLabel(NERD_ICONS.playlists, "Playlists"),
       items: state.searchResults.playlists.map((playlist) => ({
         id: `search-playlist-${playlist.id}`,
         title: playlist.name,
@@ -314,7 +315,7 @@ export function buildSearchSections(state: ShellBrowseState): ContentSection[] {
     },
     {
       id: "albums",
-      title: "Albums",
+      title: iconLabel(NERD_ICONS.album, "Albums"),
       items: state.searchResults.albums.map((album) => ({
         id: `search-album-${album.id}`,
         title: album.name,
@@ -325,7 +326,7 @@ export function buildSearchSections(state: ShellBrowseState): ContentSection[] {
     },
     {
       id: "artists",
-      title: "Artists",
+      title: iconLabel(NERD_ICONS.artist, "Artists"),
       items: state.searchResults.artists.map((artist) => ({
         id: `search-artist-${artist.id}`,
         title: artist.name,

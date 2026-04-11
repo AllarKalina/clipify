@@ -42,7 +42,7 @@ describe("authenticated app selectors", () => {
     };
 
     const viewModel = selectShellViewModel(state);
-    expect(viewModel.activeSections.map((section) => section.title)).toEqual(["Quick launch", "Picked for you"]);
+    expect(viewModel.activeSections.map((section) => section.title)).toEqual([" Quick launch", " Picked for you"]);
     expect(viewModel.activeSections[0]?.items[0]?.action).toEqual({
       type: "play-context",
       uri: "spotify:playlist:1"
@@ -80,7 +80,7 @@ describe("authenticated app selectors", () => {
     };
 
     const viewModel = selectShellViewModel(state);
-    expect(viewModel.sidebarItems[0]?.title).toBe("Liked songs");
+    expect(viewModel.sidebarItems[0]?.title).toBe(" Liked songs");
     expect(viewModel.sidebarItems[1]?.title).toBe("Roadtrip");
   });
 
@@ -132,7 +132,7 @@ describe("authenticated app selectors", () => {
     };
 
     const viewModel = selectShellViewModel(state);
-    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual(["[PIN] Pinned Mix", "Liked songs", "Alpha", "Zoo"]);
+    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual([" Pinned Mix", " Liked songs", "Alpha", "Zoo"]);
   });
 
   test("preserves spotify playlist order when priority rank is equal", () => {
@@ -183,7 +183,7 @@ describe("authenticated app selectors", () => {
     };
 
     const viewModel = selectShellViewModel(state);
-    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual(["Liked songs", "Hah", "Mud", "Hrr"]);
+    expect(viewModel.sidebarItems.map((item) => item.title)).toEqual([" Liked songs", "Hah", "Mud", "Hrr"]);
   });
 
   test("search bar is the only search-edit entry point", () => {
@@ -306,8 +306,8 @@ describe("authenticated app selectors", () => {
   test("top search bar keeps home and playlist prompts distinct", () => {
     const state = createInitialAuthenticatedAppState("");
 
-    expect(getSearchPromptLine(state.homeSnapshot)).toBe("What do you want to play?");
-    expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe("Type [/] or press [enter] to search");
+    expect(getSearchPromptLine(state.homeSnapshot)).toBe(" What do you want to play?");
+    expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe(" Type [/] or press [enter] to search");
     expect(getTopBarHeight(state.browseState)).toBe(4);
     expect(
       getTopBarHeight({

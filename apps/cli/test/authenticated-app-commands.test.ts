@@ -85,6 +85,81 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
 }
 
 describe("authenticated app commands", () => {
+  test("refresh prefers cli bootstrap endpoint when available", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getCliBootstrap: async () => ({
+            home: {
+              spotify: "linked",
+              userName: "Allar",
+              userEmail: "allar@example.com",
+              spotifyDisplayName: "Allar",
+              deviceId: "device-1",
+              deviceName: "MacBook Air",
+              deviceType: "Computer",
+              deviceStatus: "active",
+              supportsVolume: true,
+              volumePercent: 50,
+              playbackState: "paused",
+              shuffleEnabled: false,
+              repeatMode: "off",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              progressMs: 120000,
+              durationMs: 257000,
+              queueStatus: "ready",
+              queue: [],
+              recentUnavailable: false,
+              recent: [],
+              linked: true,
+              relinkRequired: false,
+              profile: {
+                id: "spotify-user-1",
+                displayName: "Allar",
+                email: "allar@spotify.test",
+                profileUrl: "https://open.spotify.com/user/allar",
+                imageUrl: "https://i.scdn.co/image/avatar-1"
+              }
+            },
+            browse: {
+              featuredPlaylists: [],
+              playlists: [],
+              likedTracks: []
+            },
+            warning: ""
+          }),
+          getMe: async () => {
+            throw new Error("legacy snapshot path should not run");
+          }
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const snapshotActions = actions.filter((action) => action.type === "replace-home-snapshot");
+    expect(snapshotActions.at(0)).toEqual({
+      type: "replace-home-snapshot",
+      snapshot: expect.objectContaining({
+        spotify: "linked",
+        trackName: "Dreams",
+        spotifyDisplayName: "Allar"
+      })
+    });
+  });
+
   test("refresh surfaces browse-load failures in the status line", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
     const actions: AuthenticatedAppAction[] = [];
