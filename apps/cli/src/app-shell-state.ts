@@ -81,19 +81,21 @@ export type ShellBrowseState = {
   playlists: PlaylistSummary[];
   likedTracks: TrackSummary[];
   playlistDetail: PlaylistDetail | null;
+  pinnedPlaylistNames: string[];
   searchQuery: string;
   searchResults: SearchResults;
   searchBusy: boolean;
   searchError: string;
 };
 
-export function createInitialShellBrowseState(): ShellBrowseState {
+export function createInitialShellBrowseState(pinnedPlaylistNames: string[] = []): ShellBrowseState {
   return {
     recentTracks: [],
     featuredPlaylists: [],
     playlists: [],
     likedTracks: [],
     playlistDetail: null,
+    pinnedPlaylistNames,
     searchQuery: "",
     searchResults: {
       tracks: [],
@@ -132,28 +134,35 @@ export function flattenSections(sections: ContentSection[]): ContentItem[] {
   return sections.flatMap((section) => section.items);
 }
 
-let pinnedPlaylistNameOverrides = new Set<string>();
-let pinnedPlaylistNamePriority = new Map<string, number>();
-
 function normalizeSortKey(value: string) {
   return value.trim().toLocaleLowerCase();
 }
 
-function isPinnedPlaylist(playlist: PlaylistSummary) {
-  if (playlist.isPinned === true) {
-    return true;
+function createPinnedPlaylistMetadata(pinnedPlaylistNames: string[]) {
+  const normalized = pinnedPlaylistNames.map((name) => normalizeSortKey(name)).filter(Boolean);
+  const pinnedPlaylistNameSet = new Set(normalized);
+  const pinnedPlaylistNamePriority = new Map(normalized.map((name, index) => [name, index]));
+
+  function isPinnedPlaylist(playlist: PlaylistSummary) {
+    if (playlist.isPinned === true) {
+      return true;
+    }
+
+    return pinnedPlaylistNameSet.has(normalizeSortKey(playlist.name));
   }
 
-  return pinnedPlaylistNameOverrides.has(normalizeSortKey(playlist.name));
+  return {
+    isPinnedPlaylist,
+    pinnedPlaylistNamePriority
+  };
 }
 
-export function setPinnedPlaylistNameOverrides(playlistNames: string[]) {
-  const normalized = playlistNames.map((name) => normalizeSortKey(name)).filter(Boolean);
-  pinnedPlaylistNameOverrides = new Set(normalized);
-  pinnedPlaylistNamePriority = new Map(normalized.map((name, index) => [name, index]));
-}
-
-export function sortPlaylistsForLibrary(playlists: PlaylistSummary[], ownerNames: string[] = []): PlaylistSummary[] {
+export function sortPlaylistsForLibrary(
+  playlists: PlaylistSummary[],
+  pinnedPlaylistNames: string[] = [],
+  ownerNames: string[] = []
+): PlaylistSummary[] {
+  const { isPinnedPlaylist, pinnedPlaylistNamePriority } = createPinnedPlaylistMetadata(pinnedPlaylistNames);
   const ownerNameKeys = new Set(ownerNames.map((ownerName) => normalizeSortKey(ownerName)).filter(Boolean));
   const isOwnedByCurrentUser = (playlist: PlaylistSummary) =>
     ownerNameKeys.size > 0 && ownerNameKeys.has(normalizeSortKey(playlist.ownerName));
@@ -161,32 +170,39 @@ export function sortPlaylistsForLibrary(playlists: PlaylistSummary[], ownerNames
   return playlists
     .map((playlist, index) => ({ playlist, index }))
     .sort((left, right) => {
-    const pinRank = Number(isPinnedPlaylist(right.playlist)) - Number(isPinnedPlaylist(left.playlist));
-    if (pinRank !== 0) {
-      return pinRank;
-    }
-
-    if (isPinnedPlaylist(left.playlist) && isPinnedPlaylist(right.playlist)) {
-      const leftPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(left.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
-      const rightPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(right.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
-      if (leftPriority !== rightPriority) {
-        return leftPriority - rightPriority;
+      const leftPinned = isPinnedPlaylist(left.playlist);
+      const rightPinned = isPinnedPlaylist(right.playlist);
+      const pinRank = Number(rightPinned) - Number(leftPinned);
+      if (pinRank !== 0) {
+        return pinRank;
       }
-    }
 
-    const ownershipRank = Number(isOwnedByCurrentUser(right.playlist)) - Number(isOwnedByCurrentUser(left.playlist));
-    if (ownershipRank !== 0) {
-      return ownershipRank;
-    }
+      if (leftPinned && rightPinned) {
+        const leftPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(left.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
+        const rightPriority = pinnedPlaylistNamePriority.get(normalizeSortKey(right.playlist.name)) ?? Number.MAX_SAFE_INTEGER;
+        if (leftPriority !== rightPriority) {
+          return leftPriority - rightPriority;
+        }
+      }
 
-    // Keep Spotify library order when rank is equal.
-    return left.index - right.index;
-  })
+      const ownershipRank = Number(isOwnedByCurrentUser(right.playlist)) - Number(isOwnedByCurrentUser(left.playlist));
+      if (ownershipRank !== 0) {
+        return ownershipRank;
+      }
+
+      // Keep Spotify library order when rank is equal.
+      return left.index - right.index;
+    })
     .map((entry) => entry.playlist);
 }
 
-export function buildLibrarySidebarItems(state: ShellBrowseState, ownerNames: string[] = []): ContentItem[] {
-  const sortedPlaylists = sortPlaylistsForLibrary(state.playlists, ownerNames);
+export function buildLibrarySidebarItems(
+  state: ShellBrowseState,
+  pinnedPlaylistNames: string[] = [],
+  ownerNames: string[] = []
+): ContentItem[] {
+  const { isPinnedPlaylist } = createPinnedPlaylistMetadata(pinnedPlaylistNames);
+  const sortedPlaylists = sortPlaylistsForLibrary(state.playlists, pinnedPlaylistNames, ownerNames);
   const pinnedPlaylists = sortedPlaylists.filter((playlist) => isPinnedPlaylist(playlist));
   const unpinnedPlaylists = sortedPlaylists.filter((playlist) => !isPinnedPlaylist(playlist));
   const toLibraryPlaylistItem = (playlist: PlaylistSummary): ContentItem => ({

@@ -427,6 +427,25 @@ describe("app routes", () => {
     expect(body.relinkRequired).toBeFalse();
   });
 
+  test("returns 404 for removed authenticated cli auth callback route", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/auth/callback?code=c&state=s"));
+    expect(response.status).toBe(404);
+  });
+
   test("allows cli public callback route without session", async () => {
     const env = baseEnv();
 
@@ -471,6 +490,52 @@ describe("app routes", () => {
     expect(body.home.queueStatus).toBe("ready");
     expect(body.browse.playlists.length).toBeGreaterThan(0);
     expect(body.browse.likedTracks.length).toBeGreaterThan(0);
+  });
+
+  test("returns cli player snapshot payload when session is present", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/player/snapshot"));
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as {
+      home: { spotify: string; userName: string; queueStatus: string };
+      warning: string;
+    };
+    expect(body.home.spotify).toBe("linked");
+    expect(body.home.userName).toBe("Allar");
+    expect(body.home.queueStatus).toBe("ready");
+  });
+
+  test("returns 404 for removed cli home view route", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock({
+        id: "u_123",
+        email: "a@example.com",
+        name: "Allar"
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(new Request("http://localhost/v1/cli/view/home"));
+    expect(response.status).toBe(404);
   });
 
   test("runs cli player action endpoint", async () => {

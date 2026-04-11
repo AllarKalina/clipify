@@ -15,6 +15,7 @@ read_when:
 ## Current Baseline
 
 - CLI integration contract is the `/v1/cli/*` surface.
+- Lightweight player polling is served by `GET /v1/cli/player/snapshot`; full browse/library hydration remains on `GET /v1/cli/bootstrap`.
 - Legacy `/v1/spotify/*` endpoints were removed during the architecture cleanup and are no longer part of the supported contract.
 - Compatibility guarantees apply to `/v1/public/meta/version`, `/v1/me`, `/v1/cli/*`, and `/api/auth/*`.
 

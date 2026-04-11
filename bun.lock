@@ -56,6 +56,9 @@
     "packages/contracts": {
       "name": "@clipify/contracts",
       "version": "0.1.0",
+      "dependencies": {
+        "zod": "^4.1.5",
+      },
       "devDependencies": {
         "typescript": "^5.9.2",
       },

@@ -1,11 +1,10 @@
 import type {
   CliBootstrapResponse,
   CliDevicesResponse,
-  CliHomeViewSection,
-  CliHomeViewResponse,
   CliLibraryViewResponse,
   CliPlayerActionRequest,
   CliPlayerActionResponse,
+  CliPlayerSnapshotResponse,
   CliSearchResponse
 } from "@clipify/contracts/cli";
 import type { AuthSession } from "../auth/session";
@@ -45,34 +44,12 @@ function createDefaultHome(session: AuthSession["user"], spotify: CliBootstrapRe
 }
 
 export function createCliBffService(spotify: SpotifyService) {
-  return {
-    async startAuthorization(userId: string) {
-      return spotify.startAuthorization(userId);
-    },
-
-    async completeAuthorization(userId: string, code: string, state: string) {
-      return spotify.completeAuthorization(userId, code, state);
-    },
-
-    async completeAuthorizationFromCallback(code: string, state: string) {
-      return spotify.completeAuthorizationFromCallback(code, state);
-    },
-
-    async getAuthorizationStatus(userId: string) {
-      return spotify.getAuthorizationStatus(userId);
-    },
-
-    async getBootstrap(session: AuthSession["user"]): Promise<CliBootstrapResponse> {
+  async function loadPlayerSnapshot(session: AuthSession["user"]): Promise<CliPlayerSnapshotResponse> {
       const auth = await spotify.getAuthorizationStatus(session.id);
 
       if (!auth.linked) {
         return {
           home: createDefaultHome(session, "not-linked"),
-          browse: {
-            featuredPlaylists: [],
-            playlists: [],
-            likedTracks: []
-          },
           warning: ""
         };
       }
@@ -80,11 +57,6 @@ export function createCliBffService(spotify: SpotifyService) {
       if (auth.relinkRequired) {
         return {
           home: createDefaultHome(session, "relink-required"),
-          browse: {
-            featuredPlaylists: [],
-            playlists: [],
-            likedTracks: []
-          },
           warning: ""
         };
       }
@@ -129,6 +101,59 @@ export function createCliBffService(spotify: SpotifyService) {
         }
       }
 
+      return {
+        home: {
+          spotify: "linked",
+          userName: session.name,
+          userEmail: session.email,
+          spotifyDisplayName: profile.displayName,
+          deviceId: currentlyPlaying.deviceId,
+          deviceName: currentlyPlaying.deviceName,
+          deviceType: currentlyPlaying.deviceType,
+          deviceStatus: currentlyPlaying.deviceStatus,
+          supportsVolume: currentlyPlaying.supportsVolume,
+          volumePercent: currentlyPlaying.volumePercent,
+          playbackState: currentlyPlaying.playbackState,
+          shuffleEnabled: currentlyPlaying.shuffleEnabled,
+          repeatMode: currentlyPlaying.repeatMode,
+          trackName: currentlyPlaying.trackName,
+          artistName: currentlyPlaying.artistName,
+          albumName: currentlyPlaying.albumName,
+          progressMs: currentlyPlaying.progressMs,
+          durationMs: currentlyPlaying.durationMs,
+          queueStatus,
+          queue,
+          recentUnavailable,
+          recent,
+          linked: true,
+          relinkRequired: false,
+          profile
+        },
+        warning: warnings.join(" | ")
+      };
+  }
+
+  return {
+    async startAuthorization(userId: string) {
+      return spotify.startAuthorization(userId);
+    },
+
+    async completeAuthorizationFromCallback(code: string, state: string) {
+      return spotify.completeAuthorizationFromCallback(code, state);
+    },
+
+    async getAuthorizationStatus(userId: string) {
+      return spotify.getAuthorizationStatus(userId);
+    },
+
+    async getPlayerSnapshot(session: AuthSession["user"]): Promise<CliPlayerSnapshotResponse> {
+      return loadPlayerSnapshot(session);
+    },
+
+    async getBootstrap(session: AuthSession["user"]): Promise<CliBootstrapResponse> {
+      const snapshot = await loadPlayerSnapshot(session);
+      const warnings = snapshot.warning ? [snapshot.warning] : [];
+
       const [featuredResult, playlistsResult, likedResult] = await Promise.allSettled([
         spotify.getFeaturedPlaylists(session.id),
         spotify.getPlaylists(session.id),
@@ -164,75 +189,13 @@ export function createCliBffService(spotify: SpotifyService) {
       }
 
       return {
-        home: {
-          spotify: "linked",
-          userName: session.name,
-          userEmail: session.email,
-          spotifyDisplayName: profile.displayName,
-          deviceId: currentlyPlaying.deviceId,
-          deviceName: currentlyPlaying.deviceName,
-          deviceType: currentlyPlaying.deviceType,
-          deviceStatus: currentlyPlaying.deviceStatus,
-          supportsVolume: currentlyPlaying.supportsVolume,
-          volumePercent: currentlyPlaying.volumePercent,
-          playbackState: currentlyPlaying.playbackState,
-          shuffleEnabled: currentlyPlaying.shuffleEnabled,
-          repeatMode: currentlyPlaying.repeatMode,
-          trackName: currentlyPlaying.trackName,
-          artistName: currentlyPlaying.artistName,
-          albumName: currentlyPlaying.albumName,
-          progressMs: currentlyPlaying.progressMs,
-          durationMs: currentlyPlaying.durationMs,
-          queueStatus,
-          queue,
-          recentUnavailable,
-          recent,
-          linked: true,
-          relinkRequired: false,
-          profile
-        },
+        home: snapshot.home,
         browse: {
           featuredPlaylists,
           playlists,
           likedTracks
         },
         warning: warnings.join(" | ")
-      };
-    },
-
-    async getHomeView(userId: string): Promise<CliHomeViewResponse> {
-      const [playlists, featured] = await Promise.all([
-        spotify.getPlaylists(userId),
-        spotify.getFeaturedPlaylists(userId)
-      ]);
-
-      const sections: CliHomeViewSection[] = [
-        {
-          id: "quick-launch",
-          title: "Quick launch",
-          items: playlists.items.slice(0, 6).map((playlist) => ({
-            id: playlist.id,
-            title: playlist.name,
-            subtitle: playlist.ownerName,
-            meta: `${playlist.trackCount} tracks`,
-            action: { type: "play-context", uri: playlist.uri }
-          }))
-        },
-        {
-          id: "picked",
-          title: "Picked for you",
-          items: featured.items.slice(0, 6).map((playlist) => ({
-            id: playlist.id,
-            title: playlist.name,
-            subtitle: playlist.description || playlist.ownerName,
-            meta: `${playlist.trackCount} tracks`,
-            action: { type: "open-playlist", playlistId: playlist.id }
-          }))
-        }
-      ];
-
-      return {
-        sections: sections.filter((section) => section.items.length > 0)
       };
     },
 

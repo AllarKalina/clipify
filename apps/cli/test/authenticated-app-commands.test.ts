@@ -13,7 +13,6 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
     signInWithEmailPassword: async () => ({ sessionCookie: "better-auth.session_token=signin" }),
     signOut: async () => undefined,
     startCliAuthorization: async () => ({ authorizeUrl: "https://accounts.spotify.com/authorize?state=abc", state: "abc" }),
-    completeCliAuthorization: async () => ({ linked: true, userId: "user-1" }),
     getCliAuthorizationStatus: async () => ({ linked: true, relinkRequired: false }),
     getCliBootstrap: async () => ({
       home: {
@@ -56,7 +55,42 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
       },
       warning: ""
     }),
-    getCliHomeView: async () => ({ sections: [] }),
+    getCliPlayerSnapshot: async () => ({
+      home: {
+        spotify: "linked",
+        userName: "Allar",
+        userEmail: "allar@example.com",
+        spotifyDisplayName: "Allar",
+        deviceId: "device-1",
+        deviceName: "MacBook Air",
+        deviceType: "Computer",
+        deviceStatus: "active",
+        supportsVolume: true,
+        volumePercent: 50,
+        playbackState: "paused",
+        shuffleEnabled: false,
+        repeatMode: "off",
+        trackName: "Dreams",
+        artistName: "Fleetwood Mac",
+        albumName: "Rumours",
+        progressMs: 120000,
+        durationMs: 257000,
+        queueStatus: "ready",
+        queue: [],
+        recentUnavailable: false,
+        recent: [],
+        linked: true,
+        relinkRequired: false,
+        profile: {
+          id: "spotify-user-1",
+          displayName: "Allar",
+          email: "allar@spotify.test",
+          profileUrl: "https://open.spotify.com/user/allar",
+          imageUrl: "https://i.scdn.co/image/avatar-1"
+        }
+      },
+      warning: ""
+    }),
     getCliLibraryView: async () => ({ section: null }),
     searchCli: async () => ({ tracks: [], playlists: [], albums: [], artists: [] }),
     getCliDevices: async () => ({

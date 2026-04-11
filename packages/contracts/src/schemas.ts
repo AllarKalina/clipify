@@ -20,11 +20,6 @@ export const cliAuthStartSchema = z.object({
   state: z.string()
 });
 
-export const cliAuthCallbackSchema = z.object({
-  linked: z.boolean(),
-  userId: z.string()
-});
-
 export const cliAuthStatusSchema = z.object({
   linked: z.boolean(),
   relinkRequired: z.boolean()
@@ -83,51 +78,53 @@ const spotifyProfileSchema = z.object({
   imageUrl: z.string()
 });
 
+export const cliSnapshotHomeSchema = z.object({
+  spotify: z.enum(["linked", "not-linked", "relink-required"]),
+  userName: z.string(),
+  userEmail: z.string(),
+  spotifyDisplayName: z.string(),
+  deviceId: z.string(),
+  deviceName: z.string(),
+  deviceType: z.string(),
+  deviceStatus: z.enum(["active", "available", "restricted", "none"]),
+  supportsVolume: z.boolean(),
+  volumePercent: z.number(),
+  playbackState: z.enum(["playing", "paused", "idle"]),
+  shuffleEnabled: z.boolean(),
+  repeatMode: z.enum(["off", "track", "context"]),
+  trackName: z.string(),
+  artistName: z.string(),
+  albumName: z.string(),
+  progressMs: z.number(),
+  durationMs: z.number(),
+  queueStatus: z.enum(["ready", "no-device", "relink-required", "unavailable"]),
+  queue: z.array(
+    z.object({
+      trackName: z.string(),
+      artistName: z.string(),
+      albumName: z.string(),
+      type: z.enum(["track", "episode", "unknown"])
+    })
+  ),
+  recentUnavailable: z.boolean(),
+  recent: z.array(
+    z.object({
+      id: z.string(),
+      trackName: z.string(),
+      artistName: z.string(),
+      albumName: z.string(),
+      uri: z.string(),
+      durationMs: z.number(),
+      playedAt: z.string()
+    })
+  ),
+  linked: z.boolean(),
+  relinkRequired: z.boolean(),
+  profile: spotifyProfileSchema.nullable()
+});
+
 export const cliBootstrapSchema = z.object({
-  home: z.object({
-    spotify: z.enum(["linked", "not-linked", "relink-required"]),
-    userName: z.string(),
-    userEmail: z.string(),
-    spotifyDisplayName: z.string(),
-    deviceId: z.string(),
-    deviceName: z.string(),
-    deviceType: z.string(),
-    deviceStatus: z.enum(["active", "available", "restricted", "none"]),
-    supportsVolume: z.boolean(),
-    volumePercent: z.number(),
-    playbackState: z.enum(["playing", "paused", "idle"]),
-    shuffleEnabled: z.boolean(),
-    repeatMode: z.enum(["off", "track", "context"]),
-    trackName: z.string(),
-    artistName: z.string(),
-    albumName: z.string(),
-    progressMs: z.number(),
-    durationMs: z.number(),
-    queueStatus: z.enum(["ready", "no-device", "relink-required", "unavailable"]),
-    queue: z.array(
-      z.object({
-        trackName: z.string(),
-        artistName: z.string(),
-        albumName: z.string(),
-        type: z.enum(["track", "episode", "unknown"])
-      })
-    ),
-    recentUnavailable: z.boolean(),
-    recent: z.array(
-      z.object({
-        id: z.string(),
-        trackName: z.string(),
-        artistName: z.string(),
-        albumName: z.string(),
-        uri: z.string(),
-        durationMs: z.number(),
-        playedAt: z.string()
-      })
-    ),
-    linked: z.boolean(),
-    relinkRequired: z.boolean(),
-    profile: spotifyProfileSchema.nullable()
-  }),
+  home: cliSnapshotHomeSchema,
   browse: z.object({
     featuredPlaylists: z.array(spotifyPlaylistSummarySchema),
     playlists: z.array(spotifyPlaylistSummarySchema),
@@ -136,31 +133,9 @@ export const cliBootstrapSchema = z.object({
   warning: z.string()
 });
 
-export const cliHomeViewSchema = z.object({
-  sections: z.array(
-    z.object({
-      id: z.enum(["quick-launch", "picked"]),
-      title: z.string(),
-      items: z.array(
-        z.object({
-          id: z.string(),
-          title: z.string(),
-          subtitle: z.string(),
-          meta: z.string(),
-          action: z.union([
-            z.object({
-              type: z.literal("play-context"),
-              uri: z.string()
-            }),
-            z.object({
-              type: z.literal("open-playlist"),
-              playlistId: z.string()
-            })
-          ])
-        })
-      )
-    })
-  )
+export const cliPlayerSnapshotSchema = z.object({
+  home: cliSnapshotHomeSchema,
+  warning: z.string()
 });
 
 export const cliLibraryViewSchema = z.object({

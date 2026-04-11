@@ -1,31 +1,29 @@
 import { z } from "zod";
 import type {
-  CliAuthCallbackResponse,
   CliAuthStartResponse,
   CliAuthStatusResponse,
   CliBootstrapResponse,
   CliDevicesResponse,
-  CliHomeViewResponse,
   CliLibraryViewResponse,
   CliPlayerActionRequest,
   CliPlayerActionResponse,
+  CliPlayerSnapshotResponse,
   CliSearchResponse,
   PublicVersionResponse
 } from "@clipify/contracts";
 import {
-  cliAuthCallbackSchema,
   cliAuthStartSchema,
   cliAuthStatusSchema,
   cliBootstrapSchema,
   cliDevicesSchema,
-  cliHomeViewSchema,
   cliLibraryViewSchema,
   cliPlayerActionRequestSchema,
   cliPlayerActionSchema,
+  cliPlayerSnapshotSchema,
   cliSearchSchema,
   meSchema,
   versionSchema
-} from "./schemas";
+} from "@clipify/contracts";
 
 export class ApiClientError extends Error {
   readonly status: number;
@@ -54,10 +52,9 @@ export type ApiClient = {
   }) => Promise<{ sessionCookie: string }>;
   signOut: () => Promise<void>;
   startCliAuthorization: () => Promise<CliAuthStartResponse>;
-  completeCliAuthorization: (input: { code: string; state: string }) => Promise<CliAuthCallbackResponse>;
   getCliAuthorizationStatus: () => Promise<CliAuthStatusResponse>;
   getCliBootstrap: () => Promise<CliBootstrapResponse>;
-  getCliHomeView: () => Promise<CliHomeViewResponse>;
+  getCliPlayerSnapshot: () => Promise<CliPlayerSnapshotResponse>;
   getCliLibraryView: (libraryId: string) => Promise<CliLibraryViewResponse>;
   searchCli: (query: string) => Promise<CliSearchResponse>;
   getCliDevices: () => Promise<CliDevicesResponse>;
@@ -264,16 +261,6 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
-    completeCliAuthorization(input) {
-      return request("/v1/cli/auth/callback", {
-        schema: cliAuthCallbackSchema,
-        query: {
-          code: input.code,
-          state: input.state
-        },
-        requireSession: true
-      });
-    },
     getCliAuthorizationStatus() {
       return request("/v1/cli/auth/status", {
         schema: cliAuthStatusSchema,
@@ -286,9 +273,9 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
         requireSession: true
       });
     },
-    getCliHomeView() {
-      return request("/v1/cli/view/home", {
-        schema: cliHomeViewSchema,
+    getCliPlayerSnapshot() {
+      return request("/v1/cli/player/snapshot", {
+        schema: cliPlayerSnapshotSchema,
         requireSession: true
       });
     },

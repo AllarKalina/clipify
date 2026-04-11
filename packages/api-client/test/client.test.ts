@@ -125,31 +125,6 @@ describe("api client", () => {
     expect(originHeader).toBe("https://example.com");
   });
 
-  test("builds cli auth callback query parameters", async () => {
-    let requestedUrl = "";
-    const client = createApiClient({
-      baseUrl: "https://example.com",
-      sessionCookie: "better-auth.session_token=abc123",
-      fetchImpl: async (url) => {
-        requestedUrl = String(url);
-        return Response.json({
-          linked: true,
-          userId: "user-1"
-        });
-      }
-    });
-
-    const payload = await client.completeCliAuthorization({
-      code: "code-1",
-      state: "state-1"
-    });
-
-    expect(payload.linked).toBeTrue();
-    expect(requestedUrl).toContain("/v1/cli/auth/callback");
-    expect(requestedUrl).toContain("code=code-1");
-    expect(requestedUrl).toContain("state=state-1");
-  });
-
   test("returns cli auth status for authenticated user", async () => {
     let requestedUrl = "";
     let cookieHeader = "";
@@ -259,6 +234,51 @@ describe("api client", () => {
     expect(payload.albums[0]?.name).toBe("Rumours");
     expect(requestedUrl).toContain("/v1/cli/search");
     expect(requestedUrl).toContain("q=rumours");
+  });
+
+  test("returns cli player snapshot payload for authenticated user", async () => {
+    let requestedUrl = "";
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          home: {
+            spotify: "linked",
+            userName: "Allar",
+            userEmail: "allar@example.com",
+            spotifyDisplayName: "Allar",
+            deviceId: "device-1",
+            deviceName: "MacBook Pro",
+            deviceType: "Computer",
+            deviceStatus: "active",
+            supportsVolume: true,
+            volumePercent: 60,
+            playbackState: "playing",
+            shuffleEnabled: false,
+            repeatMode: "off",
+            trackName: "Dreams",
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            progressMs: 120000,
+            durationMs: 257000,
+            queueStatus: "ready",
+            queue: [],
+            recentUnavailable: false,
+            recent: [],
+            linked: true,
+            relinkRequired: false,
+            profile: null
+          },
+          warning: ""
+        });
+      }
+    });
+
+    const payload = await client.getCliPlayerSnapshot();
+    expect(payload.home.spotify).toBe("linked");
+    expect(requestedUrl).toContain("/v1/cli/player/snapshot");
   });
 
   test("posts normalized cli player action payload", async () => {

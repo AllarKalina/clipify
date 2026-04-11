@@ -37,6 +37,74 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
     volumePercent: t.Number()
   });
 
+  const playerHomeSummary = t.Object({
+    spotify: t.Union([t.Literal("linked"), t.Literal("not-linked"), t.Literal("relink-required")]),
+    userName: t.String(),
+    userEmail: t.String(),
+    spotifyDisplayName: t.String(),
+    deviceId: t.String(),
+    deviceName: t.String(),
+    deviceType: t.String(),
+    deviceStatus: t.Union([t.Literal("active"), t.Literal("available"), t.Literal("restricted"), t.Literal("none")]),
+    supportsVolume: t.Boolean(),
+    volumePercent: t.Number(),
+    playbackState: t.Union([t.Literal("playing"), t.Literal("paused"), t.Literal("idle")]),
+    shuffleEnabled: t.Boolean(),
+    repeatMode: t.Union([t.Literal("off"), t.Literal("track"), t.Literal("context")]),
+    trackName: t.String(),
+    artistName: t.String(),
+    albumName: t.String(),
+    progressMs: t.Number(),
+    durationMs: t.Number(),
+    queueStatus: t.Union([t.Literal("ready"), t.Literal("no-device"), t.Literal("relink-required"), t.Literal("unavailable")]),
+    queue: t.Array(
+      t.Object({
+        trackName: t.String(),
+        artistName: t.String(),
+        albumName: t.String(),
+        type: t.Union([t.Literal("track"), t.Literal("episode"), t.Literal("unknown")])
+      })
+    ),
+    recentUnavailable: t.Boolean(),
+    recent: t.Array(
+      t.Object({
+        id: t.String(),
+        trackName: t.String(),
+        artistName: t.String(),
+        albumName: t.String(),
+        uri: t.String(),
+        durationMs: t.Number(),
+        playedAt: t.String()
+      })
+    ),
+    linked: t.Boolean(),
+    relinkRequired: t.Boolean(),
+    profile: t.Nullable(
+      t.Object({
+        id: t.String(),
+        displayName: t.String(),
+        email: t.String(),
+        profileUrl: t.String(),
+        imageUrl: t.String()
+      })
+    )
+  });
+
+  const playerSnapshotResponse = t.Object({
+    home: playerHomeSummary,
+    warning: t.String()
+  });
+
+  const bootstrapResponse = t.Object({
+    home: playerHomeSummary,
+    browse: t.Object({
+      featuredPlaylists: t.Array(playlistSummary),
+      playlists: t.Array(playlistSummary),
+      likedTracks: t.Array(trackSummary)
+    }),
+    warning: t.String()
+  });
+
   const playerActionResponse = t.Object({
     ok: t.Literal(true),
     action: t.Union([
@@ -85,27 +153,6 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
         response: t.Object({
           linked: t.Boolean(),
           relinkRequired: t.Boolean()
-        })
-      }
-    )
-    .get(
-      "/auth/callback",
-      async ({ request, query }) => {
-        const session = await requireSession(auth, request);
-        return cli.completeAuthorization(session.user.id, query.code, query.state);
-      },
-      {
-        detail: {
-          tags: ["cli"],
-          summary: "Handle Spotify OAuth callback for authenticated CLI user"
-        },
-        query: t.Object({
-          code: t.String(),
-          state: t.String()
-        }),
-        response: t.Object({
-          linked: t.Boolean(),
-          userId: t.String()
         })
       }
     )
@@ -176,105 +223,21 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
           tags: ["cli"],
           summary: "Get CLI bootstrap payload with home and browse data"
         },
-        response: t.Object({
-          home: t.Object({
-            spotify: t.Union([t.Literal("linked"), t.Literal("not-linked"), t.Literal("relink-required")]),
-            userName: t.String(),
-            userEmail: t.String(),
-            spotifyDisplayName: t.String(),
-            deviceId: t.String(),
-            deviceName: t.String(),
-            deviceType: t.String(),
-            deviceStatus: t.Union([t.Literal("active"), t.Literal("available"), t.Literal("restricted"), t.Literal("none")]),
-            supportsVolume: t.Boolean(),
-            volumePercent: t.Number(),
-            playbackState: t.Union([t.Literal("playing"), t.Literal("paused"), t.Literal("idle")]),
-            shuffleEnabled: t.Boolean(),
-            repeatMode: t.Union([t.Literal("off"), t.Literal("track"), t.Literal("context")]),
-            trackName: t.String(),
-            artistName: t.String(),
-            albumName: t.String(),
-            progressMs: t.Number(),
-            durationMs: t.Number(),
-            queueStatus: t.Union([t.Literal("ready"), t.Literal("no-device"), t.Literal("relink-required"), t.Literal("unavailable")]),
-            queue: t.Array(
-              t.Object({
-                trackName: t.String(),
-                artistName: t.String(),
-                albumName: t.String(),
-                type: t.Union([t.Literal("track"), t.Literal("episode"), t.Literal("unknown")])
-              })
-            ),
-            recentUnavailable: t.Boolean(),
-            recent: t.Array(
-              t.Object({
-                id: t.String(),
-                trackName: t.String(),
-                artistName: t.String(),
-                albumName: t.String(),
-                uri: t.String(),
-                durationMs: t.Number(),
-                playedAt: t.String()
-              })
-            ),
-            linked: t.Boolean(),
-            relinkRequired: t.Boolean(),
-            profile: t.Nullable(
-              t.Object({
-                id: t.String(),
-                displayName: t.String(),
-                email: t.String(),
-                profileUrl: t.String(),
-                imageUrl: t.String()
-              })
-            )
-          }),
-          browse: t.Object({
-            featuredPlaylists: t.Array(playlistSummary),
-            playlists: t.Array(playlistSummary),
-            likedTracks: t.Array(trackSummary)
-          }),
-          warning: t.String()
-        })
+        response: bootstrapResponse
       }
     )
     .get(
-      "/view/home",
+      "/player/snapshot",
       async ({ request }) => {
         const session = await requireSession(auth, request);
-        return cli.getHomeView(session.user.id);
+        return cli.getPlayerSnapshot(session.user);
       },
       {
         detail: {
           tags: ["cli"],
-          summary: "Get home view sections for CLI"
+          summary: "Get CLI player snapshot for polling"
         },
-        response: t.Object({
-          sections: t.Array(
-            t.Object({
-              id: t.Union([t.Literal("quick-launch"), t.Literal("picked")]),
-              title: t.String(),
-              items: t.Array(
-                t.Object({
-                  id: t.String(),
-                  title: t.String(),
-                  subtitle: t.String(),
-                  meta: t.String(),
-                  action: t.Union([
-                    t.Object({
-                      type: t.Literal("play-context"),
-                      uri: t.String()
-                    }),
-                    t.Object({
-                      type: t.Literal("open-playlist"),
-                      playlistId: t.String()
-                    })
-                  ])
-                })
-              )
-            })
-          )
-        })
+        response: playerSnapshotResponse
       }
     )
     .get(

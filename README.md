@@ -75,10 +75,9 @@ bun run --cwd apps/api db:studio
 - `GET /v1/me`
 - `GET /v1/cli/auth/start`
 - `GET /v1/cli/auth/status`
-- `GET /v1/cli/auth/callback`
 - `GET /v1/cli/auth/callback/public`
 - `GET /v1/cli/bootstrap`
-- `GET /v1/cli/view/home`
+- `GET /v1/cli/player/snapshot`
 - `GET /v1/cli/view/library/:libraryId`
 - `GET /v1/cli/search`
 - `GET /v1/cli/devices`

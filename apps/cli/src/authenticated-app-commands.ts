@@ -1,4 +1,10 @@
-import { ApiClientError, type ApiClient, type CliLibraryViewResponse, type SpotifyDeviceSummary } from "@clipify/api-client";
+import {
+  ApiClientError,
+  type ApiClient,
+  type CliLibraryViewResponse,
+  type CliPlayerSnapshotResponse,
+  type SpotifyDeviceSummary
+} from "@clipify/api-client";
 import type { Dispatch } from "react";
 import type { ContentAction, PlaylistDetail, ShellBrowseState, TrackSummary } from "./app-shell-state";
 import type { AuthenticatedAppAction, AuthenticatedAppState, LinkFlow } from "./authenticated-app-state";
@@ -14,33 +20,33 @@ export type AuthenticatedCommandContext = {
   openBrowserOnLink: boolean;
 };
 
-function mapCliBootstrapToHome(
-  bootstrap: Awaited<ReturnType<ApiClient["getCliBootstrap"]>>
+function mapCliSnapshotToHome(
+  snapshotHome: CliPlayerSnapshotResponse["home"]
 ): HomeSnapshot {
   return {
     backend: "connected",
-    spotify: bootstrap.home.spotify,
-    userName: bootstrap.home.userName,
-    userEmail: bootstrap.home.userEmail,
-    spotifyDisplayName: bootstrap.home.spotifyDisplayName,
-    deviceId: bootstrap.home.deviceId,
-    deviceName: bootstrap.home.deviceName,
-    deviceType: bootstrap.home.deviceType,
-    deviceStatus: bootstrap.home.deviceStatus,
-    supportsVolume: bootstrap.home.supportsVolume,
-    volumePercent: bootstrap.home.volumePercent,
-    playbackState: bootstrap.home.playbackState,
-    shuffleEnabled: bootstrap.home.shuffleEnabled,
-    repeatMode: bootstrap.home.repeatMode,
-    trackName: bootstrap.home.trackName,
-    artistName: bootstrap.home.artistName,
-    albumName: bootstrap.home.albumName,
-    progressMs: bootstrap.home.progressMs,
-    durationMs: bootstrap.home.durationMs,
-    queueStatus: bootstrap.home.queueStatus,
-    queue: bootstrap.home.queue,
-    recentUnavailable: bootstrap.home.recentUnavailable,
-    recent: bootstrap.home.recent
+    spotify: snapshotHome.spotify,
+    userName: snapshotHome.userName,
+    userEmail: snapshotHome.userEmail,
+    spotifyDisplayName: snapshotHome.spotifyDisplayName,
+    deviceId: snapshotHome.deviceId,
+    deviceName: snapshotHome.deviceName,
+    deviceType: snapshotHome.deviceType,
+    deviceStatus: snapshotHome.deviceStatus,
+    supportsVolume: snapshotHome.supportsVolume,
+    volumePercent: snapshotHome.volumePercent,
+    playbackState: snapshotHome.playbackState,
+    shuffleEnabled: snapshotHome.shuffleEnabled,
+    repeatMode: snapshotHome.repeatMode,
+    trackName: snapshotHome.trackName,
+    artistName: snapshotHome.artistName,
+    albumName: snapshotHome.albumName,
+    progressMs: snapshotHome.progressMs,
+    durationMs: snapshotHome.durationMs,
+    queueStatus: snapshotHome.queueStatus,
+    queue: snapshotHome.queue,
+    recentUnavailable: snapshotHome.recentUnavailable,
+    recent: snapshotHome.recent
   };
 }
 
@@ -85,7 +91,7 @@ export async function refreshAuthenticatedApp(
 
   try {
     const bootstrap = await client.getCliBootstrap();
-    const next = mapCliBootstrapToHome(bootstrap);
+    const next = mapCliSnapshotToHome(bootstrap.home);
 
     dispatch({ type: "replace-home-snapshot", snapshot: next });
     dispatch({
@@ -143,8 +149,8 @@ export async function refreshAuthenticatedPlayerSilently(context: AuthenticatedC
   const { client, dispatch, onLogoutComplete } = context;
 
   try {
-    const bootstrap = await client.getCliBootstrap();
-    const next = mapCliBootstrapToHome(bootstrap);
+    const snapshot = await client.getCliPlayerSnapshot();
+    const next = mapCliSnapshotToHome(snapshot.home);
     dispatch({ type: "replace-home-snapshot", snapshot: next });
     dispatch({ type: "patch-browse-state", patch: { recentTracks: next.recent } });
     dispatch({ type: "reset-progress-tick" });

@@ -7,11 +7,15 @@
     ".": "./src/index.ts",
     "./public": "./src/public.ts",
     "./spotify": "./src/spotify.ts",
-    "./cli": "./src/cli.ts"
+    "./cli": "./src/cli.ts",
+    "./schemas": "./src/schemas.ts"
   },
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "bunx tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^4.1.5"
   },
   "devDependencies": {
     "typescript": "^5.9.2"

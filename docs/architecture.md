@@ -60,3 +60,4 @@ packages/
 - authenticated commands, effects, selectors, and input intents live in separate CLI modules and should be extended in place instead of growing the controller.
 - `app-shell.tsx` and its child view components are presentational only; they should receive derived props rather than raw orchestration state whenever possible.
 - the authenticated shell is modeled as a library sidebar plus a main pane; avoid reintroducing page-tab navigation when extending the CLI.
+- background playback polling should use `GET /v1/cli/player/snapshot`; reserve `GET /v1/cli/bootstrap` for initial/full refreshes that include browse and library collections.

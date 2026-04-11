@@ -1,6 +1,5 @@
 import type {
   SpotifyAuthStatusResponse,
-  SpotifyCallbackResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyDeviceStatus,
   SpotifyDevicesResponse,
@@ -19,7 +18,6 @@ import type {
 export type CliQueueStatus = "ready" | "no-device" | "relink-required" | "unavailable";
 export type CliSpotifyStatus = "linked" | "not-linked" | "relink-required";
 export type CliAuthStartResponse = SpotifyStartAuthResponse;
-export type CliAuthCallbackResponse = SpotifyCallbackResponse;
 export type CliAuthStatusResponse = SpotifyAuthStatusResponse;
 
 export type CliBootstrapHome = {
@@ -62,20 +60,9 @@ export type CliBootstrapResponse = {
   warning: string;
 };
 
-export type CliHomeViewSection = {
-  id: "quick-launch" | "picked";
-  title: string;
-  items: Array<{
-    id: string;
-    title: string;
-    subtitle: string;
-    meta: string;
-    action: { type: "play-context"; uri: string } | { type: "open-playlist"; playlistId: string };
-  }>;
-};
-
-export type CliHomeViewResponse = {
-  sections: CliHomeViewSection[];
+export type CliPlayerSnapshotResponse = {
+  home: CliBootstrapHome;
+  warning: string;
 };
 
 export type CliLibraryViewResponse = {

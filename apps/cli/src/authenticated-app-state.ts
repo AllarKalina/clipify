@@ -83,7 +83,7 @@ function buildMainSections(state: AuthenticatedAppState) {
 }
 
 function getSidebarItemCount(state: AuthenticatedAppState): number {
-  return buildLibrarySidebarItems(state.browseState).length;
+  return buildLibrarySidebarItems(state.browseState, state.browseState.pinnedPlaylistNames).length;
 }
 
 export function getMainItemCount(state: AuthenticatedAppState): number {
@@ -111,7 +111,10 @@ function withBrowseState(state: AuthenticatedAppState, browseState: ShellBrowseS
   };
 }
 
-export function createInitialAuthenticatedAppState(initialStatusLine: string): AuthenticatedAppState {
+export function createInitialAuthenticatedAppState(
+  initialStatusLine: string,
+  pinnedPlaylistNames: string[] = []
+): AuthenticatedAppState {
   return {
     homeSnapshot: createPendingAuthenticatedHomeSnapshot(),
     progressTickMs: 0,
@@ -119,7 +122,7 @@ export function createInitialAuthenticatedAppState(initialStatusLine: string): A
     focusRegion: "content",
     sidebarIndex: 0,
     contentIndex: 0,
-    browseState: createInitialShellBrowseState(),
+    browseState: createInitialShellBrowseState(pinnedPlaylistNames),
     searchEditing: false,
     linkFlow: null,
     statusLine: initialStatusLine,
