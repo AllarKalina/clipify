@@ -48,7 +48,7 @@ describe("readEnv", () => {
         OTEL_ENABLED: "true",
         OTEL_EXPORTER_OTLP_ENDPOINT: "https://otel.example.com/v1/traces",
         PORT: "4000",
-        SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/spotify/auth/callback/public"
+        SPOTIFY_REDIRECT_URI: "http://localhost:3000/v1/cli/auth/callback/public"
       })
     ).toThrow("SPOTIFY_REDIRECT_URI must use a loopback IP literal");
   });

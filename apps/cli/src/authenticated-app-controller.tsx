@@ -186,16 +186,21 @@ export function AuthenticatedAppController({
         runPlaybackAction(
           context,
           state.homeSnapshot.playbackState === "playing" ? "Paused playback" : "Started playback",
-          (targetClient) => (
-            state.homeSnapshot.playbackState === "playing" ? targetClient.pauseSpotify() : targetClient.playSpotify()
-          )
+          (targetClient) =>
+            targetClient.runCliPlayerAction({
+              action: state.homeSnapshot.playbackState === "playing" ? "pause" : "play"
+            })
         );
         return;
       case "previous-track":
-        runPlaybackAction(context, "Moved to previous track", (targetClient) => targetClient.previousSpotify());
+        runPlaybackAction(context, "Moved to previous track", (targetClient) =>
+          targetClient.runCliPlayerAction({ action: "previous" })
+        );
         return;
       case "next-track":
-        runPlaybackAction(context, "Moved to next track", (targetClient) => targetClient.nextSpotify());
+        runPlaybackAction(context, "Moved to next track", (targetClient) =>
+          targetClient.runCliPlayerAction({ action: "next" })
+        );
         return;
       case "toggle-shuffle":
         runOptimisticPlayerModeAction(
@@ -203,7 +208,7 @@ export function AuthenticatedAppController({
           playerModeMutationsInFlight.current ? playerModeMutationsInFlight : playerModeMutationsInFlight,
           intent.enabled ? "Shuffle on" : "Shuffle off",
           { shuffleEnabled: intent.enabled },
-          (targetClient) => targetClient.setSpotifyShuffle(intent.enabled)
+          (targetClient) => targetClient.runCliPlayerAction({ action: "shuffle", enabled: intent.enabled })
         );
         return;
       case "cycle-repeat":
@@ -212,7 +217,7 @@ export function AuthenticatedAppController({
           playerModeMutationsInFlight.current ? playerModeMutationsInFlight : playerModeMutationsInFlight,
           `Repeat ${intent.mode === "context" ? "all" : intent.mode}`,
           { repeatMode: intent.mode },
-          (targetClient) => targetClient.setSpotifyRepeatMode(intent.mode)
+          (targetClient) => targetClient.runCliPlayerAction({ action: "repeat", mode: intent.mode })
         );
         return;
       case "set-volume":
@@ -221,7 +226,7 @@ export function AuthenticatedAppController({
           playerModeMutationsInFlight.current ? playerModeMutationsInFlight : playerModeMutationsInFlight,
           `Volume ${intent.volumePercent}%`,
           { volumePercent: intent.volumePercent },
-          (targetClient) => targetClient.setSpotifyVolume(intent.volumePercent)
+          (targetClient) => targetClient.runCliPlayerAction({ action: "volume", volumePercent: intent.volumePercent })
         );
         return;
       case "start-link":

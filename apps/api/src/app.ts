@@ -6,7 +6,6 @@ import { cliBffModule } from "./modules/cli-bff/routes";
 import { healthModule } from "./modules/health/routes";
 import { publicModule } from "./modules/public/routes";
 import { readyModule } from "./modules/ready/routes";
-import { spotifyModule } from "./modules/spotify/routes";
 import type { SpotifyService } from "./modules/spotify/service";
 import { userModule } from "./modules/user/routes";
 import { createOpenApiPlugin } from "./plugins/openapi";
@@ -69,7 +68,6 @@ export function createApp(deps: AppDeps) {
     .use(healthModule(env))
     .use(readyModule(checkReadiness))
     .use(cliBffModule(auth, spotify))
-    .use(spotifyModule(auth, spotify))
     .use(userModule(auth));
 
   return app;

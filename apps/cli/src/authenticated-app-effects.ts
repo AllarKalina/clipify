@@ -65,9 +65,7 @@ export function useAuthenticatedAppEffects({
       void (async () => {
         try {
           const query = state.browseState.searchQuery.trim();
-          const results = client.searchCli
-            ? await client.searchCli(query)
-            : await client.searchSpotify(query);
+          const results = await client.searchCli(query);
           dispatch({ type: "search-completed", results });
           dispatch({ type: "set-content-index", contentIndex: 0 });
         } catch (error) {
@@ -130,7 +128,7 @@ export function useAuthenticatedAppEffects({
     const interval = setInterval(() => {
       void (async () => {
         try {
-          const status = await client.getSpotifyAuthorizationStatus();
+          const status = await client.getCliAuthorizationStatus();
           if (!status.linked || status.relinkRequired) {
             return;
           }

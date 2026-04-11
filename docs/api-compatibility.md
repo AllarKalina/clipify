@@ -12,6 +12,12 @@ read_when:
 - Breaking response shape changes require a new API version path (`/v2/...`).
 - Non-breaking fields may be added; required field removals are breaking.
 
+## Current Baseline
+
+- CLI integration contract is the `/v1/cli/*` surface.
+- Legacy `/v1/spotify/*` endpoints were removed during the architecture cleanup and are no longer part of the supported contract.
+- Compatibility guarantees apply to `/v1/public/meta/version`, `/v1/me`, `/v1/cli/*`, and `/api/auth/*`.
+
 ## Required Metadata Endpoint
 
 - Route: `GET /v1/public/meta/version`

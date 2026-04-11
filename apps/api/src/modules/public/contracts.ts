@@ -1,1 +1,1 @@
-export type { PublicExampleResponse, PublicVersionResponse } from "@clipify/contracts/public";
+export type { PublicVersionResponse } from "@clipify/contracts/public";

@@ -1,9 +1,3 @@
-export type PublicExampleResponse = {
-  id: string;
-  title: string;
-  category: string;
-};
-
 export type PublicVersionResponse = {
   appName: string;
   apiVersion: string;

@@ -46,6 +46,22 @@ function createDefaultHome(session: AuthSession["user"], spotify: CliBootstrapRe
 
 export function createCliBffService(spotify: SpotifyService) {
   return {
+    async startAuthorization(userId: string) {
+      return spotify.startAuthorization(userId);
+    },
+
+    async completeAuthorization(userId: string, code: string, state: string) {
+      return spotify.completeAuthorization(userId, code, state);
+    },
+
+    async completeAuthorizationFromCallback(code: string, state: string) {
+      return spotify.completeAuthorizationFromCallback(code, state);
+    },
+
+    async getAuthorizationStatus(userId: string) {
+      return spotify.getAuthorizationStatus(userId);
+    },
+
     async getBootstrap(session: AuthSession["user"]): Promise<CliBootstrapResponse> {
       const auth = await spotify.getAuthorizationStatus(session.id);
 

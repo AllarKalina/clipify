@@ -1,15 +1,9 @@
-import { ApiClientError, type ApiClient, type SpotifyDeviceSummary } from "@clipify/api-client";
+import { ApiClientError, type ApiClient, type CliLibraryViewResponse, type SpotifyDeviceSummary } from "@clipify/api-client";
 import type { Dispatch } from "react";
-import type { ContentAction, ShellBrowseState } from "./app-shell-state";
+import type { ContentAction, PlaylistDetail, ShellBrowseState, TrackSummary } from "./app-shell-state";
 import type { AuthenticatedAppAction, AuthenticatedAppState, LinkFlow } from "./authenticated-app-state";
 import { openUrl } from "./browser";
-import {
-  applyProgressTick,
-  computeHomeSnapshot,
-  reconcilePlayerDevice,
-  refreshPlayerSnapshot,
-  type HomeSnapshot
-} from "./home-state";
+import { applyProgressTick, reconcilePlayerDevice, type HomeSnapshot } from "./home-state";
 import { getPlaybackFailureMessage, toMessage } from "./authenticated-app-utils";
 
 export type AuthenticatedCommandContext = {
@@ -20,57 +14,8 @@ export type AuthenticatedCommandContext = {
   openBrowserOnLink: boolean;
 };
 
-function toBrowseFailure(source: "featured picks" | "playlists" | "liked songs", result: PromiseSettledResult<unknown>) {
-  if (result.status !== "rejected") {
-    return null;
-  }
-
-  const error = result.reason;
-  if (source === "featured picks" && error instanceof ApiClientError && error.status === 403) {
-    return null;
-  }
-
-  return `${source}: ${toMessage(error)}`;
-}
-
-function getBrowseWarning(
-  featured: PromiseSettledResult<unknown>,
-  playlists: PromiseSettledResult<unknown>,
-  liked: PromiseSettledResult<unknown>
-): string {
-  const failures = [
-    toBrowseFailure("featured picks", featured),
-    toBrowseFailure("playlists", playlists),
-    toBrowseFailure("liked songs", liked)
-  ].filter(Boolean);
-
-  return failures.length > 0 ? `Browse data incomplete: ${failures.join(" | ")}` : "";
-}
-
-async function loadBrowseShellWithStatus(client: ApiClient, current: ShellBrowseState) {
-  const [featured, playlists, liked] = await Promise.allSettled([
-    client.getSpotifyFeaturedPlaylists(),
-    client.getSpotifyPlaylists(),
-    client.getSpotifySavedTracks()
-  ]);
-
-  return {
-    browseState: {
-      ...current,
-      featuredPlaylists: featured.status === "fulfilled" ? featured.value.items : current.featuredPlaylists,
-      playlists: playlists.status === "fulfilled" ? playlists.value.items : current.playlists,
-      likedTracks: liked.status === "fulfilled" ? liked.value.items : current.likedTracks
-    },
-    warning: getBrowseWarning(featured, playlists, liked)
-  };
-}
-
-async function loadPlaylistDetail(client: ApiClient, playlistId: string) {
-  return client.getSpotifyPlaylist(playlistId);
-}
-
 function mapCliBootstrapToHome(
-  bootstrap: Awaited<ReturnType<NonNullable<ApiClient["getCliBootstrap"]>>>
+  bootstrap: Awaited<ReturnType<ApiClient["getCliBootstrap"]>>
 ): HomeSnapshot {
   return {
     backend: "connected",
@@ -99,6 +44,38 @@ function mapCliBootstrapToHome(
   };
 }
 
+function toTrackSummary(item: NonNullable<CliLibraryViewResponse["section"]>["items"][number]): TrackSummary {
+  return {
+    id: item.id,
+    trackName: item.title,
+    artistName: item.subtitle,
+    albumName: item.meta ?? "",
+    uri: item.action.uri,
+    durationMs: 0
+  };
+}
+
+function toPlaylistDetail(section: NonNullable<CliLibraryViewResponse["section"]>, current: ShellBrowseState, playlistId: string): PlaylistDetail {
+  const playlist = current.playlists.find((item) => item.id === playlistId);
+  const tracks = section.items.map(toTrackSummary);
+
+  return {
+    id: playlist?.id ?? playlistId,
+    name: playlist?.name ?? section.title,
+    description: playlist?.description ?? "",
+    imageUrl: playlist?.imageUrl ?? "",
+    ownerName: playlist?.ownerName ?? "",
+    isPinned: playlist?.isPinned,
+    trackCount: playlist?.trackCount ?? tracks.length,
+    uri: playlist?.uri ?? "",
+    tracks
+  };
+}
+
+async function loadLibrarySection(client: ApiClient, libraryId: string) {
+  return client.getCliLibraryView(libraryId);
+}
+
 export async function refreshAuthenticatedApp(
   context: AuthenticatedCommandContext,
   successLine: string
@@ -106,122 +83,83 @@ export async function refreshAuthenticatedApp(
   const { client, dispatch, getState, onLogoutComplete } = context;
   dispatch({ type: "set-busy", busy: true });
 
-  if (client.getCliBootstrap) {
-    try {
-      const bootstrap = await client.getCliBootstrap();
-      const next = mapCliBootstrapToHome(bootstrap);
+  try {
+    const bootstrap = await client.getCliBootstrap();
+    const next = mapCliBootstrapToHome(bootstrap);
 
-      dispatch({ type: "replace-home-snapshot", snapshot: next });
-      dispatch({
-        type: "replace-browse-state",
-        browseState: {
-          ...getState().browseState,
-          recentTracks: next.recent,
-          featuredPlaylists: bootstrap.browse.featuredPlaylists,
-          playlists: bootstrap.browse.playlists,
-          likedTracks: bootstrap.browse.likedTracks
-        }
-      });
-      dispatch({ type: "reset-progress-tick" });
-      dispatch({ type: "set-busy", busy: false });
-
-      if (next.spotify === "linked") {
-        try {
-          const nextDevices = client.getCliDevices
-            ? (await client.getCliDevices()).items
-            : (await client.getSpotifyDevices()).items;
-          dispatch({ type: "set-device-list", devices: nextDevices });
-          dispatch({
-            type: "replace-home-snapshot",
-            snapshot: reconcilePlayerDevice(next, nextDevices)
-          });
-        } catch {}
-      }
-
-      dispatch({
-        type: "set-status-line",
-        statusLine:
-          next.spotify === "relink-required"
-            ? "Spotify permissions changed. Press [l] to re-link."
-            : bootstrap.warning || successLine
-      });
-      return next;
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) {
-        onLogoutComplete("Session expired");
-        return {
-          ...getState().homeSnapshot,
-          failureReason: "unauthorized"
-        };
-      }
-    }
-  }
-
-  const next = await computeHomeSnapshot(client);
-  if (next.failureReason === "unauthorized") {
-    onLogoutComplete("Session expired");
-    return next;
-  }
-
-  dispatch({ type: "replace-home-snapshot", snapshot: next });
-  dispatch({ type: "reset-progress-tick" });
-  dispatch({ type: "set-busy", busy: false });
-  dispatch({
-    type: "set-status-line",
-    statusLine:
-      next.backend !== "connected"
-        ? "Backend unreachable or unauthorized"
-        : next.spotify === "relink-required"
-          ? "Spotify permissions changed. Press [l] to re-link."
-          : successLine
-  });
-
-  if (next.backend === "connected" && next.spotify === "linked") {
-    try {
-      const nextDevices = (await client.getSpotifyDevices()).items;
-      dispatch({ type: "set-device-list", devices: nextDevices });
-      dispatch({
-        type: "replace-home-snapshot",
-        snapshot: reconcilePlayerDevice(next, nextDevices)
-      });
-    } catch {}
-
-    try {
-      const loadedBrowse = await loadBrowseShellWithStatus(client, {
+    dispatch({ type: "replace-home-snapshot", snapshot: next });
+    dispatch({
+      type: "replace-browse-state",
+      browseState: {
         ...getState().browseState,
-        recentTracks: next.recent
-      });
-      dispatch({ type: "replace-browse-state", browseState: loadedBrowse.browseState });
-      if (loadedBrowse.warning) {
-        dispatch({ type: "set-status-line", statusLine: loadedBrowse.warning });
+        recentTracks: next.recent,
+        featuredPlaylists: bootstrap.browse.featuredPlaylists,
+        playlists: bootstrap.browse.playlists,
+        likedTracks: bootstrap.browse.likedTracks
       }
-    } catch {}
-  }
+    });
+    dispatch({ type: "reset-progress-tick" });
 
-  return next;
+    if (next.spotify === "linked") {
+      try {
+        const nextDevices = (await client.getCliDevices()).items;
+        dispatch({ type: "set-device-list", devices: nextDevices });
+        dispatch({
+          type: "replace-home-snapshot",
+          snapshot: reconcilePlayerDevice(next, nextDevices)
+        });
+      } catch {}
+    }
+
+    dispatch({
+      type: "set-status-line",
+      statusLine:
+        next.spotify === "relink-required"
+          ? "Spotify permissions changed. Press [l] to re-link."
+          : bootstrap.warning || successLine
+    });
+    dispatch({ type: "set-busy", busy: false });
+    return next;
+  } catch (error) {
+    dispatch({ type: "set-busy", busy: false });
+    if (error instanceof ApiClientError && error.status === 401) {
+      onLogoutComplete("Session expired");
+      return {
+        ...getState().homeSnapshot,
+        failureReason: "unauthorized"
+      };
+    }
+
+    dispatch({ type: "set-status-line", statusLine: `Refresh failed: ${toMessage(error)}` });
+    return {
+      ...getState().homeSnapshot,
+      backend: "offline",
+      error: toMessage(error)
+    };
+  }
 }
 
 export async function refreshAuthenticatedPlayerSilently(context: AuthenticatedCommandContext): Promise<void> {
-  const { client, dispatch, getState, onLogoutComplete } = context;
-  const next = await refreshPlayerSnapshot(client, getState().homeSnapshot);
-  if (next.failureReason === "unauthorized") {
-    onLogoutComplete("Session expired");
-    return;
-  }
+  const { client, dispatch, onLogoutComplete } = context;
 
-  if (next.backend !== "connected") {
-    return;
+  try {
+    const bootstrap = await client.getCliBootstrap();
+    const next = mapCliBootstrapToHome(bootstrap);
+    dispatch({ type: "replace-home-snapshot", snapshot: next });
+    dispatch({ type: "patch-browse-state", patch: { recentTracks: next.recent } });
+    dispatch({ type: "reset-progress-tick" });
+  } catch (error) {
+    if (error instanceof ApiClientError && error.status === 401) {
+      onLogoutComplete("Session expired");
+    }
   }
-
-  dispatch({ type: "replace-home-snapshot", snapshot: next });
-  dispatch({ type: "reset-progress-tick" });
 }
 
 export async function startSpotifyLink(context: AuthenticatedCommandContext) {
   const { client, dispatch, openBrowserOnLink } = context;
 
   try {
-    const start = await client.startSpotifyAuthorization();
+    const start = await client.startCliAuthorization();
     dispatch({ type: "set-link-flow", linkFlow: start as LinkFlow });
 
     if (openBrowserOnLink) {
@@ -251,9 +189,7 @@ export function openDevicePicker(context: AuthenticatedCommandContext) {
 
   void (async () => {
     try {
-      const response = client.getCliDevices
-        ? await client.getCliDevices()
-        : await client.getSpotifyDevices();
+      const response = await client.getCliDevices();
       dispatch({ type: "set-device-list", devices: response.items });
     } catch (error) {
       dispatch({ type: "set-status-line", statusLine: `Device list failed: ${toMessage(error)}` });
@@ -333,7 +269,7 @@ export function runDeviceTransfer(
 
   void (async () => {
     try {
-      await client.transferSpotifyPlayback(device.id);
+      await client.runCliPlayerAction({ action: "transfer", deviceId: device.id });
       dispatch({ type: "close-device-picker" });
       await refreshAuthenticatedApp(context, `Device ready: ${device.name}`);
     } catch (error) {
@@ -350,23 +286,51 @@ export function executeContentAction(
   context: AuthenticatedCommandContext,
   action: ContentAction
 ) {
-  const { client, dispatch } = context;
+  const { client, dispatch, getState } = context;
 
   if (action.type === "noop") {
     return;
   }
 
   if (action.type === "open-liked-tracks") {
-    dispatch({ type: "open-liked-tracks" });
+    dispatch({ type: "set-busy", busy: true });
+    void loadLibrarySection(client, "liked")
+      .then((detail) => {
+        if (!detail.section) {
+          throw new Error("Liked songs view not available");
+        }
+
+        dispatch({
+          type: "patch-browse-state",
+          patch: {
+            likedTracks: detail.section.items.map(toTrackSummary)
+          }
+        });
+        dispatch({ type: "open-liked-tracks" });
+        dispatch({ type: "set-status-line", statusLine: "Opened Liked songs" });
+      })
+      .catch((error) => {
+        dispatch({ type: "set-status-line", statusLine: `Liked songs load failed: ${toMessage(error)}` });
+      })
+      .finally(() => {
+        dispatch({ type: "set-busy", busy: false });
+      });
     return;
   }
 
   if (action.type === "open-playlist") {
     dispatch({ type: "set-busy", busy: true });
-    void loadPlaylistDetail(client, action.playlistId)
+    void loadLibrarySection(client, action.playlistId)
       .then((detail) => {
-        dispatch({ type: "open-playlist-detail", detail });
-        dispatch({ type: "set-status-line", statusLine: `Opened ${detail.name}` });
+        if (!detail.section) {
+          throw new Error("Playlist view not available");
+        }
+
+        dispatch({
+          type: "open-playlist-detail",
+          detail: toPlaylistDetail(detail.section, getState().browseState, action.playlistId)
+        });
+        dispatch({ type: "set-status-line", statusLine: `Opened ${detail.section.title}` });
       })
       .catch((error) => {
         dispatch({ type: "set-status-line", statusLine: `Playlist load failed: ${toMessage(error)}` });
@@ -378,12 +342,16 @@ export function executeContentAction(
   }
 
   if (action.type === "play-track") {
-    runPlaybackAction(context, "Started track", (targetClient) => targetClient.playSpotifyTrack(action.uri));
+    runPlaybackAction(context, "Started track", (targetClient) =>
+      targetClient.runCliPlayerAction({ action: "play-track", uri: action.uri })
+    );
     return;
   }
 
   if (action.type === "play-context") {
-    runPlaybackAction(context, "Started context", (targetClient) => targetClient.playSpotifyContext(action.uri));
+    runPlaybackAction(context, "Started context", (targetClient) =>
+      targetClient.runCliPlayerAction({ action: "play-context", contextUri: action.uri })
+    );
   }
 }
 

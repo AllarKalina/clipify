@@ -8,54 +8,58 @@ import { createInitialAuthenticatedAppState, type AuthenticatedAppAction } from 
 function createClient(overrides: Partial<ApiClient>): ApiClient {
   return {
     getVersion: async () => ({ appName: "clipify-api", apiVersion: "v1", minCliVersion: "0.1.0", latestCliVersion: "0.1.0" }),
-    getPublicExample: async () => ({ id: "1", title: "example", category: "demo" }),
     getMe: async () => ({ user: { id: "user-1", email: "allar@example.com", name: "Allar" } }),
     signUpWithEmailPassword: async () => ({ sessionCookie: "better-auth.session_token=signup" }),
     signInWithEmailPassword: async () => ({ sessionCookie: "better-auth.session_token=signin" }),
     signOut: async () => undefined,
-    startSpotifyAuthorization: async () => ({ authorizeUrl: "https://accounts.spotify.com/authorize?state=abc", state: "abc" }),
-    completeSpotifyAuthorization: async () => ({ linked: true, userId: "user-1" }),
-    getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: false }),
-    getSpotifyProfile: async () => ({
-      id: "spotify-user-1",
-      displayName: "Allar",
-      email: "allar@spotify.test",
-      profileUrl: "https://open.spotify.com/user/allar",
-      imageUrl: "https://i.scdn.co/image/avatar-1"
+    startCliAuthorization: async () => ({ authorizeUrl: "https://accounts.spotify.com/authorize?state=abc", state: "abc" }),
+    completeCliAuthorization: async () => ({ linked: true, userId: "user-1" }),
+    getCliAuthorizationStatus: async () => ({ linked: true, relinkRequired: false }),
+    getCliBootstrap: async () => ({
+      home: {
+        spotify: "linked",
+        userName: "Allar",
+        userEmail: "allar@example.com",
+        spotifyDisplayName: "Allar",
+        deviceId: "device-1",
+        deviceName: "MacBook Air",
+        deviceType: "Computer",
+        deviceStatus: "active",
+        supportsVolume: true,
+        volumePercent: 50,
+        playbackState: "paused",
+        shuffleEnabled: false,
+        repeatMode: "off",
+        trackName: "Dreams",
+        artistName: "Fleetwood Mac",
+        albumName: "Rumours",
+        progressMs: 120000,
+        durationMs: 257000,
+        queueStatus: "ready",
+        queue: [],
+        recentUnavailable: false,
+        recent: [],
+        linked: true,
+        relinkRequired: false,
+        profile: {
+          id: "spotify-user-1",
+          displayName: "Allar",
+          email: "allar@spotify.test",
+          profileUrl: "https://open.spotify.com/user/allar",
+          imageUrl: "https://i.scdn.co/image/avatar-1"
+        }
+      },
+      browse: {
+        featuredPlaylists: [],
+        playlists: [],
+        likedTracks: []
+      },
+      warning: ""
     }),
-    getSpotifyFeaturedPlaylists: async () => ({ items: [] }),
-    getSpotifyPlaylists: async () => ({ items: [] }),
-    getSpotifySavedTracks: async () => ({ items: [] }),
-    getSpotifyPlaylist: async () => ({
-      id: "playlist-1",
-      name: "Roadtrip",
-      description: "",
-      imageUrl: "",
-      ownerName: "Allar",
-      trackCount: 1,
-      uri: "spotify:playlist:1",
-      tracks: []
-    }),
-    searchSpotify: async () => ({ tracks: [], playlists: [], albums: [], artists: [] }),
-    getSpotifyCurrentlyPlaying: async () => ({
-      playbackState: "idle",
-      isPlaying: false,
-      trackName: "",
-      artistName: "",
-      albumName: "",
-      albumImageUrl: "",
-      deviceId: "device-1",
-      deviceName: "MacBook Air",
-      deviceType: "Computer",
-      deviceStatus: "available",
-      supportsVolume: true,
-      volumePercent: 50,
-      shuffleEnabled: false,
-      repeatMode: "off",
-      progressMs: 0,
-      durationMs: 0
-    }),
-    getSpotifyDevices: async () => ({
+    getCliHomeView: async () => ({ sections: [] }),
+    getCliLibraryView: async () => ({ section: null }),
+    searchCli: async () => ({ tracks: [], playlists: [], albums: [], artists: [] }),
+    getCliDevices: async () => ({
       items: [
         {
           id: "device-1",
@@ -68,24 +72,43 @@ function createClient(overrides: Partial<ApiClient>): ApiClient {
         }
       ]
     }),
-    getSpotifyQueue: async () => ({ items: [] }),
-    getSpotifyRecentlyPlayed: async () => ({ items: [] }),
-    playSpotify: async () => ({ ok: true, action: "play" }),
-    pauseSpotify: async () => ({ ok: true, action: "pause" }),
-    nextSpotify: async () => ({ ok: true, action: "next" }),
-    previousSpotify: async () => ({ ok: true, action: "previous" }),
-    playSpotifyTrack: async () => ({ ok: true, action: "play-track" }),
-    playSpotifyContext: async () => ({ ok: true, action: "play-context" }),
-    transferSpotifyPlayback: async () => ({ ok: true, action: "transfer" }),
-    setSpotifyShuffle: async () => ({ ok: true, action: "shuffle" }),
-    setSpotifyRepeatMode: async () => ({ ok: true, action: "repeat" }),
-    setSpotifyVolume: async () => ({ ok: true, action: "volume" }),
+    runCliPlayerAction: async () => ({ ok: true, action: "play" }),
     ...overrides
   };
 }
 
 describe("authenticated app commands", () => {
-  test("refresh prefers cli bootstrap endpoint when available", async () => {
+  test("refresh loads bootstrap and updates snapshot", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({}),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const snapshotActions = actions.filter((action) => action.type === "replace-home-snapshot");
+    expect(snapshotActions.at(0)).toEqual({
+      type: "replace-home-snapshot",
+      snapshot: expect.objectContaining({
+        spotify: "linked",
+        trackName: "Dreams",
+        spotifyDisplayName: "Allar"
+      })
+    });
+  });
+
+  test("refresh applies bootstrap warning to status line", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
     const actions: AuthenticatedAppAction[] = [];
 
@@ -118,13 +141,69 @@ describe("authenticated app commands", () => {
               recent: [],
               linked: true,
               relinkRequired: false,
-              profile: {
-                id: "spotify-user-1",
-                displayName: "Allar",
-                email: "allar@spotify.test",
-                profileUrl: "https://open.spotify.com/user/allar",
-                imageUrl: "https://i.scdn.co/image/avatar-1"
-              }
+              profile: null
+            },
+            browse: {
+              featuredPlaylists: [],
+              playlists: [],
+              likedTracks: []
+            },
+            warning: "Browse data incomplete: playlists unavailable"
+          })
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const statusActions = actions.filter((action) => action.type === "set-status-line");
+    expect(statusActions.at(-1)).toEqual({
+      type: "set-status-line",
+      statusLine: "Browse data incomplete: playlists unavailable"
+    });
+  });
+
+  test("refresh reconciles ready device details from device list", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getCliBootstrap: async () => ({
+            home: {
+              spotify: "linked",
+              userName: "Allar",
+              userEmail: "allar@example.com",
+              spotifyDisplayName: "Allar",
+              deviceId: "",
+              deviceName: "",
+              deviceType: "",
+              deviceStatus: "none",
+              supportsVolume: false,
+              volumePercent: 0,
+              playbackState: "idle",
+              shuffleEnabled: false,
+              repeatMode: "off",
+              trackName: "",
+              artistName: "",
+              albumName: "",
+              progressMs: 0,
+              durationMs: 0,
+              queueStatus: "ready",
+              queue: [],
+              recentUnavailable: false,
+              recent: [],
+              linked: true,
+              relinkRequired: false,
+              profile: null
             },
             browse: {
               featuredPlaylists: [],
@@ -133,119 +212,7 @@ describe("authenticated app commands", () => {
             },
             warning: ""
           }),
-          getMe: async () => {
-            throw new Error("legacy snapshot path should not run");
-          }
-        }),
-        dispatch(action) {
-          actions.push(action);
-        },
-        getState: () => initialState,
-        onLogoutComplete() {
-          throw new Error("should not logout");
-        },
-        openBrowserOnLink: false
-      },
-      "Refreshed"
-    );
-
-    const snapshotActions = actions.filter((action) => action.type === "replace-home-snapshot");
-    expect(snapshotActions.at(0)).toEqual({
-      type: "replace-home-snapshot",
-      snapshot: expect.objectContaining({
-        spotify: "linked",
-        trackName: "Dreams",
-        spotifyDisplayName: "Allar"
-      })
-    });
-  });
-
-  test("refresh surfaces browse-load failures in the status line", async () => {
-    const initialState = createInitialAuthenticatedAppState("Restoring session...");
-    const actions: AuthenticatedAppAction[] = [];
-
-    await refreshAuthenticatedApp(
-      {
-        client: createClient({
-          getSpotifyPlaylists: async () => {
-            throw new ApiClientError("forbidden", 403, "/v1/spotify/me/playlists");
-          }
-        }),
-        dispatch(action) {
-          actions.push(action);
-        },
-        getState: () => initialState,
-        onLogoutComplete() {
-          throw new Error("should not logout");
-        },
-        openBrowserOnLink: false
-      },
-      "Refreshed"
-    );
-
-    const statusActions = actions.filter((action) => action.type === "set-status-line");
-    expect(statusActions.at(-1)).toEqual({
-      type: "set-status-line",
-      statusLine: "Browse data incomplete: playlists: forbidden"
-    });
-  });
-
-  test("refresh ignores featured playlist 403 warnings", async () => {
-    const initialState = createInitialAuthenticatedAppState("Restoring session...");
-    const actions: AuthenticatedAppAction[] = [];
-
-    await refreshAuthenticatedApp(
-      {
-        client: createClient({
-          getSpotifyFeaturedPlaylists: async () => {
-            throw new ApiClientError("Request failed for /v1/spotify/browse/featured-playlists: 403 forbidden", 403, "/v1/spotify/browse/featured-playlists");
-          }
-        }),
-        dispatch(action) {
-          actions.push(action);
-        },
-        getState: () => initialState,
-        onLogoutComplete() {
-          throw new Error("should not logout");
-        },
-        openBrowserOnLink: false
-      },
-      "Refreshed"
-    );
-
-    const statusActions = actions.filter((action) => action.type === "set-status-line");
-    expect(statusActions.at(-1)).toEqual({
-      type: "set-status-line",
-      statusLine: "Refreshed"
-    });
-  });
-
-  test("refresh reconciles ready device details from the device list", async () => {
-    const initialState = createInitialAuthenticatedAppState("Restoring session...");
-    const actions: AuthenticatedAppAction[] = [];
-
-    await refreshAuthenticatedApp(
-      {
-        client: createClient({
-          getSpotifyCurrentlyPlaying: async () => ({
-            playbackState: "idle",
-            isPlaying: false,
-            trackName: "",
-            artistName: "",
-            albumName: "",
-            albumImageUrl: "",
-            deviceId: "",
-            deviceName: "",
-            deviceType: "",
-            deviceStatus: "none",
-            supportsVolume: false,
-            volumePercent: 0,
-            shuffleEnabled: false,
-            repeatMode: "off",
-            progressMs: 0,
-            durationMs: 0
-          }),
-          getSpotifyDevices: async () => ({
+          getCliDevices: async () => ({
             items: [
               {
                 id: "device-2",
@@ -286,40 +253,33 @@ describe("authenticated app commands", () => {
   test("maps no-device playback failures to actionable copy", () => {
     expect(
       getPlaybackFailureMessage(
-        new ApiClientError("No active Spotify device. Start playback in Spotify first.", 409, "/v1/spotify/me/player/play"),
+        new ApiClientError("No active Spotify device. Start playback in Spotify first.", 409, "/v1/cli/player/action"),
         "Started playback"
       )
     ).toBe("No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.");
   });
 
-  test("refresh shows relink-required status without loading browse data", async () => {
+  test("refresh logs out on unauthorized bootstrap", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
-    const actions: AuthenticatedAppAction[] = [];
+    let didLogout = false;
 
     await refreshAuthenticatedApp(
       {
         client: createClient({
-          getSpotifyAuthorizationStatus: async () => ({ linked: true, relinkRequired: true }),
-          getSpotifyProfile: async () => {
-            throw new Error("should not be called");
+          getCliBootstrap: async () => {
+            throw new ApiClientError("unauthorized", 401, "/v1/cli/bootstrap");
           }
         }),
-        dispatch(action) {
-          actions.push(action);
-        },
+        dispatch() {},
         getState: () => initialState,
         onLogoutComplete() {
-          throw new Error("should not logout");
+          didLogout = true;
         },
         openBrowserOnLink: false
       },
       "Refreshed"
     );
 
-    const statusActions = actions.filter((action) => action.type === "set-status-line");
-    expect(statusActions.at(-1)).toEqual({
-      type: "set-status-line",
-      statusLine: "Spotify permissions changed. Press [l] to re-link."
-    });
+    expect(didLogout).toBeTrue();
   });
 });

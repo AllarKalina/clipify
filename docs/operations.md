@@ -99,7 +99,7 @@ bash scripts/smoke-api.sh <base-url>
    - `SPOTIFY_REDIRECT_URI`
    - `SPOTIFY_TOKEN_ENCRYPTION_KEY`
 2. Use loopback IP literal redirect URI locally:
-   - `http://127.0.0.1:3000/v1/spotify/auth/callback/public`
+   - `http://127.0.0.1:3000/v1/cli/auth/callback/public`
 3. Set the same exact redirect URI in Spotify Developer Dashboard app settings.
 4. Generate valid token encryption key:
    - `openssl rand -base64 32`
@@ -112,5 +112,5 @@ bash scripts/smoke-api.sh <base-url>
    - Dashboard URI and `SPOTIFY_REDIRECT_URI` do not match exactly.
 2. `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
    - Invalid key format/length.
-3. `GET /v1/spotify/me` returns `503`
+3. `GET /v1/cli/bootstrap` returns `503`
    - Spotify env is incomplete.

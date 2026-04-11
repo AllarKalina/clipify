@@ -55,6 +55,117 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
 
   return new Elysia({ name: "cli-bff", prefix: "/v1/cli" })
     .get(
+      "/auth/start",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        return cli.startAuthorization(session.user.id);
+      },
+      {
+        detail: {
+          tags: ["cli"],
+          summary: "Start Spotify OAuth authorization flow for CLI"
+        },
+        response: t.Object({
+          authorizeUrl: t.String(),
+          state: t.String()
+        })
+      }
+    )
+    .get(
+      "/auth/status",
+      async ({ request }) => {
+        const session = await requireSession(auth, request);
+        return cli.getAuthorizationStatus(session.user.id);
+      },
+      {
+        detail: {
+          tags: ["cli"],
+          summary: "Get Spotify link status for authenticated CLI user"
+        },
+        response: t.Object({
+          linked: t.Boolean(),
+          relinkRequired: t.Boolean()
+        })
+      }
+    )
+    .get(
+      "/auth/callback",
+      async ({ request, query }) => {
+        const session = await requireSession(auth, request);
+        return cli.completeAuthorization(session.user.id, query.code, query.state);
+      },
+      {
+        detail: {
+          tags: ["cli"],
+          summary: "Handle Spotify OAuth callback for authenticated CLI user"
+        },
+        query: t.Object({
+          code: t.String(),
+          state: t.String()
+        }),
+        response: t.Object({
+          linked: t.Boolean(),
+          userId: t.String()
+        })
+      }
+    )
+    .get(
+      "/auth/callback/public",
+      async ({ query }) => {
+        const html = (title: string, description: string) =>
+          `<!doctype html><html><head><meta charset="utf-8" /><title>${title}</title></head><body><h1>${title}</h1><p>${description}</p></body></html>`;
+
+        if (query.error) {
+          const details = query.error_description ? `${query.error}: ${query.error_description}` : query.error;
+          return new Response(html("Spotify link failed", `Spotify returned: ${details}`), {
+            status: 400,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+
+        if (!query.code || !query.state) {
+          return new Response(html("Spotify link failed", "Missing code or state in callback URL."), {
+            status: 400,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+
+        try {
+          await cli.completeAuthorizationFromCallback(query.code, query.state);
+
+          return new Response(html("Spotify linked", "You can return to Clipify in your terminal."), {
+            status: 200,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        } catch (error) {
+          if (error instanceof Response) {
+            const message = await error.text();
+            return new Response(html("Spotify link failed", message || "OAuth callback failed."), {
+              status: error.status,
+              headers: { "content-type": "text/html; charset=utf-8" }
+            });
+          }
+
+          return new Response(html("Spotify link failed", "Unexpected callback error."), {
+            status: 500,
+            headers: { "content-type": "text/html; charset=utf-8" }
+          });
+        }
+      },
+      {
+        detail: {
+          tags: ["cli"],
+          summary: "Public Spotify OAuth callback endpoint for CLI"
+        },
+        query: t.Object({
+          code: t.Optional(t.String()),
+          state: t.Optional(t.String()),
+          error: t.Optional(t.String()),
+          error_description: t.Optional(t.String())
+        })
+      }
+    )
+    .get(
       "/bootstrap",
       async ({ request }) => {
         const session = await requireSession(auth, request);

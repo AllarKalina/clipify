@@ -1,4 +1,6 @@
 import type {
+  SpotifyAuthStatusResponse,
+  SpotifyCallbackResponse,
   SpotifyCurrentlyPlayingResponse,
   SpotifyDeviceStatus,
   SpotifyDevicesResponse,
@@ -10,11 +12,15 @@ import type {
   SpotifyRecentlyPlayedResponse,
   SpotifyRepeatMode,
   SpotifySavedTracksResponse,
-  SpotifySearchResponse
+  SpotifySearchResponse,
+  SpotifyStartAuthResponse
 } from "./spotify";
 
 export type CliQueueStatus = "ready" | "no-device" | "relink-required" | "unavailable";
 export type CliSpotifyStatus = "linked" | "not-linked" | "relink-required";
+export type CliAuthStartResponse = SpotifyStartAuthResponse;
+export type CliAuthCallbackResponse = SpotifyCallbackResponse;
+export type CliAuthStatusResponse = SpotifyAuthStatusResponse;
 
 export type CliBootstrapHome = {
   spotify: CliSpotifyStatus;

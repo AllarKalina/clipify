@@ -112,8 +112,7 @@ Errors must be normalized before returning to clients.
 - Authenticated user routes: `/v1/*`
 - System routes: `/health`, `/ready`
 - Auth routes: `/api/auth/*`
-- Spotify routes: `/v1/spotify/*`
-- CLI BFF routes: `/v1/cli/*` for CLI-optimized aggregate payloads
+- CLI application routes: `/v1/cli/*` (auth, aggregate views, and player actions)
 
 ### Versioning
 

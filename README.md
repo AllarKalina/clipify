@@ -71,19 +71,12 @@ bun run --cwd apps/api db:studio
 
 - `GET /health`
 - `GET /ready`
-- `GET /v1/public/example`
 - `GET /v1/public/meta/version`
 - `GET /v1/me`
-- `GET /v1/spotify/auth/start`
-- `GET /v1/spotify/auth/status`
-- `GET /v1/spotify/auth/callback`
-- `GET /v1/spotify/auth/callback/public`
-- `GET /v1/spotify/me`
-- `GET /v1/spotify/me/player/devices`
-- `GET /v1/spotify/me/player/currently-playing`
-- `GET /v1/spotify/me/player/queue`
-- `GET /v1/spotify/me/player/recently-played`
-- `PUT /v1/spotify/me/player/transfer`
+- `GET /v1/cli/auth/start`
+- `GET /v1/cli/auth/status`
+- `GET /v1/cli/auth/callback`
+- `GET /v1/cli/auth/callback/public`
 - `GET /v1/cli/bootstrap`
 - `GET /v1/cli/view/home`
 - `GET /v1/cli/view/library/:libraryId`
@@ -98,19 +91,19 @@ bun run --cwd apps/api db:studio
 - OAuth `state` is stored server-side as hashed one-time value with TTL (`spotify_oauth_state`).
 - Linked tokens are stored encrypted in `spotify_connection`.
 - OAuth scopes requested: `user-read-private user-read-email user-read-playback-state user-read-recently-played user-modify-playback-state playlist-read-private playlist-read-collaborative user-library-read`.
-- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`).
+- Set Spotify app redirect URI to match `SPOTIFY_REDIRECT_URI` (default: `http://127.0.0.1:3000/v1/cli/auth/callback/public`).
 - Do not use `localhost` alias for Spotify redirect URI; use IP literal loopback (`127.0.0.1` or `::1`).
-- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for Spotify routes.
+- `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, `SPOTIFY_REDIRECT_URI`, `SPOTIFY_TOKEN_ENCRYPTION_KEY` are required for CLI Spotify integration routes.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY` must be base64-encoded 32 bytes (`openssl rand -base64 32`).
 
 ### Spotify Troubleshooting
 
 - `INVALID_CLIENT: Invalid redirect URI`
   - Ensure Spotify dashboard redirect URI and `SPOTIFY_REDIRECT_URI` match exactly.
-  - Recommended local value: `http://127.0.0.1:3000/v1/spotify/auth/callback/public`.
+  - Recommended local value: `http://127.0.0.1:3000/v1/cli/auth/callback/public`.
 - `SPOTIFY_TOKEN_ENCRYPTION_KEY must be base64-encoded 32 bytes`
   - Regenerate key and restart API.
-- `GET /v1/spotify/me` returns `503`
+- `GET /v1/cli/bootstrap` returns `503`
   - One or more Spotify env vars are missing/empty.
 - Home shows a re-link prompt after login
   - Older Spotify links may be missing the playlist/library scopes used by the current Home shell.
