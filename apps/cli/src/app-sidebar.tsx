@@ -13,17 +13,18 @@ function renderRow(content: string, selected: boolean, activeRegion: boolean) {
 
 type AppSidebarProps = {
   width: number;
+  height: number;
   focusRegion: AppFocusRegion;
   userName: string;
   items: ContentItem[];
   selectedIndex: number;
 };
 
-export function AppSidebar({ width, focusRegion, userName, items, selectedIndex }: AppSidebarProps) {
+export function AppSidebar({ width, height, focusRegion, userName, items, selectedIndex }: AppSidebarProps) {
   const rowWidth = Math.max(1, width - 5);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width}>
+    <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1} width={width} height={height} minHeight={height}>
       <Text color="green" bold>
         Your Library
       </Text>

@@ -35,7 +35,7 @@ export function AuthenticatedShell(props: AppShellProps) {
   const shellWidth = props.width;
   const topBarHeight = getTopBarHeight(props.browse);
   const mainRowHeight = Math.max(8, props.height - 8);
-  const bodyHeight = Math.max(4, mainRowHeight - topBarHeight - 1);
+  const bodyHeight = Math.max(4, mainRowHeight - topBarHeight);
   const contentWidth = shellWidth - sidebarWidth - 3;
 
   return (
@@ -43,6 +43,7 @@ export function AuthenticatedShell(props: AppShellProps) {
       <Box height={mainRowHeight}>
         <AppSidebar
           width={sidebarWidth}
+          height={mainRowHeight}
           focusRegion={props.focusRegion}
           userName={props.player.userName}
           items={props.sidebarItems}

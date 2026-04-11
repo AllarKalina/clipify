@@ -40,7 +40,7 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
   const searchSelected = contentIndex === 0;
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height} flexShrink={0} marginBottom={1}>
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height} flexShrink={0}>
       <Text color="cyan">{clipLine(getSearchPromptLine(player), contentWidth)}</Text>
       <Text color={searchSelected && focusRegion === "content" ? "black" : "white"} backgroundColor={searchSelected && focusRegion === "content" ? "green" : undefined}>
         {clipLine(getSearchInputLine(browse, player), contentWidth)}

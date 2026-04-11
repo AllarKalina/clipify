@@ -99,7 +99,7 @@ export function AppPageBody({
   const visibleListLines = mainView === "home" ? [] : buildVisibleListLines(sections, contentIndex, listAvailableLines);
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width}>
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height}>
       <Box marginBottom={1} flexDirection="column">
         <Text color="green" bold>
           {clipLine(viewLabel, contentWidth)}
