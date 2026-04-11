@@ -10,6 +10,7 @@ import type { SpotifyService } from "./modules/spotify/service";
 import { userModule } from "./modules/user/routes";
 import { createOpenApiPlugin } from "./plugins/openapi";
 import { createOtelPlugin } from "./plugins/otel";
+import { createProtectedSessionPlugin } from "./plugins/protected-session";
 import { requestIdPlugin } from "./plugins/request-id";
 import type { Logger } from "./plugins/logger";
 
@@ -30,6 +31,7 @@ export function createApp(deps: AppDeps) {
   const appWithPlugins = otelPlugin ? baseApp.use(otelPlugin) : baseApp;
 
   return appWithPlugins
+    .use(createProtectedSessionPlugin(auth))
     .onRequest(({ request, set }) => {
       const requestId = set.headers["x-request-id"];
       logger.info("request.start", {

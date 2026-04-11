@@ -23,9 +23,16 @@ function baseEnv(nodeEnv: AppEnv["NODE_ENV"] = "test"): AppEnv {
   };
 }
 
-function createAuthMock(user: { id: string; email: string; name: string } | null) {
+function createAuthMock(
+  user: { id: string; email: string; name: string } | null,
+  handler?: (request: Request) => Response | Promise<Response>
+) {
   return {
-    handler() {
+    async handler(request: Request) {
+      if (handler) {
+        return handler(request);
+      }
+
       return new Response("auth", { status: 200 });
     },
     api: {
@@ -387,6 +394,44 @@ describe("app routes", () => {
 
     const response = await app.handle(new Request("http://localhost/openapi"));
     expect(response.status).toBe(404);
+  });
+
+  test("passes raw auth requests through without rebuilding the body", async () => {
+    const env = baseEnv();
+    const observed: { method?: string; url?: string; contentType?: string; body?: string } = {};
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null, async (request) => {
+        observed.method = request.method;
+        observed.url = request.url;
+        observed.contentType = request.headers.get("content-type") ?? undefined;
+        observed.body = await request.text();
+
+        return new Response("ok", { status: 204 });
+      }) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/api/auth/sign-in/email", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          email: "a@example.com"
+        })
+      })
+    );
+
+    expect(response.status).toBe(204);
+    expect(observed.method).toBe("POST");
+    expect(observed.url).toBe("http://localhost/api/auth/sign-in/email");
+    expect(observed.contentType).toBe("application/json");
+    expect(observed.body).toBe(JSON.stringify({ email: "a@example.com" }));
   });
 
   test("blocks cli auth start route without session", async () => {

@@ -25,6 +25,28 @@ export type CliErrorPayload = {
 
 export type CliErrorStatus = 400 | 401 | 403 | 404 | 409 | 500 | 502 | 503;
 
+export class CliBffError extends Error {
+  readonly status: CliErrorStatus;
+  readonly code: CliErrorCode;
+  readonly hint?: string;
+
+  constructor(status: CliErrorStatus, code: CliErrorCode, message: string, hint?: string) {
+    super(message);
+    this.name = "CliBffError";
+    this.status = status;
+    this.code = code;
+    this.hint = hint;
+  }
+}
+
+export function createCliBffError(status: CliErrorStatus, code: CliErrorCode, message: string, hint?: string) {
+  return new CliBffError(status, code, message, hint);
+}
+
+export function isCliBffError(error: unknown): error is CliBffError {
+  return error instanceof CliBffError;
+}
+
 export const cliErrorResponseSchema = t.Object({
   error: t.Object({
     code: t.Union([
@@ -135,10 +157,84 @@ function mapErrorCode(status: CliErrorStatus, message: string): CliErrorPayload[
   return { code: "INTERNAL_ERROR", message: message || "Unexpected server error." };
 }
 
+async function readResponseErrorPayload(error: Response): Promise<CliErrorPayload["error"] | null> {
+  const contentType = error.headers.get("content-type")?.toLowerCase() ?? "";
+  if (!contentType.includes("application/json")) {
+    return null;
+  }
+
+  try {
+    const parsed = (await error.clone().json()) as {
+      error?: {
+        code?: CliErrorCode;
+        message?: string;
+        hint?: string;
+      };
+    };
+    if (!parsed.error?.code || !parsed.error?.message) {
+      return null;
+    }
+
+    return {
+      code: parsed.error.code,
+      message: parsed.error.message,
+      hint: parsed.error.hint
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function toCliErrorPayload(error: unknown): Promise<{ status: CliErrorStatus; body: CliErrorPayload }> {
+  if (isCliBffError(error)) {
+    return {
+      status: error.status,
+      body: {
+        error: {
+          code: error.code,
+          message: error.message,
+          hint: error.hint
+        }
+      }
+    };
+  }
+
+  if (error && typeof error === "object" && "error" in error) {
+    const candidate = error as {
+      error?: {
+        code?: CliErrorCode;
+        message?: string;
+        hint?: string;
+      };
+    };
+
+    if (candidate.error?.code && candidate.error?.message) {
+      return {
+        status: 500,
+        body: {
+          error: {
+            code: candidate.error.code,
+            message: candidate.error.message,
+            hint: candidate.error.hint
+          }
+        }
+      };
+    }
+  }
+
   if (error instanceof Response) {
     const status = normalizeErrorStatus(error.status);
-    const message = (await error.text()).trim();
+    const parsed = await readResponseErrorPayload(error);
+    if (parsed) {
+      return {
+        status,
+        body: {
+          error: parsed
+        }
+      };
+    }
+
+    const message = status === 400 || status === 403 || status === 409 ? (await error.text()).trim() : "";
     return {
       status,
       body: {

@@ -60,22 +60,57 @@ type ClientDeps = {
   sessionCookie?: string;
 };
 
-type FailureInfo = {
-  message: string;
-  code?: CliErrorCode;
-};
-
 type TreatyResult<T> = {
   data: T | null;
   error: unknown;
   status: number;
 };
 
+type ParsedFailure = {
+  message: string;
+  code?: CliErrorCode;
+  hint?: string;
+};
+
+const cliErrorCodes: CliErrorCode[] = [
+  "UNAUTHORIZED",
+  "INVALID_INPUT",
+  "RELINK_REQUIRED",
+  "PREMIUM_REQUIRED",
+  "NO_ACTIVE_DEVICE",
+  "DEVICE_RESTRICTED",
+  "NOT_FOUND",
+  "FORBIDDEN",
+  "CONFLICT",
+  "UPSTREAM_FAILURE",
+  "SERVICE_UNAVAILABLE",
+  "BAD_REQUEST",
+  "INTERNAL_ERROR"
+];
+const cliErrorCodeSet = new Set<string>(cliErrorCodes);
+
 export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: ClientDeps): ApiClient {
   const authOrigin = new URL(baseUrl).origin;
   const networkRetryDelayMs = 150;
+  const requestWithRetry = Object.assign(
+    async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+      try {
+        return await fetchImpl(input, init);
+      } catch (error) {
+        if (!isRetriableNetworkError(error)) {
+          throw error;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, networkRetryDelayMs));
+        return fetchImpl(input, init);
+      }
+    },
+    {
+      preconnect: fetch.preconnect
+    }
+  );
   const bff = treaty<ApiApp>(baseUrl, {
-    fetcher: requestWithRetry as typeof fetch,
+    fetcher: requestWithRetry,
     throwHttpError: false
   });
 
@@ -91,19 +126,6 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
       message.includes("fetch failed") ||
       message.includes("connection refused")
     );
-  }
-
-  async function requestWithRetry(input: URL | Request | string, init?: RequestInit): Promise<Response> {
-    try {
-      return await fetchImpl(input, init);
-    } catch (error) {
-      if (!isRetriableNetworkError(error)) {
-        throw error;
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, networkRetryDelayMs));
-      return fetchImpl(input, init);
-    }
   }
 
   function parseSessionCookie(setCookie: string, path: string): { sessionCookie: string } {
@@ -128,48 +150,107 @@ export function createApiClient({ baseUrl, fetchImpl = fetch, sessionCookie }: C
     };
   }
 
-  function toFailureInfo(raw: unknown, fallbackStatus: number): FailureInfo {
-    if (raw && typeof raw === "object" && "value" in raw) {
-      const value = (raw as { value?: unknown }).value;
-      return toFailureInfo(value, fallbackStatus);
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null;
+  }
+
+  function isCliErrorCode(value: unknown): value is CliErrorCode {
+    return typeof value === "string" && cliErrorCodeSet.has(value);
+  }
+
+  function readFailureDetails(error: unknown): ParsedFailure | null {
+    if (!isRecord(error)) {
+      return null;
     }
 
-    if (typeof raw === "string") {
+    if (typeof error.value === "string") {
       return {
-        message: raw
+        message: error.value
       };
     }
 
-    if (raw && typeof raw === "object") {
-      const candidate = raw as {
-        error?: {
-          code?: CliErrorCode;
-          message?: string;
-        };
-      };
+    if (isRecord(error.value)) {
+      const envelope = error.value.error;
 
-      if (candidate.error?.message) {
+      if (isRecord(envelope) && typeof envelope.message === "string") {
         return {
-          message: candidate.error.message,
-          code: candidate.error.code
+          code: isCliErrorCode(envelope.code) ? envelope.code : undefined,
+          message: envelope.message,
+          hint: typeof envelope.hint === "string" ? envelope.hint : undefined
         };
       }
     }
 
-    return {
-      message: fallbackStatus === 401 ? "Unauthorized" : "Request failed"
-    };
+    if (typeof error.message === "string") {
+      return {
+        message: error.message
+      };
+    }
+
+    return null;
+  }
+
+  function defaultMessageForStatus(status: number): string {
+    switch (status) {
+      case 400:
+        return "Invalid request.";
+      case 401:
+        return "Unauthorized. Please log in again.";
+      case 403:
+        return "Forbidden.";
+      case 404:
+        return "Resource not found.";
+      case 409:
+        return "Conflict.";
+      case 500:
+        return "Unexpected server error.";
+      case 502:
+        return "Upstream request failed.";
+      case 503:
+        return "Service unavailable.";
+      default:
+        return "Request failed.";
+    }
+  }
+
+  function codeForStatus(status: number, parsed?: ParsedFailure | null): CliErrorCode | undefined {
+    switch (status) {
+      case 400:
+        return parsed?.code ?? "BAD_REQUEST";
+      case 401:
+        return "UNAUTHORIZED";
+      case 403:
+        return parsed?.code ?? "FORBIDDEN";
+      case 404:
+        return "NOT_FOUND";
+      case 409:
+        return parsed?.code ?? "CONFLICT";
+      case 500:
+        return "INTERNAL_ERROR";
+      case 502:
+        return "UPSTREAM_FAILURE";
+      case 503:
+        return "SERVICE_UNAVAILABLE";
+      default:
+        return parsed?.code;
+    }
+  }
+
+  function buildFailure(path: string, status: number, error: unknown): ApiClientError {
+    const parsed = readFailureDetails(error);
+    const code = codeForStatus(status, parsed);
+    const message = parsed?.message ?? defaultMessageForStatus(status);
+
+    return new ApiClientError(`Request failed for ${path}: ${status} ${message}`, status, path, code);
   }
 
   function unwrapTreatyResult<T>(path: string, result: TreatyResult<T>): T {
     if (result.error) {
-      const status = Number(result.status || 500);
-      const failure = toFailureInfo(result.error, status);
-      throw new ApiClientError(`Request failed for ${path}: ${status} ${failure.message}`, status, path, failure.code);
+      throw buildFailure(path, Number(result.status || 500), result.error);
     }
 
     if (result.data === null) {
-      throw new ApiClientError(`Invalid response for ${path}`, 502, path);
+      throw new ApiClientError(`Invalid response for ${path}`, 502, path, "UPSTREAM_FAILURE");
     }
 
     return result.data;

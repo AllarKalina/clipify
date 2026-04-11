@@ -26,7 +26,11 @@ describe("api client", () => {
       fetchImpl: async () => new Response("nope", { status: 503 })
     });
 
-    expect(client.getVersion()).rejects.toBeInstanceOf(ApiClientError);
+    await expect(client.getVersion()).rejects.toMatchObject({
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+      path: "/v1/public/meta/version"
+    });
   });
 
   test("returns current user profile for protected me route", async () => {
@@ -203,6 +207,32 @@ describe("api client", () => {
     const payload = await client.getCliBootstrap();
     expect(payload.home.spotify).toBe("linked");
     expect(requestedUrl).toContain("/v1/cli/bootstrap");
+  });
+
+  test("maps cli error envelopes to typed api client errors", async () => {
+    const client = createApiClient({
+      baseUrl: "https://example.com",
+      sessionCookie: "better-auth.session_token=abc123",
+      fetchImpl: async () =>
+        Response.json(
+          {
+            error: {
+              code: "NO_ACTIVE_DEVICE",
+              message: "No active Spotify device. Start playback in Spotify first.",
+              hint: "Press [d] to transfer playback or start playback in Spotify."
+            }
+          },
+          {
+            status: 409
+          }
+        )
+    });
+
+    await expect(client.getCliBootstrap()).rejects.toMatchObject({
+      status: 409,
+      code: "NO_ACTIVE_DEVICE",
+      path: "/v1/cli/bootstrap"
+    });
   });
 
   test("returns cli search payload for authenticated user", async () => {
