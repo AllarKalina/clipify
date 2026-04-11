@@ -87,10 +87,11 @@ export function cliBffModule(auth: AppAuth, spotify: SpotifyService) {
       CliBffError
     })
     .macro({
-      cliDetail(summary: string) {
+      cliDetail(summary: string, description?: string) {
         return {
           detail: {
-            summary
+            summary,
+            description: description ?? summary
           }
         };
       }
