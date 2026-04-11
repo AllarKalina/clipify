@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import React from "react";
-import { describePlayerDevice } from "./device-picker-state";
+import { describePlayerDevice, getPlayerDeviceHint } from "./device-picker-state";
 import type { HomeSnapshot } from "./home-state";
 import { getMainViewLabel, type AppFocusRegion, type MainView } from "./app-shell-state";
 import { clipLine, formatDuration, formatProgress } from "./app-shell-utils";
@@ -62,6 +62,7 @@ export function BottomPlayer({
         {clipLine("[tab] focus  [↑↓] move  [enter] select/edit  [/] search  [h] home  [space] play  [,/.] prev/next", width - 4)}
       </Text>
       <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit  [s/t] shuffle/repeat  [-/=] volume", width - 4)}</Text>
+      <Text color="white">{clipLine(getPlayerDeviceHint(player), width - 4)}</Text>
       <Text color={busy ? "yellow" : player.error ? "red" : "cyan"}>{clipLine(busy ? "working..." : statusLine, width - 4)}</Text>
     </Box>
   );

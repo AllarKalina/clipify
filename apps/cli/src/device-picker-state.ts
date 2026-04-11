@@ -8,14 +8,34 @@ export function describePlayerDevice(player: Pick<HomeSnapshot, "deviceName" | "
   }
 
   if (player.deviceStatus === "available" && player.deviceName) {
-    return `${player.deviceName}${suffix} ready`;
+    return `${player.deviceName}${suffix} ready elsewhere`;
   }
 
   if (player.deviceStatus === "restricted" && player.deviceName) {
     return `${player.deviceName}${suffix} restricted`;
   }
 
-  return "No Spotify device available";
+  return "No active Spotify device";
+}
+
+export function getPlayerDeviceHint(player: Pick<HomeSnapshot, "spotify" | "deviceName" | "deviceStatus">): string {
+  if (player.spotify !== "linked") {
+    return "Link Spotify to unlock device control.";
+  }
+
+  if (player.deviceStatus === "active" && player.deviceName) {
+    return `Controlling ${player.deviceName}.`;
+  }
+
+  if (player.deviceStatus === "available" && player.deviceName) {
+    return `${player.deviceName} is available, but playback is controlled elsewhere. Press [d] to transfer.`;
+  }
+
+  if (player.deviceStatus === "restricted" && player.deviceName) {
+    return `${player.deviceName} is visible, but Spotify will not allow remote control from Clipify.`;
+  }
+
+  return "No active Spotify device. Start playback in Spotify or press [d] to transfer.";
 }
 
 export function describeAvailableDevice(device: SpotifyDeviceSummary): string {

@@ -1,4 +1,4 @@
-import type { ApiClient, ApiClientError } from "@clipify/api-client";
+import type { ApiClient, ApiClientError, SpotifyDeviceSummary } from "@clipify/api-client";
 
 export type HomeSnapshot = {
   backend: "connected" | "offline";
@@ -73,6 +73,53 @@ export function createPendingAuthenticatedHomeSnapshot(): HomeSnapshot {
   return {
     ...createInitialHomeSnapshot(),
     backend: "connected"
+  };
+}
+
+function pickPrimaryDevice(devices: SpotifyDeviceSummary[]): SpotifyDeviceSummary | null {
+  return devices.find((device) => device.isActive) ?? devices.find((device) => !device.isRestricted) ?? devices[0] ?? null;
+}
+
+export function reconcilePlayerDevice(snapshot: HomeSnapshot, devices: SpotifyDeviceSummary[]): HomeSnapshot {
+  const activeDevice = devices.find((device) => device.isActive) ?? null;
+  const primaryDevice = pickPrimaryDevice(devices);
+
+  if (activeDevice) {
+    return {
+      ...snapshot,
+      deviceId: activeDevice.id,
+      deviceName: activeDevice.name,
+      deviceType: activeDevice.type,
+      deviceStatus: activeDevice.isRestricted ? "restricted" : "active",
+      supportsVolume: activeDevice.supportsVolume,
+      volumePercent: activeDevice.volumePercent
+    };
+  }
+
+  if (!primaryDevice) {
+    return {
+      ...snapshot,
+      deviceId: "",
+      deviceName: "",
+      deviceType: "",
+      deviceStatus: "none",
+      supportsVolume: false,
+      volumePercent: 0
+    };
+  }
+
+  if (snapshot.deviceStatus === "active" && snapshot.deviceName) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    deviceId: primaryDevice.id,
+    deviceName: primaryDevice.name,
+    deviceType: primaryDevice.type,
+    deviceStatus: primaryDevice.isRestricted ? "restricted" : "available",
+    supportsVolume: primaryDevice.supportsVolume,
+    volumePercent: primaryDevice.volumePercent
   };
 }
 

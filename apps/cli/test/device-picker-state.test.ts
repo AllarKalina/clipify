@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clampDeviceSelection, describeAvailableDevice, describePlayerDevice } from "../src/device-picker-state";
+import { clampDeviceSelection, describeAvailableDevice, describePlayerDevice, getPlayerDeviceHint } from "../src/device-picker-state";
 
 describe("device picker state", () => {
   test("describes player device states clearly", () => {
@@ -17,7 +17,7 @@ describe("device picker state", () => {
         deviceType: "Speaker",
         deviceStatus: "available"
       })
-    ).toBe("Living Room · speaker ready");
+    ).toBe("Living Room · speaker ready elsewhere");
 
     expect(
       describePlayerDevice({
@@ -25,7 +25,25 @@ describe("device picker state", () => {
         deviceType: "",
         deviceStatus: "none"
       })
-    ).toBe("No Spotify device available");
+    ).toBe("No active Spotify device");
+  });
+
+  test("describes player device hints clearly", () => {
+    expect(
+      getPlayerDeviceHint({
+        spotify: "linked",
+        deviceName: "Living Room",
+        deviceStatus: "available"
+      })
+    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [d] to transfer.");
+
+    expect(
+      getPlayerDeviceHint({
+        spotify: "linked",
+        deviceName: "",
+        deviceStatus: "none"
+      })
+    ).toBe("No active Spotify device. Start playback in Spotify or press [d] to transfer.");
   });
 
   test("describes available devices for picker rows", () => {

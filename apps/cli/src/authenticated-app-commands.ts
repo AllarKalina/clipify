@@ -6,6 +6,7 @@ import { openUrl } from "./browser";
 import {
   applyProgressTick,
   computeHomeSnapshot,
+  reconcilePlayerDevice,
   refreshPlayerSnapshot,
   type HomeSnapshot
 } from "./home-state";
@@ -79,6 +80,10 @@ export async function refreshAuthenticatedApp(
     try {
       const nextDevices = (await client.getSpotifyDevices()).items;
       dispatch({ type: "set-device-list", devices: nextDevices });
+      dispatch({
+        type: "replace-home-snapshot",
+        snapshot: reconcilePlayerDevice(next, nextDevices)
+      });
     } catch {}
 
     try {

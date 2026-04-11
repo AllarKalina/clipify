@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ApiClient } from "@clipify/api-client";
 import { ApiClientError } from "@clipify/api-client";
 import { refreshAuthenticatedApp } from "../src/authenticated-app-commands";
+import { getPlaybackFailureMessage } from "../src/authenticated-app-utils";
 import { createInitialAuthenticatedAppState, type AuthenticatedAppAction } from "../src/authenticated-app-state";
 
 function createClient(overrides: Partial<ApiClient>): ApiClient {
@@ -112,5 +113,77 @@ describe("authenticated app commands", () => {
       type: "set-status-line",
       statusLine: "Browse data incomplete: playlists: forbidden"
     });
+  });
+
+  test("refresh reconciles ready device details from the device list", async () => {
+    const initialState = createInitialAuthenticatedAppState("Restoring session...");
+    const actions: AuthenticatedAppAction[] = [];
+
+    await refreshAuthenticatedApp(
+      {
+        client: createClient({
+          getSpotifyCurrentlyPlaying: async () => ({
+            playbackState: "idle",
+            isPlaying: false,
+            trackName: "",
+            artistName: "",
+            albumName: "",
+            albumImageUrl: "",
+            deviceId: "",
+            deviceName: "",
+            deviceType: "",
+            deviceStatus: "none",
+            supportsVolume: false,
+            volumePercent: 0,
+            shuffleEnabled: false,
+            repeatMode: "off",
+            progressMs: 0,
+            durationMs: 0
+          }),
+          getSpotifyDevices: async () => ({
+            items: [
+              {
+                id: "device-2",
+                name: "Living Room",
+                type: "Speaker",
+                isActive: false,
+                isRestricted: false,
+                supportsVolume: true,
+                volumePercent: 35
+              }
+            ]
+          })
+        }),
+        dispatch(action) {
+          actions.push(action);
+        },
+        getState: () => initialState,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      "Refreshed"
+    );
+
+    const snapshots = actions.filter((action) => action.type === "replace-home-snapshot");
+    expect(snapshots).toHaveLength(2);
+    expect(snapshots.at(-1)).toEqual({
+      type: "replace-home-snapshot",
+      snapshot: expect.objectContaining({
+        deviceName: "Living Room",
+        deviceStatus: "available",
+        volumePercent: 35
+      })
+    });
+  });
+
+  test("maps no-device playback failures to actionable copy", () => {
+    expect(
+      getPlaybackFailureMessage(
+        new ApiClientError("No active Spotify device. Start playback in Spotify first.", 409, "/v1/spotify/me/player/play"),
+        "Started playback"
+      )
+    ).toBe("No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.");
   });
 });

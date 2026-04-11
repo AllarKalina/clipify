@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { ApiClient } from "@clipify/api-client";
 import { ApiClientError } from "@clipify/api-client";
-import { applyProgressTick, computeHomeSnapshot, refreshPlayerSnapshot, shouldBackgroundRefresh, shouldTickPlayback } from "../src/home-state";
+import {
+  applyProgressTick,
+  computeHomeSnapshot,
+  reconcilePlayerDevice,
+  refreshPlayerSnapshot,
+  shouldBackgroundRefresh,
+  shouldTickPlayback
+} from "../src/home-state";
 
 function createClient(overrides: Partial<ApiClient>): ApiClient {
   return {
@@ -247,5 +254,88 @@ describe("home state", () => {
     expect(getProfileCalls).toBe(0);
     expect(getRecentCalls).toBe(0);
     expect(getQueueCalls).toBe(0);
+  });
+
+  test("reconciles ready devices when no active playback device is reported", async () => {
+    const snapshot = await computeHomeSnapshot(
+      createClient({
+        getSpotifyCurrentlyPlaying: async () => ({
+          playbackState: "idle",
+          isPlaying: false,
+          trackName: "",
+          artistName: "",
+          albumName: "",
+          albumImageUrl: "",
+          deviceId: "",
+          deviceName: "",
+          deviceType: "",
+          deviceStatus: "none",
+          supportsVolume: false,
+          volumePercent: 0,
+          shuffleEnabled: false,
+          repeatMode: "off",
+          progressMs: 0,
+          durationMs: 0
+        })
+      })
+    );
+
+    const next = reconcilePlayerDevice(snapshot, [
+      {
+        id: "device-2",
+        name: "Living Room",
+        type: "Speaker",
+        isActive: false,
+        isRestricted: false,
+        supportsVolume: true,
+        volumePercent: 35
+      }
+    ]);
+
+    expect(next.deviceName).toBe("Living Room");
+    expect(next.deviceStatus).toBe("available");
+    expect(next.supportsVolume).toBeTrue();
+    expect(next.volumePercent).toBe(35);
+  });
+
+  test("reconciles active device from device list when playback endpoint is stale", async () => {
+    const snapshot = await computeHomeSnapshot(
+      createClient({
+        getSpotifyCurrentlyPlaying: async () => ({
+          playbackState: "paused",
+          isPlaying: false,
+          trackName: "Dreams",
+          artistName: "Fleetwood Mac",
+          albumName: "Rumours",
+          albumImageUrl: "https://i.scdn.co/image/rumours",
+          deviceId: "device-old",
+          deviceName: "Old Speaker",
+          deviceType: "Speaker",
+          deviceStatus: "available",
+          supportsVolume: false,
+          volumePercent: 0,
+          shuffleEnabled: false,
+          repeatMode: "off",
+          progressMs: 0,
+          durationMs: 257000
+        })
+      })
+    );
+
+    const next = reconcilePlayerDevice(snapshot, [
+      {
+        id: "device-3",
+        name: "MacBook Pro",
+        type: "Computer",
+        isActive: true,
+        isRestricted: false,
+        supportsVolume: true,
+        volumePercent: 60
+      }
+    ]);
+
+    expect(next.deviceId).toBe("device-3");
+    expect(next.deviceName).toBe("MacBook Pro");
+    expect(next.deviceStatus).toBe("active");
   });
 });
