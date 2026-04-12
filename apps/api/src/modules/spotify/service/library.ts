@@ -25,10 +25,14 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
     async getFeaturedPlaylists(userId) {
       context.requireConfigured();
 
-      const { response } = await context.fetchSpotifyWithRetry(
-        userId,
-        "https://api.spotify.com/v1/browse/featured-playlists?limit=8"
+      const featuredUrl = new URL("https://api.spotify.com/v1/browse/featured-playlists");
+      featuredUrl.searchParams.set("limit", "8");
+      featuredUrl.searchParams.set(
+        "fields",
+        "playlists(items(id,name,description,images,owner(display_name),items(total),uri))"
       );
+
+      const { response } = await context.fetchSpotifyWithRetry(userId, featuredUrl.toString());
 
       if (!response.ok) {
         const text = await response.text();
@@ -39,15 +43,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
 
       const payload = (await response.json()) as {
         playlists?: {
-          items?: Array<{
-            id?: string;
-            name?: string;
-            description?: string | null;
-            images?: Array<{ url?: string }>;
-            owner?: { display_name?: string | null };
-            tracks?: { total?: number };
-            uri?: string;
-          }>;
+          items?: Array<Parameters<typeof summarizePlaylist>[0]>;
         };
       };
 
@@ -63,7 +59,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
       playlistsUrl.searchParams.set("limit", "20");
       playlistsUrl.searchParams.set(
         "fields",
-        "items(id,name,description,images,owner(display_name),is_pinned,isPinned,pinned,tracks(total),uri)"
+        "items(id,name,description,images,owner(display_name),items(total),uri)"
       );
 
       const { response } = await context.fetchSpotifyWithRetry(userId, playlistsUrl.toString());
@@ -82,10 +78,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
           description?: string | null;
           images?: Array<{ url?: string }>;
           owner?: { display_name?: string | null };
-          is_pinned?: boolean | null;
-          isPinned?: boolean | null;
-          pinned?: boolean | null;
-          tracks?: { total?: number };
+          items?: { total?: number };
           uri?: string;
         }>;
       };
@@ -131,7 +124,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
       const playlistUrl = new URL(`https://api.spotify.com/v1/playlists/${playlistId}`);
       playlistUrl.searchParams.set(
         "fields",
-        "id,name,description,images,owner(display_name),is_pinned,isPinned,pinned,tracks(total),uri,items(total)"
+        "id,name,description,images,owner(display_name),uri,items(total)"
       );
 
       const { response } = await context.fetchSpotifyWithRetry(userId, playlistUrl.toString());
@@ -149,13 +142,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
         description?: string | null;
         images?: Array<{ url?: string }>;
         owner?: { display_name?: string | null };
-        is_pinned?: boolean | null;
-        isPinned?: boolean | null;
-        pinned?: boolean | null;
         items?: {
-          total?: number;
-        };
-        tracks?: {
           total?: number;
         };
         uri?: string;

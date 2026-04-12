@@ -20,7 +20,6 @@ read_when:
 - BFF error responses are JSON envelopes: `{ error: { code, message, hint? } }`.
 - `/v1/me` unauthorized responses follow the same structured envelope style (`{ error: { code, message } }`).
 - CLI BFF errors are normalized through typed application errors first, then status-aware fallback mapping for upstream `Response` failures.
-- `/v1/spotify/*` routes are not part of the supported surface.
 - Supported route families: `/v1/public/*`, `/v1/me`, `/v1/cli/*`, and explicit `/api/auth/*` endpoints (`sign-in/email`, `sign-up/email`, `sign-out`).
 - OpenAPI spec is available at `/openapi/json` (`/openapi` UI is non-production only).
 - API responses include `x-request-id`; OpenAPI should annotate route headers explicitly when the header is part of the contract.
@@ -28,6 +27,7 @@ read_when:
 - Elysia `fromTypes(...)` remains deferred until monorepo typegen becomes stable enough to generate clean docs without warnings.
 - Route-level rate limits may return `429` envelopes with code `RATE_LIMITED`.
 - Forwarded IP headers are ignored for rate-limit keying unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true`.
+- Spotify playlist payload handling is strict: playlist counts come from `items.total` and playlist item entries come from `items[].item`.
 
 ## Version Metadata Endpoint
 

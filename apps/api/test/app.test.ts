@@ -995,22 +995,4 @@ describe("app routes", () => {
     expect(body.action).toBe("play-context");
   });
 
-  test("returns 404 for removed spotify endpoint family", async () => {
-    const env = baseEnv();
-
-    const app = createApp({
-      env,
-      logger: createLogger(env),
-      auth: createAuthMock({
-        id: "u_123",
-        email: "a@example.com",
-        name: "Allar"
-      }) as never,
-      spotify: createSpotifyMock() as never,
-      checkReadiness: async () => true
-    });
-
-    const response = await app.handle(new Request("http://localhost/v1/spotify/me"));
-    expect(response.status).toBe(404);
-  });
 });

@@ -47,7 +47,7 @@ describe("spotify service search", () => {
                   description: "",
                   images: [],
                   owner: { display_name: "Allar" },
-                  tracks: { total: 12 },
+                  items: { total: 12 },
                   uri: "spotify:playlist:1"
                 }
               ]

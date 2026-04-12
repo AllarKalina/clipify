@@ -88,15 +88,6 @@ export type SpotifyDevicePayload = {
 };
 
 export type SpotifyPlaylistTrackEntry = {
-  track?: {
-    id?: string;
-    name?: string;
-    artists?: Array<{ name?: string }>;
-    album?: { name?: string };
-    uri?: string;
-    duration_ms?: number;
-    type?: string;
-  } | null;
   item?: {
     id?: string;
     name?: string;
@@ -109,7 +100,7 @@ export type SpotifyPlaylistTrackEntry = {
 };
 
 export type SpotifyPlaylistTrackPayload = SpotifyPlaylistTrackEntry | null;
-export type SpotifyPlayableTrackPayload = NonNullable<SpotifyPlaylistTrackEntry["track"]>;
+export type SpotifyPlayableTrackPayload = NonNullable<SpotifyPlaylistTrackEntry["item"]>;
 
 export type SpotifyPlaylistItemsPagePayload = {
   items?: SpotifyPlaylistTrackPayload[];
@@ -232,23 +223,17 @@ export function summarizePlaylist(item: {
   description?: string | null;
   images?: Array<{ url?: string }>;
   owner?: { display_name?: string | null };
-  is_pinned?: boolean | null;
-  isPinned?: boolean | null;
-  pinned?: boolean | null;
   items?: { total?: number };
-  tracks?: { total?: number };
   uri?: string;
 }): SpotifyPlaylistSummary {
-  const pinnedFlag = item.is_pinned ?? item.isPinned ?? item.pinned;
-
   return {
     id: item.id ?? "",
     name: item.name ?? "",
     description: item.description ?? "",
     imageUrl: item.images?.[0]?.url ?? "",
     ownerName: item.owner?.display_name ?? "",
-    isPinned: typeof pinnedFlag === "boolean" ? pinnedFlag : undefined,
-    trackCount: item.items?.total ?? item.tracks?.total ?? 0,
+    isPinned: undefined,
+    trackCount: item.items?.total ?? 0,
     uri: item.uri ?? ""
   };
 }
@@ -271,7 +256,7 @@ export function summarizeTrack(item: {
   };
 }
 
-function isPlayableTrack(track: SpotifyPlaylistTrackEntry["track"] | SpotifyPlaylistTrackEntry["item"]): track is SpotifyPlayableTrackPayload {
+function isPlayableTrack(track: SpotifyPlaylistTrackEntry["item"]): track is SpotifyPlayableTrackPayload {
   if (!track) {
     return false;
   }
@@ -281,7 +266,7 @@ function isPlayableTrack(track: SpotifyPlaylistTrackEntry["track"] | SpotifyPlay
 
 export function summarizePlaylistTracks(items: SpotifyPlaylistTrackPayload[] | undefined) {
   return (items ?? [])
-    .map((entry) => entry?.track ?? entry?.item ?? null)
+    .map((entry) => entry?.item ?? null)
     .filter(isPlayableTrack)
     .map((track) => summarizeTrack(track));
 }
@@ -292,7 +277,7 @@ export function buildPlaylistItemsUrl(playlistId: string, offset = 0) {
   url.searchParams.set("offset", String(offset));
   url.searchParams.set(
     "fields",
-    "items(item(id,name,artists(name),album(name),uri,duration_ms,type),track(id,name,artists(name),album(name),uri,duration_ms,type)),next"
+    "items(item(id,name,artists(name),album(name),uri,duration_ms,type)),next"
   );
   return url.toString();
 }

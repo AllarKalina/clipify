@@ -3,6 +3,125 @@ import { createSpotifyService } from "../src/modules/spotify/service";
 import { baseEnv, createLinkedSpotifyService, createMemoryStore, grantedScope } from "./spotify.service.test-support";
 
 describe("spotify service library", () => {
+  test("reads featured playlist counts from items.total", async () => {
+    const store = createMemoryStore();
+    await createLinkedSpotifyService({
+      store,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            scope: grantedScope,
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    let requestedUrl = "";
+    const service = createSpotifyService(baseEnv(), {
+      store,
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          playlists: {
+            items: [
+              {
+                id: "featured-1",
+                name: "Top Picks",
+                description: "curated",
+                images: [{ url: "https://i.scdn.co/image/featured-1" }],
+                owner: { display_name: "Spotify" },
+                items: { total: 17 },
+                uri: "spotify:playlist:featured-1"
+              }
+            ]
+          }
+        });
+      }
+    });
+
+    await expect(service.getFeaturedPlaylists("user-1")).resolves.toEqual({
+      items: [
+        {
+          id: "featured-1",
+          name: "Top Picks",
+          description: "curated",
+          imageUrl: "https://i.scdn.co/image/featured-1",
+          ownerName: "Spotify",
+          isPinned: undefined,
+          trackCount: 17,
+          uri: "spotify:playlist:featured-1"
+        }
+      ]
+    });
+
+    const decodedUrl = decodeURIComponent(requestedUrl);
+    expect(decodedUrl).toContain("items(total)");
+  });
+
+  test("reads playlist counts from items.total in /me/playlists responses", async () => {
+    const store = createMemoryStore();
+    await createLinkedSpotifyService({
+      store,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            scope: grantedScope,
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    let requestedUrl = "";
+    const service = createSpotifyService(baseEnv(), {
+      store,
+      fetchImpl: async (url) => {
+        requestedUrl = String(url);
+        return Response.json({
+          items: [
+            {
+              id: "playlist-1",
+              name: "Roadtrip",
+              description: "",
+              images: [],
+              owner: { display_name: "Allar" },
+              items: { total: 42 },
+              uri: "spotify:playlist:1"
+            }
+          ]
+        });
+      }
+    });
+
+    await expect(service.getPlaylists("user-1")).resolves.toEqual({
+      items: [
+        {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          isPinned: undefined,
+          trackCount: 42,
+          uri: "spotify:playlist:1"
+        }
+      ]
+    });
+    const decodedUrl = decodeURIComponent(requestedUrl);
+    expect(decodedUrl).toContain("items(total)");
+  });
+
   test("reads playlist detail tracks from the current items payload", async () => {
     const store = createMemoryStore();
     await createLinkedSpotifyService({
@@ -65,7 +184,7 @@ describe("spotify service library", () => {
             description: "",
             images: [],
             owner: { display_name: "Allar" },
-            tracks: { total: 3 },
+            items: { total: 3 },
             uri: "spotify:playlist:1"
           });
         }
@@ -94,77 +213,6 @@ describe("spotify service library", () => {
         }
       ]
     });
-  });
-
-  test("supports alternate playlist track payload shape", async () => {
-    const store = createMemoryStore();
-    await createLinkedSpotifyService({
-      store,
-      fetchImpl: async (url) => {
-        if (String(url).includes("/api/token")) {
-          return Response.json({
-            access_token: "access-1",
-            refresh_token: "refresh-1",
-            token_type: "Bearer",
-            scope: grantedScope,
-            expires_in: 3600
-          });
-        }
-
-        return Response.json({ id: "spotify-user-1" });
-      }
-    });
-
-    const service = createSpotifyService(baseEnv(), {
-      store,
-      fetchImpl: async (url) => {
-        if (String(url).includes("/playlists/playlist-1/items")) {
-          return Response.json({
-            items: [
-              {
-                track: {
-                  id: "track-1",
-                  name: "Dreams",
-                  artists: [{ name: "Fleetwood Mac" }],
-                  album: { name: "Rumours" },
-                  uri: "spotify:track:1",
-                  duration_ms: 257000,
-                  type: "track"
-                }
-              }
-            ],
-            next: null
-          });
-        }
-
-        return Response.json({
-          id: "playlist-1",
-          name: "Roadtrip",
-          description: "",
-          images: [],
-          owner: { display_name: "Allar" },
-          tracks: {
-            total: 1
-          },
-          uri: "spotify:playlist:1"
-        });
-      }
-    });
-
-    await expect(service.getPlaylist("user-1", "playlist-1")).resolves.toEqual(
-      expect.objectContaining({
-        tracks: [
-          {
-            id: "track-1",
-            trackName: "Dreams",
-            artistName: "Fleetwood Mac",
-            albumName: "Rumours",
-            uri: "spotify:track:1",
-            durationMs: 257000
-          }
-        ]
-      })
-    );
   });
 
   test("paginates playlist item responses until all tracks are loaded", async () => {
@@ -235,7 +283,7 @@ describe("spotify service library", () => {
           description: "",
           images: [],
           owner: { display_name: "Allar" },
-          tracks: { total: 2 },
+          items: { total: 2 },
           uri: "spotify:playlist:1"
         });
       }
@@ -252,7 +300,7 @@ describe("spotify service library", () => {
     );
   });
 
-  test("prefers items.total when summarizing playlist counts", async () => {
+  test("summarizes playlist counts from items.total", async () => {
     const store = createMemoryStore();
     await createLinkedSpotifyService({
       store,
@@ -285,7 +333,6 @@ describe("spotify service library", () => {
           images: [],
           owner: { display_name: "Allar" },
           items: { total: 119 },
-          tracks: { total: 0 },
           uri: "spotify:playlist:1"
         });
       }
