@@ -34,7 +34,7 @@ export const cliBffModels = {
     state: t.Optional(t.String()),
     error: t.Optional(t.String()),
     error_description: t.Optional(t.String())
-  }),
+  }, { additionalProperties: true }),
   [cliModelNames.authStartResponse]: t.Object({
     authorizeUrl: t.String(),
     state: t.String()

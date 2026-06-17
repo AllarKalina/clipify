@@ -752,6 +752,23 @@ describe("app routes", () => {
     expect(response.status).toBe(200);
   });
 
+  test("allows spotify-owned extra query fields on public callback route", async () => {
+    const env = baseEnv();
+
+    const app = createApp({
+      env,
+      logger: createLogger(env),
+      auth: createAuthMock(null) as never,
+      spotify: createSpotifyMock() as never,
+      checkReadiness: async () => true
+    });
+
+    const response = await app.handle(
+      new Request("http://localhost/v1/cli/auth/callback/public?code=code-1&state=state-1&iss=https%3A%2F%2Faccounts.spotify.com")
+    );
+    expect(response.status).toBe(200);
+  });
+
   test("escapes untrusted oauth callback values in html response", async () => {
     const env = baseEnv();
 
