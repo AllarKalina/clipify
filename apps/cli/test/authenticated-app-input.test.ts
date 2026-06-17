@@ -59,6 +59,23 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "none" });
   });
 
+  test("typing on the selected search row starts editing with that input", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      focusRegion: "content" as const,
+      contentIndex: 0,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "h", {})).toEqual({ type: "start-search-editing-with-input", value: "h" });
+    expect(resolveAuthenticatedIntent(state, "7", {})).toEqual({ type: "start-search-editing-with-input", value: "7" });
+    expect(resolveAuthenticatedIntent(state, "s", {})).toEqual({ type: "start-search-editing-with-input", value: "s" });
+  });
+
   test("active search exits through navigation intents", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
@@ -480,11 +497,33 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "none" });
   });
 
-  test("maps transport keys to intents", () => {
+  test("control keys require command prefix", () => {
     const state = createInitialAuthenticatedAppState("");
+
+    expect(resolveAuthenticatedIntent(state, "s", { super: true })).toEqual({ type: "activate-control-prefix" });
+    expect(resolveAuthenticatedIntent(state, " ", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, ",", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, ".", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, "d", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, "r", {})).toEqual({ type: "none" });
+  });
+
+  test("command prefix maps control keys to intents", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      controlPrefixActive: true
+    };
 
     expect(resolveAuthenticatedIntent(state, " ", {})).toEqual({ type: "toggle-playback" });
     expect(resolveAuthenticatedIntent(state, ",", {})).toEqual({ type: "previous-track" });
     expect(resolveAuthenticatedIntent(state, ".", {})).toEqual({ type: "next-track" });
+    expect(resolveAuthenticatedIntent(state, "s", {})).toEqual({ type: "toggle-shuffle", enabled: true });
+    expect(resolveAuthenticatedIntent(state, "t", {})).toEqual({ type: "cycle-repeat", mode: "context" });
+    expect(resolveAuthenticatedIntent(state, "d", {})).toEqual({ type: "open-device-picker" });
+    expect(resolveAuthenticatedIntent(state, "r", {})).toEqual({ type: "refresh" });
+    expect(resolveAuthenticatedIntent(state, "l", {})).toEqual({ type: "start-link" });
+    expect(resolveAuthenticatedIntent(state, "o", {})).toEqual({ type: "logout" });
+    expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "exit" });
   });
 });

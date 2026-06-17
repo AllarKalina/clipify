@@ -14,7 +14,10 @@ export type AuthenticatedIntent =
   | { type: "activate-sidebar-item" }
   | { type: "move-content-selection"; direction: "up" | "down" }
   | { type: "set-content-index"; contentIndex: number }
+  | { type: "activate-control-prefix" }
+  | { type: "clear-control-prefix" }
   | { type: "start-search-editing" }
+  | { type: "start-search-editing-with-input"; value: string }
   | { type: "stop-search-editing" }
   | { type: "submit-search-query" }
   | { type: "append-search-query"; value: string }
@@ -152,10 +155,16 @@ export function resolveAuthenticatedIntent(
     backspace?: boolean;
     delete?: boolean;
     tab?: boolean;
+    meta?: boolean;
+    super?: boolean;
   }
 ): AuthenticatedIntent {
   if (key.ctrl && input === "c") {
     return { type: "exit" };
+  }
+
+  if ((key.meta || key.super) && input === "s") {
+    return { type: "activate-control-prefix" };
   }
 
   if (state.busy) {
@@ -182,6 +191,72 @@ export function resolveAuthenticatedIntent(
     return { type: "none" };
   }
 
+  if (state.controlPrefixActive) {
+    if (key.escape) {
+      return { type: "clear-control-prefix" };
+    }
+
+    if (input === "q") {
+      return { type: "exit" };
+    }
+
+    if (input === "h") {
+      return { type: "go-home" };
+    }
+
+    if (input === "o") {
+      return { type: "logout" };
+    }
+
+    if (input === "d") {
+      return { type: "open-device-picker" };
+    }
+
+    if (input === "r") {
+      return { type: "refresh" };
+    }
+
+    if (input === " ") {
+      return { type: "toggle-playback" };
+    }
+
+    if (input === ",") {
+      return { type: "previous-track" };
+    }
+
+    if (input === ".") {
+      return { type: "next-track" };
+    }
+
+    if (input === "s") {
+      return { type: "toggle-shuffle", enabled: !state.homeSnapshot.shuffleEnabled };
+    }
+
+    if (input === "t") {
+      return { type: "cycle-repeat", mode: nextRepeatMode(state.homeSnapshot.repeatMode) };
+    }
+
+    if (input === "-" || input === "_") {
+      return {
+        type: "set-volume",
+        volumePercent: Math.max(0, state.homeSnapshot.volumePercent - 10)
+      };
+    }
+
+    if (input === "=" || input === "+") {
+      return {
+        type: "set-volume",
+        volumePercent: Math.min(100, state.homeSnapshot.volumePercent + 10)
+      };
+    }
+
+    if (input === "l") {
+      return { type: "start-link" };
+    }
+
+    return resolveAuthenticatedIntent({ ...state, controlPrefixActive: false }, input, key);
+  }
+
   if (state.searchEditing) {
     if (key.return) {
       return { type: "submit-search-query" };
@@ -195,7 +270,7 @@ export function resolveAuthenticatedIntent(
       return { type: "trim-search-query" };
     }
 
-    if (input && !key.ctrl) {
+    if (input && !key.ctrl && !key.meta && !key.super) {
       return { type: "append-search-query", value: input };
     }
 
@@ -206,28 +281,12 @@ export function resolveAuthenticatedIntent(
     return { type: "none" };
   }
 
-  if (input === "q") {
-    return { type: "exit" };
-  }
-
   if (key.tab) {
     return { type: "toggle-focus" };
   }
 
-  if (input === "h") {
-    return { type: "go-home" };
-  }
-
   if (key.escape && state.mainView !== "home") {
     return { type: "go-home" };
-  }
-
-  if (input === "o") {
-    return { type: "logout" };
-  }
-
-  if (input === "d") {
-    return { type: "open-device-picker" };
   }
 
   if (state.focusRegion === "sidebar") {
@@ -297,48 +356,10 @@ export function resolveAuthenticatedIntent(
     if (key.return && selectSelectedItem(state)) {
       return { type: "activate-selected-item" };
     }
-  }
 
-  if (input === "r") {
-    return { type: "refresh" };
-  }
-
-  if (input === " ") {
-    return { type: "toggle-playback" };
-  }
-
-  if (input === ",") {
-    return { type: "previous-track" };
-  }
-
-  if (input === ".") {
-    return { type: "next-track" };
-  }
-
-  if (input === "s") {
-    return { type: "toggle-shuffle", enabled: !state.homeSnapshot.shuffleEnabled };
-  }
-
-  if (input === "t") {
-    return { type: "cycle-repeat", mode: nextRepeatMode(state.homeSnapshot.repeatMode) };
-  }
-
-  if (input === "-" || input === "_") {
-    return {
-      type: "set-volume",
-      volumePercent: Math.max(0, state.homeSnapshot.volumePercent - 10)
-    };
-  }
-
-  if (input === "=" || input === "+") {
-    return {
-      type: "set-volume",
-      volumePercent: Math.min(100, state.homeSnapshot.volumePercent + 10)
-    };
-  }
-
-  if (input === "l") {
-    return { type: "start-link" };
+    if (input && !key.ctrl && !key.meta && !key.super && selectCanStartSearchEditing(state)) {
+      return { type: "start-search-editing-with-input", value: input };
+    }
   }
 
   return { type: "none" };

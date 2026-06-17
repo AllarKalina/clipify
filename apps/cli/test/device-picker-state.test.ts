@@ -35,7 +35,7 @@ describe("device picker state", () => {
         deviceName: "Living Room",
         deviceStatus: "available"
       })
-    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [d] to transfer.");
+    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [cmd+s] then [d] to transfer.");
 
     expect(
       getPlayerDeviceHint({
@@ -43,7 +43,7 @@ describe("device picker state", () => {
         deviceName: "",
         deviceStatus: "none"
       })
-    ).toBe("No active Spotify device. Start playback in Spotify or press [d] to transfer.");
+    ).toBe("No active Spotify device. Start playback in Spotify or press [cmd+s] then [d] to transfer.");
 
     expect(
       getPlayerDeviceHint({
@@ -51,7 +51,7 @@ describe("device picker state", () => {
         deviceName: "",
         deviceStatus: "none"
       })
-    ).toBe("Spotify permissions changed. Press [l] to re-link and unlock Home and library.");
+    ).toBe("Spotify permissions changed. Press [cmd+s] then [l] to re-link and unlock Home and library.");
   });
 
   test("describes available devices for picker rows", () => {

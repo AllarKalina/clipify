@@ -152,7 +152,7 @@ export function AppPageBody({
           {clipLine(
             linkPending
               ? "Completing Spotify re-link..."
-              : "Spotify permissions changed. Press [l] to re-link and restore Home, search, and your library.",
+              : "Spotify permissions changed. Press [cmd+s] then [l] to re-link and restore Home, search, and your library.",
             contentWidth
           )}
         </Text>
@@ -161,7 +161,7 @@ export function AppPageBody({
           {clipLine(
             linkPending
               ? "Finish Spotify link to unlock Home and library."
-              : "Link Spotify with [l] to unlock search, quick launch, and your library.",
+              : "Link Spotify with [cmd+s] then [l] to unlock search, quick launch, and your library.",
             contentWidth
           )}
         </Text>

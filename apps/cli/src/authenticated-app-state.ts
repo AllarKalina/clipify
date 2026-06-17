@@ -37,6 +37,7 @@ export type AuthenticatedAppState = {
   contentIndex: number;
   browseState: ShellBrowseState;
   searchEditing: boolean;
+  controlPrefixActive: boolean;
   linkFlow: LinkFlow | null;
   statusLine: string;
   busy: boolean;
@@ -57,6 +58,7 @@ export type AuthenticatedAppAction =
   | { type: "move-content-selection"; direction: "up" | "down" }
   | { type: "set-content-index"; contentIndex: number }
   | { type: "set-search-editing"; searchEditing: boolean }
+  | { type: "set-control-prefix-active"; controlPrefixActive: boolean }
   | { type: "set-search-query"; searchQuery: string }
   | { type: "reset-search" }
   | { type: "submit-search-query" }
@@ -126,6 +128,7 @@ export function createInitialAuthenticatedAppState(
     contentIndex: 0,
     browseState: createInitialShellBrowseState(pinnedPlaylistNames),
     searchEditing: false,
+    controlPrefixActive: false,
     linkFlow: null,
     statusLine: initialStatusLine,
     busy: false,
@@ -201,6 +204,8 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
       };
     case "set-search-editing":
       return { ...state, searchEditing: action.searchEditing };
+    case "set-control-prefix-active":
+      return { ...state, controlPrefixActive: action.controlPrefixActive };
     case "set-search-query": {
       return withBrowseState(
         state,

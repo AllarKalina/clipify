@@ -235,7 +235,7 @@ export function buildRelinkRequiredSidebarItems(): ContentItem[] {
     {
       id: "library-relink",
       title: "Spotify re-link required",
-      subtitle: "Press [l] to refresh permissions",
+      subtitle: "Press [cmd+s] then [l] to refresh permissions",
       meta: "library locked",
       action: { type: "noop" } as const
     }

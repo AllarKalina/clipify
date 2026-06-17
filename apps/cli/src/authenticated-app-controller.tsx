@@ -104,6 +104,7 @@ export function AuthenticatedAppController({
       busy={state.busy}
       statusLine={state.statusLine}
       searchEditing={state.searchEditing}
+      controlPrefixActive={state.controlPrefixActive}
       linkPending={Boolean(state.linkFlow)}
       devicePickerOpen={state.devicePicker.open}
       devicePickerDevices={state.devicePicker.devices}

@@ -262,7 +262,7 @@ describe("authenticated app commands", () => {
     const statusActions = actions.filter((action) => action.type === "set-status-line");
     expect(statusActions.at(-1)).toEqual({
       type: "set-status-line",
-      statusLine: "Spotify returned partial data. Press [r] to refresh."
+      statusLine: "Spotify returned partial data. Press [cmd+s] then [r] to refresh."
     });
   });
 
@@ -352,7 +352,7 @@ describe("authenticated app commands", () => {
         new ApiClientError("No active Spotify device. Start playback in Spotify first.", 409, "/v1/cli/player/action"),
         "Started playback"
       )
-    ).toBe("No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.");
+    ).toBe("No active Spotify device. Press [cmd+s] then [d] to transfer playback, or start playback in Spotify first.");
   });
 
   test("maps no-device playback failures with available device context", () => {
@@ -365,7 +365,7 @@ describe("authenticated app commands", () => {
           deviceStatus: "available"
         }
       )
-    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [d] to transfer.");
+    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [cmd+s] then [d] to transfer.");
   });
 
   test("refresh logs out on unauthorized bootstrap", async () => {

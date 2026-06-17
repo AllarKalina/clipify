@@ -37,6 +37,10 @@ export function handleAuthenticatedIntent({
   onExit,
   playerModeMutationsInFlight
 }: HandleAuthenticatedIntentArgs): void {
+  if (state.controlPrefixActive && intent.type !== "activate-control-prefix") {
+    dispatch({ type: "set-control-prefix-active", controlPrefixActive: false });
+  }
+
   switch (intent.type) {
     case "exit":
       onExit();
@@ -93,15 +97,30 @@ export function handleAuthenticatedIntent({
       }
       dispatch({ type: "set-content-index", contentIndex: intent.contentIndex });
       return;
+    case "activate-control-prefix":
+      dispatch({ type: "set-control-prefix-active", controlPrefixActive: true });
+      return;
+    case "clear-control-prefix":
+      dispatch({ type: "set-control-prefix-active", controlPrefixActive: false });
+      return;
     case "start-search-editing":
       dispatch({ type: "set-focus-region", focusRegion: "content" });
       dispatch({ type: "set-content-index", contentIndex: 0 });
       dispatch({ type: "set-search-editing", searchEditing: true });
       return;
+    case "start-search-editing-with-input":
+      dispatch({ type: "set-focus-region", focusRegion: "content" });
+      dispatch({ type: "set-content-index", contentIndex: 0 });
+      dispatch({ type: "set-search-editing", searchEditing: true });
+      dispatch({
+        type: "set-search-query",
+        searchQuery: `${state.browseState.searchQuery}${intent.value}`
+      });
+      return;
     case "relink-required":
       dispatch({
         type: "set-status-line",
-        statusLine: "Spotify permissions changed. Press [l] to re-link before using Home or search."
+        statusLine: "Spotify permissions changed. Press [cmd+s] then [l] to re-link before using Home or search."
       });
       return;
     case "stop-search-editing":

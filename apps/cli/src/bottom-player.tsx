@@ -13,6 +13,7 @@ type BottomPlayerProps = {
   mainView: MainView;
   focusRegion: AppFocusRegion;
   linkPending: boolean;
+  controlPrefixActive: boolean;
 };
 
 export function BottomPlayer({
@@ -22,7 +23,8 @@ export function BottomPlayer({
   busy,
   mainView,
   focusRegion,
-  linkPending
+  linkPending,
+  controlPrefixActive
 }: BottomPlayerProps) {
   const leftWidth = Math.floor(width * 0.35);
   const rightWidth = Math.floor(width * 0.25);
@@ -61,9 +63,16 @@ export function BottomPlayer({
         </Text>
       </Box>
       <Text color="white">
-        {clipLine("[tab] focus  [↑↓] move  [←→] lateral  [enter] select/edit  [/] search  [h] home  [space] play  [,/.] prev/next", width - 4)}
+        {clipLine("[tab] focus  [↑↓] move  [←→] lateral  [enter] select/search  [/] search", width - 4)}
       </Text>
-      <Text color="white">{clipLine("[d] devices  [r] refresh  [l] link  [o] logout  [q] quit  [s/t] shuffle/repeat  [-/=] volume", width - 4)}</Text>
+      <Text color={controlPrefixActive ? "green" : "white"} bold={controlPrefixActive}>
+        {clipLine(
+          controlPrefixActive
+            ? "cmd+s active: [space] play  [,/.] prev/next  [s/t] modes  [-/=] volume  [d/r/l/o/q/h] app"
+            : "[cmd+s] controls: play, prev/next, modes, volume, devices, refresh, link, logout, quit, home",
+          width - 4
+        )}
+      </Text>
       <Text color="white">{clipLine(getPlayerDeviceHint(player), width - 4)}</Text>
       <Text color={busy ? "yellow" : player.error ? "red" : "cyan"}>{clipLine(busy ? "working..." : statusLine, width - 4)}</Text>
     </Box>

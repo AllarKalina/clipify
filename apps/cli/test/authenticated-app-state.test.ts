@@ -20,6 +20,22 @@ describe("authenticated app state", () => {
     expect(next.searchEditing).toBeFalse();
   });
 
+  test("control prefix can be armed and cleared", () => {
+    const armed = authenticatedAppReducer(createInitialAuthenticatedAppState(""), {
+      type: "set-control-prefix-active",
+      controlPrefixActive: true
+    });
+
+    expect(armed.controlPrefixActive).toBeTrue();
+
+    const cleared = authenticatedAppReducer(armed, {
+      type: "set-control-prefix-active",
+      controlPrefixActive: false
+    });
+
+    expect(cleared.controlPrefixActive).toBeFalse();
+  });
+
   test("device list clamps selected index", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),

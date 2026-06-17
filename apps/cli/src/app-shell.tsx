@@ -23,6 +23,7 @@ type AppShellProps = {
   busy: boolean;
   statusLine: string;
   searchEditing: boolean;
+  controlPrefixActive: boolean;
   linkPending: boolean;
   devicePickerOpen: boolean;
   devicePickerDevices: SpotifyDeviceSummary[];
@@ -82,6 +83,7 @@ export function AuthenticatedShell(props: AppShellProps) {
           mainView={props.mainView}
           focusRegion={props.focusRegion}
           linkPending={props.linkPending}
+          controlPrefixActive={props.controlPrefixActive}
         />
       </Box>
       {props.devicePickerOpen ? (

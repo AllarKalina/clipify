@@ -29,7 +29,7 @@ function formatBootstrapWarning(warning: string): string {
     return warning;
   }
 
-  return "Spotify returned partial data. Press [r] to refresh.";
+  return "Spotify returned partial data. Press [cmd+s] then [r] to refresh.";
 }
 
 function mapCliSnapshotToHome(
@@ -133,7 +133,7 @@ export async function refreshAuthenticatedApp(
       type: "set-status-line",
       statusLine:
         next.spotify === "relink-required"
-          ? "Spotify permissions changed. Press [l] to re-link."
+          ? "Spotify permissions changed. Press [cmd+s] then [l] to re-link."
           : formatBootstrapWarning(bootstrap.warning) || successLine
     });
     dispatch({ type: "set-busy", busy: false });

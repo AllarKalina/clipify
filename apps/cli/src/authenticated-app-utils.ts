@@ -21,14 +21,14 @@ type PlaybackFailureContext = Pick<HomeSnapshot, "deviceName" | "deviceStatus">;
 
 function getNoActiveDeviceMessage(player?: PlaybackFailureContext): string {
   if (player?.deviceStatus === "available" && player.deviceName) {
-    return `${player.deviceName} is available, but playback is controlled elsewhere. Press [d] to transfer.`;
+    return `${player.deviceName} is available, but playback is controlled elsewhere. Press [cmd+s] then [d] to transfer.`;
   }
 
   if (player?.deviceStatus === "restricted" && player.deviceName) {
-    return `${player.deviceName} is restricted. Pick a different device with [d].`;
+    return `${player.deviceName} is restricted. Pick a different device with [cmd+s] then [d].`;
   }
 
-  return "No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.";
+  return "No active Spotify device. Press [cmd+s] then [d] to transfer playback, or start playback in Spotify first.";
 }
 
 export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string, player?: PlaybackFailureContext): string {
@@ -38,7 +38,7 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string,
   }
 
   if (apiError.code === "RELINK_REQUIRED") {
-    return "Playback control needs a fresh Spotify re-link. Press [l].";
+    return "Playback control needs a fresh Spotify re-link. Press [cmd+s] then [l].";
   }
 
   if (apiError.code === "PREMIUM_REQUIRED") {
@@ -50,11 +50,11 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string,
   }
 
   if (apiError.code === "DEVICE_RESTRICTED") {
-    return "Playback is restricted on the current Spotify device. Pick a different device with [d].";
+    return "Playback is restricted on the current Spotify device. Pick a different device with [cmd+s] then [d].";
   }
 
   if (apiError.status === 403 && apiError.message.includes("fresh Spotify re-link")) {
-    return "Playback control needs a fresh Spotify re-link. Press [l].";
+    return "Playback control needs a fresh Spotify re-link. Press [cmd+s] then [l].";
   }
 
   if (apiError.status === 403 && apiError.message.toLowerCase().includes("premium")) {
@@ -66,7 +66,7 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string,
   }
 
   if (apiError.status === 409 && apiError.message.toLowerCase().includes("restricted")) {
-    return "Playback is restricted on the current Spotify device. Pick a different device with [d].";
+    return "Playback is restricted on the current Spotify device. Pick a different device with [cmd+s] then [d].";
   }
 
   return apiError.message.replace(/^Request failed for [^:]+:\s*\d+\s*/u, "") || `${fallbackLabel} failed`;
