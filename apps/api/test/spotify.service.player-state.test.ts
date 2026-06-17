@@ -61,6 +61,9 @@ describe("spotify service player state", () => {
           shuffle_state: true,
           repeat_state: "context",
           progress_ms: 120000,
+          context: {
+            uri: "spotify:playlist:1"
+          },
           device: {
             id: "device-1",
             is_active: true,
@@ -91,6 +94,7 @@ describe("spotify service player state", () => {
     expect(result.deviceName).toBe("MacBook Pro");
     expect(result.shuffleEnabled).toBeTrue();
     expect(result.repeatMode).toBe("context");
+    expect(result.contextUri).toBe("spotify:playlist:1");
     expect(result.volumePercent).toBe(60);
     expect(result.durationMs).toBe(257000);
     expect(currentlyPlayingCalls).toBe(1);

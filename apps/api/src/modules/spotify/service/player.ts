@@ -177,6 +177,7 @@ export function createSpotifyPlayerService(context: SpotifyServiceContext): Spot
           artistName: "",
           albumName: "",
           albumImageUrl: "",
+          contextUri: "",
           ...baseDevice,
           progressMs: 0,
           durationMs: 0
@@ -210,6 +211,9 @@ export function createSpotifyPlayerService(context: SpotifyServiceContext): Spot
           artists?: { name?: string }[];
           album?: { name?: string; images?: { url?: string }[] };
         };
+        context?: {
+          uri?: string | null;
+        } | null;
       };
 
       const currentDevice = payload.device ? summarizeDevice(payload.device) : null;
@@ -231,6 +235,7 @@ export function createSpotifyPlayerService(context: SpotifyServiceContext): Spot
         artistName: payload.item?.artists?.[0]?.name ?? "",
         albumName: payload.item?.album?.name ?? "",
         albumImageUrl: payload.item?.album?.images?.[0]?.url ?? "",
+        contextUri: payload.context?.uri ?? "",
         deviceId: resolvedDevice.deviceId,
         deviceName: resolvedDevice.deviceName,
         deviceType: resolvedDevice.deviceType,

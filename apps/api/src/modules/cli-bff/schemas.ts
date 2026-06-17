@@ -122,6 +122,7 @@ export const cliBffModels = {
     trackName: t.String(),
     artistName: t.String(),
     albumName: t.String(),
+    contextUri: t.String(),
     progressMs: t.Number(),
     durationMs: t.Number(),
     queueStatus: t.Union([t.Literal("ready"), t.Literal("no-device"), t.Literal("relink-required"), t.Literal("unavailable")]),

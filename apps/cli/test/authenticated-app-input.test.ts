@@ -285,7 +285,7 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { upArrow: true })).toEqual({ type: "set-content-index", contentIndex: 0 });
   });
 
-  test("up on second item jumps straight to search", () => {
+  test("playlist detail up moves from second track to first track", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
@@ -336,10 +336,14 @@ describe("authenticated app input", () => {
       }
     };
 
-    expect(resolveAuthenticatedIntent(state, "", { upArrow: true })).toEqual({ type: "set-content-index", contentIndex: 0 });
+    expect(resolveAuthenticatedIntent(state, "", { upArrow: true })).toEqual({ type: "move-content-selection", direction: "up" });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 1 }, "", { upArrow: true })).toEqual({
+      type: "set-content-index",
+      contentIndex: 0
+    });
   });
 
-  test("down on second-to-last item is a no-op", () => {
+  test("playlist detail down can reach the last track", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
@@ -398,7 +402,8 @@ describe("authenticated app input", () => {
       }
     };
 
-    expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "move-content-selection", direction: "down" });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 4 }, "", { downArrow: true })).toEqual({ type: "none" });
   });
 
   test("control keys require command prefix", () => {

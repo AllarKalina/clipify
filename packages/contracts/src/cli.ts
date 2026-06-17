@@ -60,6 +60,7 @@ export type CliBootstrapHome = {
   trackName: string;
   artistName: string;
   albumName: string;
+  contextUri: string;
   progressMs: number;
   durationMs: number;
   queueStatus: CliQueueStatus;

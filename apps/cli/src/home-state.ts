@@ -18,6 +18,7 @@ export type HomeSnapshot = {
   trackName: string;
   artistName: string;
   albumName: string;
+  contextUri: string;
   progressMs: number;
   durationMs: number;
   queueStatus: "ready" | "no-device" | "relink-required" | "unavailable";
@@ -60,6 +61,7 @@ export function createInitialHomeSnapshot(): HomeSnapshot {
     trackName: "",
     artistName: "",
     albumName: "",
+    contextUri: "",
     progressMs: 0,
     durationMs: 0,
     queueStatus: "ready",

@@ -17,6 +17,7 @@ read_when:
 
 - CLI integration contract is the `/v1/cli/*` surface.
 - Lightweight player polling is served by `GET /v1/cli/player/snapshot`; full browse/library hydration remains on `GET /v1/cli/bootstrap`.
+- CLI player snapshots include `home.contextUri`, the current Spotify context URI when one is available, or an empty string.
 - BFF error responses are JSON envelopes: `{ error: { code, message, hint? } }`.
 - `/v1/me` unauthorized responses follow the same structured envelope style (`{ error: { code, message } }`).
 - CLI BFF errors are normalized through typed application errors first, then status-aware fallback mapping for upstream `Response` failures.

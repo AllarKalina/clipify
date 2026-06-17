@@ -339,7 +339,8 @@ export function resolveAuthenticatedIntent(
 
     if (key.upArrow) {
       const lastIndex = getMainItemCount(state) - 1;
-      if (lastIndex >= 1 && state.contentIndex <= 2) {
+      const searchJumpThreshold = state.mainView === "home" ? 2 : 1;
+      if (lastIndex >= 1 && state.contentIndex <= searchJumpThreshold) {
         return { type: "set-content-index", contentIndex: 0 };
       }
 
@@ -352,7 +353,8 @@ export function resolveAuthenticatedIntent(
 
     if (key.downArrow) {
       const lastIndex = getMainItemCount(state) - 1;
-      if (lastIndex >= 1 && state.contentIndex >= Math.max(1, lastIndex - 1)) {
+      const lastReachableIndex = state.mainView === "home" ? Math.max(1, lastIndex - 1) : lastIndex;
+      if (lastIndex >= 1 && state.contentIndex >= lastReachableIndex) {
         return { type: "none" };
       }
 

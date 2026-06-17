@@ -53,6 +53,7 @@ function mapCliSnapshotToHome(
     trackName: snapshotHome.trackName,
     artistName: snapshotHome.artistName,
     albumName: snapshotHome.albumName,
+    contextUri: snapshotHome.contextUri,
     progressMs: snapshotHome.progressMs,
     durationMs: snapshotHome.durationMs,
     queueStatus: snapshotHome.queueStatus,
@@ -379,6 +380,13 @@ export function executeContentAction(
   }
 
   if (action.type === "play-and-open-playlist") {
+    const alreadyPlayingContext =
+      getState().homeSnapshot.playbackState === "playing" && getState().homeSnapshot.contextUri === action.uri;
+    if (alreadyPlayingContext) {
+      openPlaylistDetail(context, action.playlistId);
+      return;
+    }
+
     openPlaylistDetail(context, action.playlistId, { manageBusy: false, showSuccessStatus: false });
     runPlaybackAction(context, "Started playlist", (targetClient) =>
       targetClient.runCliPlayerAction({ action: "play-context", contextUri: action.uri })

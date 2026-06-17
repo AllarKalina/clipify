@@ -24,6 +24,7 @@ export type SpotifyCurrentlyPlayingResponse = {
   artistName: string;
   albumName: string;
   albumImageUrl: string;
+  contextUri: string;
   deviceId: string;
   deviceName: string;
   deviceType: string;

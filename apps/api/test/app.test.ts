@@ -164,6 +164,7 @@ function createSpotifyMock() {
         artistName: "Fleetwood Mac",
         albumName: "Rumours",
         albumImageUrl: "https://i.scdn.co/image/rumours",
+        contextUri: "spotify:playlist:1",
         deviceId: "device-1",
         deviceName: "MacBook Pro",
         deviceType: "Computer",
