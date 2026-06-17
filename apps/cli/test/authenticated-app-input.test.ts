@@ -66,7 +66,7 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "activate-selected-item" });
   });
 
-  test("escape returns playlist detail content to home", () => {
+  test("escape closes playlist detail only when content is focused", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
@@ -79,7 +79,8 @@ describe("authenticated app input", () => {
       }
     };
 
-    expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "go-home" });
+    expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "close-playlist-detail" });
+    expect(resolveAuthenticatedIntent({ ...state, focusRegion: "sidebar" as const }, "", { escape: true })).toEqual({ type: "none" });
   });
 
   test("sidebar arrows navigate library entries", () => {

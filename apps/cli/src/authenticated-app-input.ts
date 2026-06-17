@@ -25,6 +25,7 @@ export type AuthenticatedIntent =
   | { type: "trim-search-query-word" }
   | { type: "clear-search-query" }
   | { type: "go-home" }
+  | { type: "close-playlist-detail" }
   | { type: "logout" }
   | { type: "open-device-picker" }
   | { type: "refresh" }
@@ -303,7 +304,11 @@ export function resolveAuthenticatedIntent(
     return { type: "toggle-focus" };
   }
 
-  if (key.escape && state.mainView !== "home") {
+  if (key.escape && state.mainView === "playlist-detail" && state.focusRegion === "content") {
+    return { type: "close-playlist-detail" };
+  }
+
+  if (key.escape && state.mainView !== "home" && state.mainView !== "playlist-detail") {
     return { type: "go-home" };
   }
 

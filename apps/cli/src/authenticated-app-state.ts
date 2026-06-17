@@ -28,6 +28,13 @@ export type DevicePickerState = {
   selectedIndex: number;
 };
 
+export type PlaylistReturnTarget = {
+  mainView: Exclude<MainView, "playlist-detail">;
+  focusRegion: AppFocusRegion;
+  sidebarIndex: number;
+  contentIndex: number;
+};
+
 export type AuthenticatedAppState = {
   homeSnapshot: HomeSnapshot;
   progressTickMs: number;
@@ -35,6 +42,7 @@ export type AuthenticatedAppState = {
   focusRegion: AppFocusRegion;
   sidebarIndex: number;
   contentIndex: number;
+  playlistReturnTarget: PlaylistReturnTarget | null;
   browseState: ShellBrowseState;
   searchEditing: boolean;
   controlPrefixActive: boolean;
@@ -69,6 +77,7 @@ export type AuthenticatedAppAction =
   | { type: "patch-browse-state"; patch: Partial<ShellBrowseState> }
   | { type: "open-liked-tracks" }
   | { type: "open-playlist-detail"; detail: PlaylistDetail }
+  | { type: "close-playlist-detail" }
   | { type: "open-device-picker" }
   | { type: "close-device-picker" }
   | { type: "set-device-picker-loading"; loading: boolean }
@@ -115,6 +124,24 @@ function withBrowseState(state: AuthenticatedAppState, browseState: ShellBrowseS
   };
 }
 
+function getPlaylistReturnTarget(state: AuthenticatedAppState): PlaylistReturnTarget {
+  if (state.mainView === "playlist-detail") {
+    return {
+      mainView: state.playlistReturnTarget?.mainView ?? "home",
+      focusRegion: state.focusRegion,
+      sidebarIndex: state.sidebarIndex,
+      contentIndex: state.playlistReturnTarget?.contentIndex ?? 0
+    };
+  }
+
+  return {
+    mainView: state.mainView,
+    focusRegion: state.focusRegion,
+    sidebarIndex: state.sidebarIndex,
+    contentIndex: state.contentIndex
+  };
+}
+
 export function createInitialAuthenticatedAppState(
   initialStatusLine: string,
   pinnedPlaylistNames: string[] = []
@@ -126,6 +153,7 @@ export function createInitialAuthenticatedAppState(
     focusRegion: "content",
     sidebarIndex: 0,
     contentIndex: 0,
+    playlistReturnTarget: null,
     browseState: createInitialShellBrowseState(pinnedPlaylistNames),
     searchEditing: false,
     controlPrefixActive: false,
@@ -178,6 +206,7 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ...state,
         mainView: action.mainView,
         contentIndex: 0,
+        playlistReturnTarget: action.mainView === "playlist-detail" ? state.playlistReturnTarget : null,
         searchEditing: false
       };
     case "set-focus-region":
@@ -319,8 +348,32 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ),
         mainView: "playlist-detail",
         focusRegion: "content",
-        contentIndex: action.detail.tracks.length > 0 ? 1 : 0
+        contentIndex: action.detail.tracks.length > 0 ? 1 : 0,
+        playlistReturnTarget: getPlaylistReturnTarget(state)
       };
+    case "close-playlist-detail": {
+      const target =
+        state.playlistReturnTarget ??
+        ({
+          mainView: "home",
+          focusRegion: "content",
+          sidebarIndex: state.sidebarIndex,
+          contentIndex: 0
+        } satisfies PlaylistReturnTarget);
+
+      return withBrowseState(
+        {
+          ...state,
+          mainView: target.mainView,
+          focusRegion: target.focusRegion,
+          sidebarIndex: target.sidebarIndex,
+          contentIndex: target.contentIndex,
+          playlistReturnTarget: null,
+          searchEditing: false
+        },
+        state.browseState
+      );
+    }
     case "open-device-picker":
       return {
         ...state,

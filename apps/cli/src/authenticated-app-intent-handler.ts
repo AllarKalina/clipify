@@ -91,6 +91,9 @@ export function handleAuthenticatedIntent({
       dispatch({ type: "set-main-view", mainView: "home" });
       dispatch({ type: "set-focus-region", focusRegion: "content" });
       return;
+    case "close-playlist-detail":
+      dispatch({ type: "close-playlist-detail" });
+      return;
     case "move-content-selection":
       leaveSearchEditing(state, dispatch);
       dispatch({ type: "move-content-selection", direction: intent.direction });

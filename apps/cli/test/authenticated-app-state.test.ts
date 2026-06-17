@@ -126,7 +126,113 @@ describe("authenticated app state", () => {
 
     expect(next.mainView).toBe("playlist-detail");
     expect(next.contentIndex).toBe(1);
+    expect(next.playlistReturnTarget).toEqual({
+      mainView: "home",
+      focusRegion: "content",
+      sidebarIndex: 0,
+      contentIndex: 3
+    });
     expect(next.browseState.playlistDetail?.name).toBe("Roadtrip");
+  });
+
+  test("closing playlist detail restores the quick launch selection", () => {
+    const playlist = {
+      id: "playlist-1",
+      name: "Roadtrip",
+      description: "",
+      imageUrl: "",
+      ownerName: "Allar",
+      trackCount: 1,
+      uri: "spotify:playlist:1",
+      tracks: [
+        {
+          id: "track-1",
+          trackName: "Dreams",
+          artistName: "Fleetwood Mac",
+          albumName: "Rumours",
+          uri: "spotify:track:1",
+          durationMs: 257000
+        }
+      ]
+    };
+    const opened = authenticatedAppReducer(
+      {
+        ...createInitialAuthenticatedAppState(""),
+        mainView: "home" as const,
+        focusRegion: "content" as const,
+        contentIndex: 4,
+        homeSnapshot: {
+          ...createInitialAuthenticatedAppState("").homeSnapshot,
+          spotify: "linked" as const
+        },
+        browseState: {
+          ...createInitialAuthenticatedAppState("").browseState,
+          playlists: [1, 2, 3, 4].map((index) => ({
+            id: `playlist-${index}`,
+            name: `Playlist ${index}`,
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 1,
+            uri: `spotify:playlist:${index}`
+          }))
+        }
+      },
+      {
+        type: "open-playlist-detail",
+        detail: playlist
+      }
+    );
+
+    const closed = authenticatedAppReducer(opened, { type: "close-playlist-detail" });
+
+    expect(closed.mainView).toBe("home");
+    expect(closed.focusRegion).toBe("content");
+    expect(closed.contentIndex).toBe(4);
+    expect(closed.playlistReturnTarget).toBeNull();
+  });
+
+  test("closing playlist detail restores the sidebar selection", () => {
+    const opened = authenticatedAppReducer(
+      {
+        ...createInitialAuthenticatedAppState(""),
+        mainView: "home" as const,
+        focusRegion: "sidebar" as const,
+        sidebarIndex: 2,
+        contentIndex: 5,
+        browseState: {
+          ...createInitialAuthenticatedAppState("").browseState,
+          playlists: [1, 2].map((index) => ({
+            id: `playlist-${index}`,
+            name: `Playlist ${index}`,
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 1,
+            uri: `spotify:playlist:${index}`
+          }))
+        }
+      },
+      {
+        type: "open-playlist-detail",
+        detail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 0,
+          uri: "spotify:playlist:1",
+          tracks: []
+        }
+      }
+    );
+
+    const closed = authenticatedAppReducer(opened, { type: "close-playlist-detail" });
+
+    expect(closed.mainView).toBe("home");
+    expect(closed.focusRegion).toBe("sidebar");
+    expect(closed.sidebarIndex).toBe(2);
   });
 
   test("opening an empty playlist detail leaves the search row selected", () => {
