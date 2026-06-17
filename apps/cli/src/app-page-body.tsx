@@ -120,7 +120,7 @@ export function AppPageBody({
   const viewLabel = getMainViewLabel(mainView);
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
   const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
-  const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 3) : 0;
+  const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 1) : 0;
   const headerLineCount = playlistDetail ? 2 : 1;
   const listAvailableLines = Math.max(1, height - headerLineCount - 1);
   const visibleListLines =
@@ -142,7 +142,7 @@ export function AppPageBody({
               {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
             </Text>
             <Text color="white">
-              {clipLine(` · ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
+              {clipLine(` ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
             </Text>
           </Text>
         ) : null}
