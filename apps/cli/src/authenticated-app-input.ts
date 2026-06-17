@@ -143,6 +143,14 @@ function resolveHomeHorizontalMove(state: AuthenticatedAppState, direction: "lef
   return null;
 }
 
+function isClearSearchInput(input: string, key: { ctrl?: boolean; super?: boolean; backspace?: boolean; delete?: boolean }) {
+  return (key.super && (key.backspace || key.delete)) || (key.ctrl && input === "u");
+}
+
+function isTrimSearchInputWord(input: string, key: { ctrl?: boolean; meta?: boolean; backspace?: boolean; delete?: boolean }) {
+  return (key.meta && (key.backspace || key.delete)) || (key.ctrl && input === "w");
+}
+
 export function resolveAuthenticatedIntent(
   state: AuthenticatedAppState,
   input: string,
@@ -268,11 +276,11 @@ export function resolveAuthenticatedIntent(
       return { type: "none" };
     }
 
-    if (key.super && (key.backspace || key.delete)) {
+    if (isClearSearchInput(input, key)) {
       return { type: "clear-search-query" };
     }
 
-    if (key.meta && (key.backspace || key.delete)) {
+    if (isTrimSearchInputWord(input, key)) {
       return { type: "trim-search-query-word" };
     }
 
@@ -368,11 +376,11 @@ export function resolveAuthenticatedIntent(
     }
 
     if (selectCanStartSearchEditing(state)) {
-      if (key.super && (key.backspace || key.delete)) {
+      if (isClearSearchInput(input, key)) {
         return { type: "clear-search-query" };
       }
 
-      if (key.meta && (key.backspace || key.delete)) {
+      if (isTrimSearchInputWord(input, key)) {
         return { type: "trim-search-query-word" };
       }
 

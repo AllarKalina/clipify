@@ -23,16 +23,20 @@ export function getSearchPromptLine(player: HomeSnapshot) {
   return iconLabel(NERD_ICONS.search, "Search Spotify");
 }
 
-export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapshot, searchEditing = false) {
+function getSearchLabel(browse: ShellBrowseState, player: HomeSnapshot, searchEditing = false) {
   if (player.spotify === "relink-required") {
-    return iconLabel(NERD_ICONS.search, "Re-link Spotify to search");
+    return "Re-link Spotify to search";
   }
 
   if (browse.searchQuery) {
-    return iconLabel(NERD_ICONS.search, browse.searchQuery);
+    return browse.searchQuery;
   }
 
-  return searchEditing ? iconLabel(NERD_ICONS.search, "") : iconLabel(NERD_ICONS.search, "Search Spotify");
+  return searchEditing ? "" : "Search Spotify";
+}
+
+export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapshot, searchEditing = false) {
+  return iconLabel(NERD_ICONS.search, getSearchLabel(browse, player, searchEditing));
 }
 
 export function getTopBarHeight(browse: ShellBrowseState) {
@@ -43,11 +47,30 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
   const contentWidth = width - 4;
   const searchSelected = contentIndex === 0;
   const searchActive = searchSelected && focusRegion === "content";
+  const searchLabel = getSearchLabel(browse, player, searchEditing);
+  const cursor = searchActive ? (searchEditing ? "▌" : "▏") : "";
+  const inputWidth = Math.max(1, contentWidth - 4 - cursor.length);
+  const clippedSearchLabel = clipLine(searchLabel, inputWidth);
+  const mutedPlaceholder = !browse.searchQuery && !searchEditing && player.spotify !== "relink-required";
 
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height} flexShrink={0}>
-      <Text color={searchActive ? "black" : searchEditing ? "cyan" : "white"} backgroundColor={searchActive ? "green" : undefined} bold={searchEditing}>
-        {clipLine(getSearchInputLine(browse, player, searchEditing), contentWidth)}
+    <Box
+      flexDirection="column"
+      borderStyle="round"
+      borderColor={searchActive ? "green" : "cyan"}
+      paddingX={1}
+      width={width}
+      height={height}
+      minHeight={height}
+      flexShrink={0}
+    >
+      <Text>
+        <Text color={searchActive ? "green" : "cyan"}>{searchActive ? "› " : "  "}</Text>
+        <Text color={searchActive ? "green" : "white"}>{`${NERD_ICONS.search} `}</Text>
+        <Text color={mutedPlaceholder ? "gray" : "white"} bold={searchEditing}>
+          {clippedSearchLabel}
+        </Text>
+        {cursor ? <Text color="green">{cursor}</Text> : null}
       </Text>
       {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
       {browse.searchBusy ? <Text color="yellow">{clipLine(iconLabel(NERD_ICONS.search, `Searching ${browse.submittedSearchQuery}...`), contentWidth)}</Text> : null}

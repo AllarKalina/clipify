@@ -71,7 +71,9 @@ describe("authenticated app search input", () => {
     expect(resolveAuthenticatedIntent(state, "", { backspace: true })).toEqual({ type: "trim-search-query" });
     expect(resolveAuthenticatedIntent(state, "", { delete: true })).toEqual({ type: "trim-search-query" });
     expect(resolveAuthenticatedIntent(state, "", { meta: true, backspace: true })).toEqual({ type: "trim-search-query-word" });
+    expect(resolveAuthenticatedIntent(state, "w", { ctrl: true })).toEqual({ type: "trim-search-query-word" });
     expect(resolveAuthenticatedIntent(state, "", { super: true, backspace: true })).toEqual({ type: "clear-search-query" });
+    expect(resolveAuthenticatedIntent(state, "u", { ctrl: true })).toEqual({ type: "clear-search-query" });
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "submit-search-query" });
   });
 
@@ -84,7 +86,9 @@ describe("authenticated app search input", () => {
     };
 
     expect(resolveAuthenticatedIntent(state, "", { meta: true, backspace: true })).toEqual({ type: "trim-search-query-word" });
+    expect(resolveAuthenticatedIntent(state, "w", { ctrl: true })).toEqual({ type: "trim-search-query-word" });
     expect(resolveAuthenticatedIntent(state, "", { super: true, backspace: true })).toEqual({ type: "clear-search-query" });
+    expect(resolveAuthenticatedIntent(state, "u", { ctrl: true })).toEqual({ type: "clear-search-query" });
   });
 
   test("active search exits through navigation intents", () => {
