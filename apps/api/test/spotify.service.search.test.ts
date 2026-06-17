@@ -122,4 +122,47 @@ describe("spotify service search", () => {
       ]
     });
   });
+
+  test("skips null spotify search result items", async () => {
+    const store = createMemoryStore();
+    await createLinkedSpotifyService({
+      store,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/api/token")) {
+          return Response.json({
+            access_token: "access-1",
+            refresh_token: "refresh-1",
+            token_type: "Bearer",
+            scope: grantedScope,
+            expires_in: 3600
+          });
+        }
+
+        return Response.json({ id: "spotify-user-1" });
+      }
+    });
+
+    const searchService = createSpotifyService(baseEnv(), {
+      store,
+      fetchImpl: async (url) => {
+        if (String(url).includes("/search")) {
+          return Response.json({
+            tracks: { items: [null] },
+            playlists: { items: [null] },
+            albums: { items: [null] },
+            artists: { items: [null] }
+          });
+        }
+
+        return Response.json({});
+      }
+    });
+
+    await expect(searchService.search("user-1", "machine gun kelly")).resolves.toEqual({
+      tracks: [],
+      playlists: [],
+      albums: [],
+      artists: []
+    });
+  });
 });

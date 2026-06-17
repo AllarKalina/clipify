@@ -5,6 +5,10 @@ export type SpotifySearchService = {
   search: (userId: string, query: string) => Promise<SpotifySearchResponse>;
 };
 
+function present<T>(item: T | null | undefined): item is T {
+  return item != null;
+}
+
 export function createSpotifySearchService(context: SpotifyServiceContext): SpotifySearchService {
   return {
     async search(userId, query) {
@@ -25,17 +29,17 @@ export function createSpotifySearchService(context: SpotifyServiceContext): Spot
       }
 
       const payload = (await response.json()) as {
-        tracks?: { items?: Array<Parameters<typeof summarizeTrack>[0]> };
-        playlists?: { items?: Array<Parameters<typeof summarizePlaylist>[0]> };
-        albums?: { items?: Array<Parameters<typeof summarizeAlbum>[0]> };
-        artists?: { items?: Array<Parameters<typeof summarizeArtist>[0]> };
+        tracks?: { items?: Array<Parameters<typeof summarizeTrack>[0] | null> };
+        playlists?: { items?: Array<Parameters<typeof summarizePlaylist>[0] | null> };
+        albums?: { items?: Array<Parameters<typeof summarizeAlbum>[0] | null> };
+        artists?: { items?: Array<Parameters<typeof summarizeArtist>[0] | null> };
       };
 
       return {
-        tracks: (payload.tracks?.items ?? []).map((item) => summarizeTrack(item)),
-        playlists: (payload.playlists?.items ?? []).map((item) => summarizePlaylist(item)),
-        albums: (payload.albums?.items ?? []).map((item) => summarizeAlbum(item)),
-        artists: (payload.artists?.items ?? []).map((item) => summarizeArtist(item))
+        tracks: (payload.tracks?.items ?? []).filter(present).map((item) => summarizeTrack(item)),
+        playlists: (payload.playlists?.items ?? []).filter(present).map((item) => summarizePlaylist(item)),
+        albums: (payload.albums?.items ?? []).filter(present).map((item) => summarizeAlbum(item)),
+        artists: (payload.artists?.items ?? []).filter(present).map((item) => summarizeArtist(item))
       };
     }
   };
