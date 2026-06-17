@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { buildVisibleListLines } from "../src/app-page-body";
+import { buildVisibleListLines, formatPlaylistDetailHeader } from "../src/app-page-body";
 import { getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
@@ -327,6 +327,21 @@ describe("authenticated app selectors", () => {
       { type: "item", item: expect.objectContaining({ title: "B" }), absoluteIndex: 2 },
       { type: "item", item: expect.objectContaining({ title: "C" }), absoluteIndex: 3 }
     ]);
+  });
+
+  test("playlist detail header keeps title with metadata", () => {
+    expect(
+      formatPlaylistDetailHeader({
+        id: "playlist-1",
+        name: "Na",
+        description: "",
+        imageUrl: "",
+        ownerName: "Allar Kalina",
+        trackCount: 131,
+        uri: "spotify:playlist:1",
+        tracks: []
+      })
+    ).toBe("Na · Allar Kalina · 131 tracks");
   });
 
   test("top search bar keeps home and playlist prompts distinct", () => {

@@ -56,6 +56,10 @@ type BuildVisibleListLinesOptions = {
   stickySectionIds?: string[];
 };
 
+export function formatPlaylistDetailHeader(playlistDetail: NonNullable<ShellBrowseState["playlistDetail"]>): string {
+  return `${playlistDetail.name} · ${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`;
+}
+
 export function buildVisibleListLines(
   sections: ContentSection[],
   contentIndex: number,
@@ -120,11 +124,11 @@ export function AppPageBody({
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height}>
       <Box marginBottom={1} flexDirection="column">
         <Text color="green" bold>
-          {clipLine(playlistDetail ? `${viewLabel} · ${playlistDetail.name}` : viewLabel, contentWidth)}
+          {clipLine(viewLabel, contentWidth)}
         </Text>
         {playlistDetail ? (
           <Text color="white">
-            {clipLine(`${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`, contentWidth)}
+            {clipLine(formatPlaylistDetailHeader(playlistDetail), contentWidth)}
           </Text>
         ) : null}
       </Box>
