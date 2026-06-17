@@ -98,6 +98,7 @@ export type CliLibraryViewResponse = {
       title: string;
       subtitle: string;
       meta?: string;
+      addedAt?: string;
       action: { type: "play-track"; uri: string };
     }>;
   } | null;

@@ -37,6 +37,7 @@ export type AuthenticatedIntent =
   | { type: "cycle-repeat"; mode: AuthenticatedAppState["homeSnapshot"]["repeatMode"] }
   | { type: "set-volume"; volumePercent: number }
   | { type: "start-link" }
+  | { type: "cycle-track-sort" }
   | { type: "relink-required" };
 
 function getHomeTileSectionCounts(state: AuthenticatedAppState): number[] {
@@ -278,6 +279,10 @@ export function resolveAuthenticatedIntent(
 
     if (input === "l") {
       return { type: "start-link" };
+    }
+
+    if (input === "a" && (state.mainView === "playlist-detail" || state.mainView === "liked-tracks")) {
+      return { type: "cycle-track-sort" };
     }
 
     return resolveAuthenticatedIntent({ ...state, controlPrefixActive: false }, input, key);

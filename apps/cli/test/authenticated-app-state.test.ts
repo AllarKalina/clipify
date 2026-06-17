@@ -253,6 +253,60 @@ describe("authenticated app state", () => {
     expect(next.contentIndex).toBe(0);
   });
 
+  test("cycling track sort keeps the selected playlist track selected", () => {
+    const initial = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      contentIndex: 3,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 3,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Middle",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000,
+              addedAt: "2026-02-02T12:00:00Z"
+            },
+            {
+              id: "track-2",
+              trackName: "Oldest",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:2",
+              durationMs: 257000,
+              addedAt: "2026-02-01T12:00:00Z"
+            },
+            {
+              id: "track-3",
+              trackName: "Newest",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:3",
+              durationMs: 257000,
+              addedAt: "2026-02-03T12:00:00Z"
+            }
+          ]
+        }
+      }
+    };
+
+    const next = authenticatedAppReducer(initial, { type: "cycle-track-sort" });
+
+    expect(next.browseState.trackSortMode).toBe("added");
+    expect(next.contentIndex).toBe(1);
+  });
+
   test("set search query only updates the draft", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),

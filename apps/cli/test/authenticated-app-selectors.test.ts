@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
+import { getNextTrackSortMode, getTrackSortLabel } from "../src/app-shell-state";
 import {
   buildVisibleListLines,
   formatPlaylistDetailHeader,
@@ -283,6 +284,60 @@ describe("authenticated app selectors", () => {
     const viewModel = selectShellViewModel(state);
     expect(viewModel.activeSections.map((section) => section.title)).toEqual(["Roadtrip"]);
     expect(viewModel.activeSections[0]?.items[0]?.title).toBe("Dreams");
+  });
+
+  test("sorts playlist detail tracks by newest added date", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        trackSortMode: "added" as const,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 3,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Middle",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000,
+              addedAt: "2026-02-02T12:00:00Z"
+            },
+            {
+              id: "track-2",
+              trackName: "Newest",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:2",
+              durationMs: 257000,
+              addedAt: "2026-02-03T12:00:00Z"
+            },
+            {
+              id: "track-3",
+              trackName: "Oldest",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:3",
+              durationMs: 257000,
+              addedAt: "2026-02-01T12:00:00Z"
+            }
+          ]
+        }
+      }
+    };
+
+    const viewModel = selectShellViewModel(state);
+    expect(viewModel.activeSections[0]?.items.map((item) => item.title)).toEqual(["Newest", "Middle", "Oldest"]);
+    expect(getTrackSortLabel(state.browseState.trackSortMode)).toBe("recent");
+    expect(getNextTrackSortMode("added")).toBe("title");
   });
 
   test("list viewport keeps consecutive playlist rows around the selection", () => {

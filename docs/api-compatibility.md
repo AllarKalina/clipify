@@ -28,7 +28,7 @@ read_when:
 - Elysia `fromTypes(...)` remains deferred until monorepo typegen becomes stable enough to generate clean docs without warnings.
 - Route-level rate limits may return `429` envelopes with code `RATE_LIMITED`.
 - Forwarded IP headers are ignored for rate-limit keying unless `RATE_LIMIT_TRUST_PROXY_HEADERS=true`.
-- Spotify playlist payload handling is strict: playlist counts come from `items.total` and playlist item entries come from `items[].item`.
+- Spotify playlist payload handling is strict: playlist counts come from `items.total`, playlist item entries come from `items[].item`, and playlist/liked track added dates are exposed as optional `addedAt` fields.
 
 ## Version Metadata Endpoint
 

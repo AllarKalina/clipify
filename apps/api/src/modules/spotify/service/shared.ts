@@ -88,6 +88,7 @@ export type SpotifyDevicePayload = {
 };
 
 export type SpotifyPlaylistTrackEntry = {
+  added_at?: string | null;
   item?: {
     id?: string;
     name?: string;
@@ -245,6 +246,7 @@ export function summarizeTrack(item: {
   album?: { name?: string };
   uri?: string;
   duration_ms?: number;
+  added_at?: string | null;
 }): SpotifyTrackSummary {
   return {
     id: item.id ?? "",
@@ -252,7 +254,8 @@ export function summarizeTrack(item: {
     artistName: item.artists?.[0]?.name ?? "",
     albumName: item.album?.name ?? "",
     uri: item.uri ?? "",
-    durationMs: item.duration_ms ?? 0
+    durationMs: item.duration_ms ?? 0,
+    ...(item.added_at ? { addedAt: item.added_at } : {})
   };
 }
 
@@ -265,10 +268,14 @@ function isPlayableTrack(track: SpotifyPlaylistTrackEntry["item"]): track is Spo
 }
 
 export function summarizePlaylistTracks(items: SpotifyPlaylistTrackPayload[] | undefined) {
-  return (items ?? [])
-    .map((entry) => entry?.item ?? null)
-    .filter(isPlayableTrack)
-    .map((track) => summarizeTrack(track));
+  return (items ?? []).flatMap((entry) => {
+    const track = entry?.item ?? null;
+    if (!isPlayableTrack(track)) {
+      return [];
+    }
+
+    return [summarizeTrack({ ...track, added_at: entry?.added_at ?? undefined })];
+  });
 }
 
 export function buildPlaylistItemsUrl(playlistId: string, offset = 0) {
@@ -277,7 +284,7 @@ export function buildPlaylistItemsUrl(playlistId: string, offset = 0) {
   url.searchParams.set("offset", String(offset));
   url.searchParams.set(
     "fields",
-    "items(item(id,name,artists(name),album(name),uri,duration_ms,type)),next"
+    "items(added_at,item(id,name,artists(name),album(name),uri,duration_ms,type)),next"
   );
   return url.toString();
 }

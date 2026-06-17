@@ -68,8 +68,8 @@ export function BottomPlayer({
       <Text color={controlPrefixActive ? "green" : "white"} bold={controlPrefixActive}>
         {clipLine(
           controlPrefixActive
-            ? "cmd+s active: [space] play  [,/.] prev/next  [s/t] modes  [-/=] volume  [d/r/l/o/q/h] app"
-            : "[cmd+s] controls: play, prev/next, modes, volume, devices, refresh, link, logout, quit, home",
+            ? "cmd+s active: [space] play  [,/.] prev/next  [s/t] modes  [a] sort  [-/=] volume  [d/r/l/o/q/h] app"
+            : "[cmd+s] controls: play, prev/next, modes, sort, devices, refresh, link, logout, quit, home",
           width - 4
         )}
       </Text>

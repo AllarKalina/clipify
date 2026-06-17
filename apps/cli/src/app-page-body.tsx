@@ -1,7 +1,7 @@
 import { Box, Text } from "ink";
 import React from "react";
 import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
-import { getMainViewLabel } from "./app-shell-state";
+import { getMainViewLabel, getTrackSortLabel } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 import { iconLabel, NERD_ICONS } from "./nerd-icons";
@@ -125,6 +125,10 @@ function getPlaylistDetailMetadata(playlistDetail: NonNullable<ShellBrowseState[
   return `${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`;
 }
 
+function getTrackSortMetadata(state: ShellBrowseState): string {
+  return `sort ${getTrackSortLabel(state.trackSortMode)}`;
+}
+
 export function shouldRenderMainViewLabel(mainView: MainView, playlistDetail: ShellBrowseState["playlistDetail"]): boolean {
   return mainView !== "home" && !playlistDetail;
 }
@@ -195,7 +199,13 @@ export function AppPageBody({
   const viewLabel = getMainViewLabel(mainView);
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
   const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
-  const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 1) : 0;
+  const trackSortMetadata = mainView === "playlist-detail" || mainView === "liked-tracks" ? getTrackSortMetadata(browse) : "";
+  const headerMetadata = playlistDetail
+    ? trackSortMetadata
+      ? `${playlistDetailMetadata} · `
+      : playlistDetailMetadata
+    : "";
+  const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - headerMetadata.length - trackSortMetadata.length - 1) : 0;
   const showMainHeader = shouldRenderMainViewLabel(mainView, playlistDetail);
   const showHeader = Boolean(playlistDetail) || showMainHeader;
   const listAvailableLines = getBodyListAvailableLines(height, showHeader);
@@ -216,12 +226,21 @@ export function AppPageBody({
                 {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
               </Text>
               <Text color="white">
-                {clipLine(` ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
+                {clipLine(` ${headerMetadata}`, Math.max(1, contentWidth - playlistAccentWidth - trackSortMetadata.length))}
               </Text>
+              {trackSortMetadata ? <Text color={browse.trackSortMode === "original" ? "gray" : "cyan"}>{trackSortMetadata}</Text> : null}
             </Text>
           ) : (
-            <Text color="green" bold>
-              {clipLine(viewLabel, contentWidth)}
+            <Text>
+              <Text color="green" bold>
+                {clipLine(viewLabel, trackSortMetadata ? Math.max(1, contentWidth - trackSortMetadata.length - 3) : contentWidth)}
+              </Text>
+              {trackSortMetadata ? (
+                <>
+                  <Text color="white"> · </Text>
+                  <Text color={browse.trackSortMode === "original" ? "gray" : "cyan"}>{trackSortMetadata}</Text>
+                </>
+              ) : null}
             </Text>
           )}
         </Box>

@@ -12,6 +12,7 @@ import {
 } from "./authenticated-app-commands";
 import type { AuthenticatedIntent } from "./authenticated-app-input";
 import { selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
+import { getNextTrackSortMode, getTrackSortLabel } from "./app-shell-state";
 import type { AuthenticatedAppAction, AuthenticatedAppState } from "./authenticated-app-state";
 
 type HandleAuthenticatedIntentArgs = {
@@ -172,6 +173,12 @@ export function handleAuthenticatedIntent({
     case "refresh":
       void refreshAuthenticatedApp(context, "Refreshed");
       return;
+    case "cycle-track-sort": {
+      const nextSortMode = getNextTrackSortMode(state.browseState.trackSortMode);
+      dispatch({ type: "cycle-track-sort" });
+      dispatch({ type: "set-status-line", statusLine: `Track sort: ${getTrackSortLabel(nextSortMode)}` });
+      return;
+    }
     case "activate-selected-item": {
       const selectedItem = selectSelectedItem(state);
       if (selectedItem) {

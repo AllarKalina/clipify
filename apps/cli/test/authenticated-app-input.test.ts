@@ -488,4 +488,20 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "o", {})).toEqual({ type: "logout" });
     expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "exit" });
   });
+
+  test("command prefix cycles track sort only in track list views", () => {
+    const trackListState = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      controlPrefixActive: true
+    };
+    const homeState = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "home" as const,
+      controlPrefixActive: true
+    };
+
+    expect(resolveAuthenticatedIntent(trackListState, "a", {})).toEqual({ type: "cycle-track-sort" });
+    expect(resolveAuthenticatedIntent(homeState, "a", {})).toEqual({ type: "none" });
+  });
 });

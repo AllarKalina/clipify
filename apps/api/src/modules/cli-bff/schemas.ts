@@ -59,7 +59,8 @@ export const cliBffModels = {
     artistName: t.String(),
     albumName: t.String(),
     uri: t.String(),
-    durationMs: t.Number()
+    durationMs: t.Number(),
+    addedAt: t.Optional(t.String())
   }),
   [cliModelNames.albumSummary]: t.Object({
     id: t.String(),
@@ -159,6 +160,7 @@ export const cliBffModels = {
     title: t.String(),
     subtitle: t.String(),
     meta: t.Optional(t.String()),
+    addedAt: t.Optional(t.String()),
     action: t.Ref(cliModelNames.libraryItemAction)
   }),
   [cliModelNames.librarySection]: t.Object({

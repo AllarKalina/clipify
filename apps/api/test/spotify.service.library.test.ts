@@ -156,7 +156,8 @@ describe("spotify service library", () => {
                   uri: "spotify:track:1",
                   duration_ms: 257000,
                   type: "track"
-                }
+                },
+                added_at: "2026-02-03T12:00:00Z"
               },
               {
                 item: {
@@ -209,7 +210,8 @@ describe("spotify service library", () => {
           artistName: "Fleetwood Mac",
           albumName: "Rumours",
           uri: "spotify:track:1",
-          durationMs: 257000
+          durationMs: 257000,
+          addedAt: "2026-02-03T12:00:00Z"
         }
       ]
     });
@@ -251,7 +253,8 @@ describe("spotify service library", () => {
                   uri: "spotify:track:2",
                   duration_ms: 223000,
                   type: "track"
-                }
+                },
+                added_at: "2026-02-04T12:00:00Z"
               }
             ],
             next: null
@@ -270,7 +273,8 @@ describe("spotify service library", () => {
                   uri: "spotify:track:1",
                   duration_ms: 257000,
                   type: "track"
-                }
+                },
+                added_at: "2026-02-03T12:00:00Z"
               }
             ],
             next: "https://api.spotify.com/v1/playlists/playlist-1/items?offset=50&limit=50"
@@ -293,8 +297,8 @@ describe("spotify service library", () => {
       expect.objectContaining({
         trackCount: 2,
         tracks: [
-          expect.objectContaining({ trackName: "Dreams" }),
-          expect.objectContaining({ trackName: "Go Your Own Way" })
+          expect.objectContaining({ trackName: "Dreams", addedAt: "2026-02-03T12:00:00Z" }),
+          expect.objectContaining({ trackName: "Go Your Own Way", addedAt: "2026-02-04T12:00:00Z" })
         ]
       })
     );

@@ -336,6 +336,7 @@ export function createCliBffService(spotify: SpotifyService) {
               title: track.trackName,
               subtitle: track.artistName,
               meta: track.albumName,
+              addedAt: track.addedAt,
               action: { type: "play-track", uri: track.uri }
             }))
           }
@@ -352,6 +353,7 @@ export function createCliBffService(spotify: SpotifyService) {
             title: track.trackName,
             subtitle: track.artistName,
             meta: track.albumName,
+            addedAt: track.addedAt,
             action: { type: "play-track", uri: track.uri }
           }))
         }

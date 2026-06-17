@@ -70,7 +70,8 @@ function toTrackSummary(item: NonNullable<CliLibraryViewResponse["section"]>["it
     artistName: item.subtitle,
     albumName: item.meta ?? "",
     uri: item.action.uri,
-    durationMs: 0
+    durationMs: 0,
+    addedAt: item.addedAt
   };
 }
 

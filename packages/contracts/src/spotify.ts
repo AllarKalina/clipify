@@ -69,6 +69,7 @@ export type SpotifyTrackSummary = {
   albumName: string;
   uri: string;
   durationMs: number;
+  addedAt?: string;
 };
 
 export type SpotifyPlaylistSummary = {

@@ -22,7 +22,10 @@ export type TrackSummary = {
   albumName: string;
   uri: string;
   durationMs: number;
+  addedAt?: string;
 };
+
+export type TrackSortMode = "original" | "added" | "title" | "artist";
 
 export type RecentTrackSummary = TrackSummary & {
   playedAt: string;
@@ -82,6 +85,7 @@ export type ShellBrowseState = {
   playlists: PlaylistSummary[];
   likedTracks: TrackSummary[];
   playlistDetail: PlaylistDetail | null;
+  trackSortMode: TrackSortMode;
   pinnedPlaylistNames: string[];
   searchQuery: string;
   submittedSearchQuery: string;
@@ -98,6 +102,7 @@ export function createInitialShellBrowseState(pinnedPlaylistNames: string[] = []
     playlists: [],
     likedTracks: [],
     playlistDetail: null,
+    trackSortMode: "original",
     pinnedPlaylistNames,
     searchQuery: "",
     submittedSearchQuery: "",
@@ -139,8 +144,58 @@ export function flattenSections(sections: ContentSection[]): ContentItem[] {
   return sections.flatMap((section) => section.items);
 }
 
+export function getTrackSortLabel(sortMode: TrackSortMode): string {
+  return sortMode === "title" ? "title" : sortMode === "artist" ? "artist" : sortMode === "added" ? "recent" : "playlist";
+}
+
+export function getNextTrackSortMode(sortMode: TrackSortMode): TrackSortMode {
+  return sortMode === "original" ? "added" : sortMode === "added" ? "title" : sortMode === "title" ? "artist" : "original";
+}
+
 function normalizeSortKey(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+function getAddedAtTime(track: TrackSummary): number {
+  if (!track.addedAt) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const value = Date.parse(track.addedAt);
+  return Number.isNaN(value) ? Number.NEGATIVE_INFINITY : value;
+}
+
+function sortTracks(tracks: TrackSummary[], sortMode: TrackSortMode): TrackSummary[] {
+  if (sortMode === "original") {
+    return tracks;
+  }
+
+  return tracks
+    .map((track, index) => ({ track, index }))
+    .sort((left, right) => {
+      if (sortMode === "added") {
+        const leftTime = getAddedAtTime(left.track);
+        const rightTime = getAddedAtTime(right.track);
+        const timeRank = rightTime - leftTime;
+
+        if (timeRank !== 0) {
+          return timeRank;
+        }
+
+        return left.index - right.index;
+      }
+
+      const leftValue = sortMode === "title" ? left.track.trackName : left.track.artistName;
+      const rightValue = sortMode === "title" ? right.track.trackName : right.track.artistName;
+      const valueRank = normalizeSortKey(leftValue).localeCompare(normalizeSortKey(rightValue));
+
+      if (valueRank !== 0) {
+        return valueRank;
+      }
+
+      return left.index - right.index;
+    })
+    .map((entry) => entry.track);
 }
 
 function createPinnedPlaylistMetadata(pinnedPlaylistNames: string[]) {
@@ -279,7 +334,7 @@ export function buildLikedTracksSections(state: ShellBrowseState): ContentSectio
     {
       id: "liked-tracks",
       title: iconLabel(NERD_ICONS.liked, "Liked songs"),
-      items: state.likedTracks.map((track) => ({
+      items: sortTracks(state.likedTracks, state.trackSortMode).map((track) => ({
         id: `liked-${track.id || track.uri}`,
         title: track.trackName,
         subtitle: track.artistName,
@@ -299,7 +354,7 @@ export function buildPlaylistDetailSections(state: ShellBrowseState): ContentSec
     {
       id: "playlist-tracks",
       title: state.playlistDetail.name,
-      items: state.playlistDetail.tracks.map((track) => ({
+      items: sortTracks(state.playlistDetail.tracks, state.trackSortMode).map((track) => ({
         id: `playlist-track-${track.id || track.uri}`,
         title: track.trackName,
         subtitle: track.artistName,

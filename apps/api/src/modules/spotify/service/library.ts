@@ -102,6 +102,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
 
       const payload = (await response.json()) as {
         items?: Array<{
+          added_at?: string | null;
           track?: {
             id?: string;
             name?: string;
@@ -114,7 +115,7 @@ export function createSpotifyLibraryService(context: SpotifyServiceContext): Spo
       };
 
       return {
-        items: (payload.items ?? []).map((item) => summarizeTrack(item.track ?? {}))
+        items: (payload.items ?? []).map((item) => summarizeTrack({ ...(item.track ?? {}), added_at: item.added_at ?? undefined }))
       };
     },
 

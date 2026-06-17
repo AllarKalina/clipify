@@ -7,6 +7,7 @@ import {
   createInitialShellBrowseState,
   buildLibrarySidebarItems,
   flattenSections,
+  getNextTrackSortMode,
   moveSelection,
   type AppFocusRegion,
   type MainView,
@@ -75,6 +76,7 @@ export type AuthenticatedAppAction =
   | { type: "search-failed"; error: string }
   | { type: "replace-browse-state"; browseState: ShellBrowseState }
   | { type: "patch-browse-state"; patch: Partial<ShellBrowseState> }
+  | { type: "cycle-track-sort" }
   | { type: "open-liked-tracks" }
   | { type: "open-playlist-detail"; detail: PlaylistDetail }
   | { type: "close-playlist-detail" }
@@ -140,6 +142,23 @@ function getPlaylistReturnTarget(state: AuthenticatedAppState): PlaylistReturnTa
     sidebarIndex: state.sidebarIndex,
     contentIndex: state.contentIndex
   };
+}
+
+function getSelectedTrackUri(state: AuthenticatedAppState): string | null {
+  if (state.contentIndex <= 0) {
+    return null;
+  }
+
+  const selectedItem = flattenSections(buildMainSections(state))[state.contentIndex - 1];
+  return selectedItem?.action.type === "play-track" ? selectedItem.action.uri : null;
+}
+
+function findTrackContentIndex(state: AuthenticatedAppState, uri: string): number | null {
+  const itemIndex = flattenSections(buildMainSections(state)).findIndex(
+    (item) => item.action.type === "play-track" && item.action.uri === uri
+  );
+
+  return itemIndex >= 0 ? itemIndex + 1 : null;
 }
 
 export function createInitialAuthenticatedAppState(
@@ -330,6 +349,16 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ...state.browseState,
         ...action.patch
       });
+    case "cycle-track-sort": {
+      const selectedTrackUri = getSelectedTrackUri(state);
+      const nextState = withBrowseState(state, {
+        ...state.browseState,
+        trackSortMode: getNextTrackSortMode(state.browseState.trackSortMode)
+      });
+      const nextContentIndex = selectedTrackUri ? findTrackContentIndex(nextState, selectedTrackUri) : null;
+
+      return nextContentIndex ? { ...nextState, contentIndex: nextContentIndex } : nextState;
+    }
     case "open-liked-tracks":
       return {
         ...withBrowseState(state, state.browseState),
