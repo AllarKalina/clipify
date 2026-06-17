@@ -64,7 +64,9 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
   const cursor = searchActive ? (searchEditing ? "▌" : "▏") : "";
   const inputWidth = Math.max(1, contentWidth - 2 - cursor.length);
   const clippedSearchLabel = clipSearchInputLabel(searchLabel, inputWidth);
-  const cursorBeforeLabel = searchActive && showsPlaceholder;
+  const cursorOverPlaceholder = searchActive && showsPlaceholder && clippedSearchLabel.length > 0;
+  const placeholderCursor = cursorOverPlaceholder ? clippedSearchLabel.slice(0, 1) : "";
+  const placeholderTail = cursorOverPlaceholder ? clippedSearchLabel.slice(1) : clippedSearchLabel;
 
   return (
     <Box
@@ -79,11 +81,15 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
     >
       <Text>
         <Text color={searchActive ? "green" : "white"}>{`${NERD_ICONS.search} `}</Text>
-        {cursorBeforeLabel && cursor ? <Text color="green">{cursor}</Text> : null}
+        {cursorOverPlaceholder ? (
+          <Text color="black" backgroundColor="green">
+            {placeholderCursor}
+          </Text>
+        ) : null}
         <Text color={showsPlaceholder ? "gray" : "white"} bold={searchEditing && !showsPlaceholder}>
-          {clippedSearchLabel}
+          {placeholderTail}
         </Text>
-        {!cursorBeforeLabel && cursor ? <Text color="green">{cursor}</Text> : null}
+        {!cursorOverPlaceholder && cursor ? <Text color="green">{cursor}</Text> : null}
       </Text>
       {browse.searchError ? <Text color="red">{clipLine(browse.searchError, contentWidth)}</Text> : null}
       {browse.searchBusy ? <Text color="yellow">{clipLine(iconLabel(NERD_ICONS.search, `Searching ${browse.submittedSearchQuery}...`), contentWidth)}</Text> : null}
