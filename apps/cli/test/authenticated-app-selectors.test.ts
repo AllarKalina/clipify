@@ -5,6 +5,7 @@ import {
   buildVisibleListLines,
   formatPlaylistDetailHeader,
   formatTrackRow,
+  getBodyListAvailableLines,
   getListItemRenderKey,
   getListScrollMargin,
   shouldRenderMainViewLabel
@@ -340,6 +341,12 @@ describe("authenticated app selectors", () => {
       { type: "item", item: expect.objectContaining({ title: "E" }), absoluteIndex: 5 },
       { type: "item", item: expect.objectContaining({ title: "F" }), absoluteIndex: 6 }
     ]);
+  });
+
+  test("body list height accounts for borders and sticky playlist header", () => {
+    expect(getBodyListAvailableLines(37, true)).toBe(33);
+    expect(getBodyListAvailableLines(37, false)).toBe(35);
+    expect(getBodyListAvailableLines(3, true)).toBe(1);
   });
 
   test("list viewport can keep playlist section title out of scrolling rows", () => {

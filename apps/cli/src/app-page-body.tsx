@@ -137,6 +137,12 @@ export function getListScrollMargin(availableLines: number, requestedMargin = 2)
   return Math.min(requestedMargin, Math.max(1, Math.floor((availableLines - 1) / 3)));
 }
 
+export function getBodyListAvailableLines(height: number, showHeader: boolean): number {
+  const borderLines = 2;
+  const headerLines = showHeader ? 2 : 0;
+  return Math.max(1, height - borderLines - headerLines);
+}
+
 export function buildVisibleListLines(
   sections: ContentSection[],
   contentIndex: number,
@@ -192,8 +198,7 @@ export function AppPageBody({
   const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 1) : 0;
   const showMainHeader = shouldRenderMainViewLabel(mainView, playlistDetail);
   const showHeader = Boolean(playlistDetail) || showMainHeader;
-  const headerLineCount = showHeader ? 1 : 0;
-  const listAvailableLines = Math.max(1, height - headerLineCount - 1);
+  const listAvailableLines = getBodyListAvailableLines(height, showHeader);
   const visibleListLines =
     mainView === "home"
       ? []
