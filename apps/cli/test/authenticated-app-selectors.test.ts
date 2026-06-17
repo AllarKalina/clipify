@@ -341,7 +341,7 @@ describe("authenticated app selectors", () => {
         uri: "spotify:playlist:1",
         tracks: []
       })
-    ).toBe("Na · Allar Kalina · 131 tracks");
+    ).toBe(" Na · Allar Kalina · 131 tracks");
   });
 
   test("top search bar keeps home and playlist prompts distinct", () => {

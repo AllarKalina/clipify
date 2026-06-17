@@ -4,6 +4,7 @@ import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowse
 import { getMainViewLabel } from "./app-shell-state";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
+import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
 function renderRow(content: string, selected: boolean, activeRegion: boolean) {
   return (
@@ -57,7 +58,10 @@ type BuildVisibleListLinesOptions = {
 };
 
 export function formatPlaylistDetailHeader(playlistDetail: NonNullable<ShellBrowseState["playlistDetail"]>): string {
-  return `${playlistDetail.name} · ${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`;
+  return iconLabel(
+    NERD_ICONS.playlists,
+    `${playlistDetail.name} · ${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`
+  );
 }
 
 export function buildVisibleListLines(
