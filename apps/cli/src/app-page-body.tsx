@@ -64,6 +64,10 @@ export function formatPlaylistDetailHeader(playlistDetail: NonNullable<ShellBrow
   );
 }
 
+function getPlaylistDetailMetadata(playlistDetail: NonNullable<ShellBrowseState["playlistDetail"]>): string {
+  return `${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`;
+}
+
 export function buildVisibleListLines(
   sections: ContentSection[],
   contentIndex: number,
@@ -115,6 +119,8 @@ export function AppPageBody({
   const rowWidth = Math.max(1, contentWidth - 1);
   const viewLabel = getMainViewLabel(mainView);
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
+  const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
+  const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 3) : 0;
   const headerLineCount = playlistDetail ? 2 : 1;
   const listAvailableLines = Math.max(1, height - headerLineCount - 1);
   const visibleListLines =
@@ -131,8 +137,13 @@ export function AppPageBody({
           {clipLine(viewLabel, contentWidth)}
         </Text>
         {playlistDetail ? (
-          <Text color="white">
-            {clipLine(formatPlaylistDetailHeader(playlistDetail), contentWidth)}
+          <Text>
+            <Text color="green" bold>
+              {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
+            </Text>
+            <Text color="white">
+              {clipLine(` · ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
+            </Text>
           </Text>
         ) : null}
       </Box>
