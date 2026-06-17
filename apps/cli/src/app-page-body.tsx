@@ -69,6 +69,10 @@ function getPlaylistDetailMetadata(playlistDetail: NonNullable<ShellBrowseState[
   return `${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`;
 }
 
+export function shouldRenderMainViewLabel(mainView: MainView, playlistDetail: ShellBrowseState["playlistDetail"]): boolean {
+  return mainView !== "home" && !playlistDetail;
+}
+
 export function buildVisibleListLines(
   sections: ContentSection[],
   contentIndex: number,
@@ -121,8 +125,9 @@ export function AppPageBody({
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
   const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
   const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 1) : 0;
-  const showMainHeader = mainView !== "home";
-  const headerLineCount = playlistDetail ? 2 : showMainHeader ? 1 : 0;
+  const showMainHeader = shouldRenderMainViewLabel(mainView, playlistDetail);
+  const showHeader = Boolean(playlistDetail) || showMainHeader;
+  const headerLineCount = showHeader ? 1 : 0;
   const listAvailableLines = Math.max(1, height - headerLineCount - 1);
   const visibleListLines =
     mainView === "home"
@@ -133,11 +138,8 @@ export function AppPageBody({
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height}>
-      {showMainHeader ? (
+      {showHeader ? (
         <Box marginBottom={1} flexDirection="column">
-          <Text color="green" bold>
-            {clipLine(viewLabel, contentWidth)}
-          </Text>
           {playlistDetail ? (
             <Text>
               <Text color="green" bold>
@@ -147,7 +149,11 @@ export function AppPageBody({
                 {clipLine(` ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
               </Text>
             </Text>
-          ) : null}
+          ) : (
+            <Text color="green" bold>
+              {clipLine(viewLabel, contentWidth)}
+            </Text>
+          )}
         </Box>
       ) : null}
       {player.spotify === "relink-required" ? (

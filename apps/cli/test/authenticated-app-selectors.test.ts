@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { buildVisibleListLines, formatPlaylistDetailHeader } from "../src/app-page-body";
+import { buildVisibleListLines, formatPlaylistDetailHeader, shouldRenderMainViewLabel } from "../src/app-page-body";
 import { clipSearchInputLabel, getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
@@ -331,17 +331,20 @@ describe("authenticated app selectors", () => {
   });
 
   test("playlist detail header keeps title with metadata", () => {
+    const playlistDetail = {
+      id: "playlist-1",
+      name: "Na",
+      description: "",
+      imageUrl: "",
+      ownerName: "Allar Kalina",
+      trackCount: 131,
+      uri: "spotify:playlist:1",
+      tracks: []
+    };
+
+    expect(shouldRenderMainViewLabel("playlist-detail", playlistDetail)).toBeFalse();
     expect(
-      formatPlaylistDetailHeader({
-        id: "playlist-1",
-        name: "Na",
-        description: "",
-        imageUrl: "",
-        ownerName: "Allar Kalina",
-        trackCount: 131,
-        uri: "spotify:playlist:1",
-        tracks: []
-      })
+      formatPlaylistDetailHeader(playlistDetail)
     ).toBe(" Na · Allar Kalina · 131 tracks");
   });
 
