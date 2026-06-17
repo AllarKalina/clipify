@@ -55,6 +55,7 @@ type ListRenderLine =
   | { type: "item"; item: ContentItem; absoluteIndex: number };
 
 type BuildVisibleListLinesOptions = {
+  scrollMargin?: number;
   stickySectionIds?: string[];
 };
 
@@ -71,6 +72,14 @@ function getPlaylistDetailMetadata(playlistDetail: NonNullable<ShellBrowseState[
 
 export function shouldRenderMainViewLabel(mainView: MainView, playlistDetail: ShellBrowseState["playlistDetail"]): boolean {
   return mainView !== "home" && !playlistDetail;
+}
+
+export function getListScrollMargin(availableLines: number, requestedMargin = 2): number {
+  if (availableLines <= 2) {
+    return 0;
+  }
+
+  return Math.min(requestedMargin, Math.max(1, Math.floor((availableLines - 1) / 3)));
 }
 
 export function buildVisibleListLines(
@@ -104,7 +113,8 @@ export function buildVisibleListLines(
 
   const selectedLineIndex = allLines.findIndex((line) => line.type === "item" && line.absoluteIndex === contentIndex);
   const targetIndex = selectedLineIndex >= 0 ? selectedLineIndex : 0;
-  const windowStart = Math.max(0, Math.min(targetIndex, allLines.length - availableLines));
+  const scrollMargin = getListScrollMargin(availableLines, options.scrollMargin ?? 2);
+  const windowStart = Math.max(0, Math.min(targetIndex - scrollMargin, allLines.length - availableLines));
   return allLines.slice(windowStart, windowStart + availableLines);
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { buildVisibleListLines, formatPlaylistDetailHeader, shouldRenderMainViewLabel } from "../src/app-page-body";
+import { buildVisibleListLines, formatPlaylistDetailHeader, getListScrollMargin, shouldRenderMainViewLabel } from "../src/app-page-body";
 import { clipSearchInputLabel, getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
@@ -301,6 +301,37 @@ describe("authenticated app selectors", () => {
       { type: "item", item: expect.objectContaining({ title: "C" }), absoluteIndex: 3 },
       { type: "item", item: expect.objectContaining({ title: "D" }), absoluteIndex: 4 },
       { type: "item", item: expect.objectContaining({ title: "E" }), absoluteIndex: 5 }
+    ]);
+  });
+
+  test("list viewport gives the active playlist row breathing room while scrolling", () => {
+    const lines = buildVisibleListLines(
+      [
+        {
+          id: "playlist-tracks",
+          title: "Na",
+          items: [
+            { id: "1", title: "A", subtitle: "artist", action: { type: "noop" } },
+            { id: "2", title: "B", subtitle: "artist", action: { type: "noop" } },
+            { id: "3", title: "C", subtitle: "artist", action: { type: "noop" } },
+            { id: "4", title: "D", subtitle: "artist", action: { type: "noop" } },
+            { id: "5", title: "E", subtitle: "artist", action: { type: "noop" } },
+            { id: "6", title: "F", subtitle: "artist", action: { type: "noop" } },
+            { id: "7", title: "G", subtitle: "artist", action: { type: "noop" } }
+          ]
+        }
+      ],
+      4,
+      4,
+      { stickySectionIds: ["playlist-tracks"] }
+    );
+
+    expect(getListScrollMargin(4)).toBe(1);
+    expect(lines).toEqual([
+      { type: "item", item: expect.objectContaining({ title: "C" }), absoluteIndex: 3 },
+      { type: "item", item: expect.objectContaining({ title: "D" }), absoluteIndex: 4 },
+      { type: "item", item: expect.objectContaining({ title: "E" }), absoluteIndex: 5 },
+      { type: "item", item: expect.objectContaining({ title: "F" }), absoluteIndex: 6 }
     ]);
   });
 
