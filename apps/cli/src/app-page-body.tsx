@@ -40,6 +40,10 @@ export function formatTrackRow(item: ContentItem, absoluteIndex: number, width: 
   };
 }
 
+export function getListItemRenderKey(item: ContentItem, absoluteIndex: number): string {
+  return `item-${absoluteIndex}-${item.id}`;
+}
+
 function renderRow(item: ContentItem, absoluteIndex: number, selected: boolean, activeRegion: boolean, width: number) {
   const layout = formatTrackRow(item, absoluteIndex, width);
   const activeSelected = selected && activeRegion;
@@ -272,7 +276,7 @@ export function AppPageBody({
                 {clipLine(line.title, contentWidth)}
               </Text>
             ) : (
-              <React.Fragment key={line.item.id}>
+              <React.Fragment key={getListItemRenderKey(line.item, line.absoluteIndex)}>
                 {renderRow(line.item, line.absoluteIndex, line.absoluteIndex === contentIndex, focusRegion === "content", rowWidth)}
               </React.Fragment>
             )

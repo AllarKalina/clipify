@@ -5,6 +5,7 @@ import {
   buildVisibleListLines,
   formatPlaylistDetailHeader,
   formatTrackRow,
+  getListItemRenderKey,
   getListScrollMargin,
   shouldRenderMainViewLabel
 } from "../src/app-page-body";
@@ -416,6 +417,18 @@ describe("authenticated app selectors", () => {
 
     expect(narrow.metadata).toBe("");
     expect(narrow.title.trimEnd()).toBe("I Wanna Dance with Some…");
+  });
+
+  test("list item render keys stay unique for duplicate spotify tracks", () => {
+    const repeatedTrack = {
+      id: "track-american-pie",
+      title: "American Pie",
+      subtitle: "Don McLean",
+      action: { type: "noop" as const }
+    };
+
+    expect(getListItemRenderKey(repeatedTrack, 12)).toBe("item-12-track-american-pie");
+    expect(getListItemRenderKey(repeatedTrack, 12)).not.toBe(getListItemRenderKey(repeatedTrack, 13));
   });
 
   test("top search bar stays compact", () => {
