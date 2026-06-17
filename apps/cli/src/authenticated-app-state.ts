@@ -58,6 +58,8 @@ export type AuthenticatedAppAction =
   | { type: "set-content-index"; contentIndex: number }
   | { type: "set-search-editing"; searchEditing: boolean }
   | { type: "set-search-query"; searchQuery: string }
+  | { type: "reset-search" }
+  | { type: "submit-search-query" }
   | { type: "search-started" }
   | { type: "search-completed"; results: SearchResults }
   | { type: "search-failed"; error: string }
@@ -200,15 +202,52 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
     case "set-search-editing":
       return { ...state, searchEditing: action.searchEditing };
     case "set-search-query": {
-      const trimmed = action.searchQuery.trim();
       return withBrowseState(
-        {
-          ...state,
-          mainView: trimmed ? "search-results" : state.mainView === "search-results" ? "home" : state.mainView
-        },
+        state,
         {
           ...state.browseState,
           searchQuery: action.searchQuery
+        }
+      );
+    }
+    case "reset-search":
+      return withBrowseState(state, {
+        ...state.browseState,
+        searchQuery: "",
+        submittedSearchQuery: "",
+        searchRequestId: 0,
+        searchBusy: false,
+        searchError: "",
+        searchResults: { tracks: [], playlists: [], albums: [], artists: [] }
+      });
+    case "submit-search-query": {
+      const submittedSearchQuery = state.browseState.searchQuery.trim();
+      if (!submittedSearchQuery) {
+        return withBrowseState(
+          {
+            ...state,
+            mainView: state.mainView === "search-results" ? "home" : state.mainView
+          },
+          {
+            ...state.browseState,
+            submittedSearchQuery: "",
+            searchBusy: false,
+            searchError: ""
+          }
+        );
+      }
+
+      return withBrowseState(
+        {
+          ...state,
+          mainView: "search-results"
+        },
+        {
+          ...state.browseState,
+          submittedSearchQuery,
+          searchRequestId: state.browseState.searchRequestId + 1,
+          searchBusy: true,
+          searchError: ""
         }
       );
     }

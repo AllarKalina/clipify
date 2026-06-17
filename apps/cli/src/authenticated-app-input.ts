@@ -16,6 +16,7 @@ export type AuthenticatedIntent =
   | { type: "set-content-index"; contentIndex: number }
   | { type: "start-search-editing" }
   | { type: "stop-search-editing" }
+  | { type: "submit-search-query" }
   | { type: "append-search-query"; value: string }
   | { type: "trim-search-query" }
   | { type: "go-home" }
@@ -182,8 +183,12 @@ export function resolveAuthenticatedIntent(
   }
 
   if (state.searchEditing) {
-    if (key.escape || key.return) {
-      return { type: "stop-search-editing" };
+    if (key.return) {
+      return { type: "submit-search-query" };
+    }
+
+    if (key.escape) {
+      return { type: "none" };
     }
 
     if (key.backspace || key.delete) {
@@ -192,6 +197,10 @@ export function resolveAuthenticatedIntent(
 
     if (input && !key.ctrl) {
       return { type: "append-search-query", value: input };
+    }
+
+    if (key.tab || key.upArrow || key.downArrow || key.leftArrow || key.rightArrow) {
+      return resolveAuthenticatedIntent({ ...state, searchEditing: false }, input, key);
     }
 
     return { type: "none" };

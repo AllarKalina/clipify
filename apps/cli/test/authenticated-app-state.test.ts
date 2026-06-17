@@ -131,7 +131,7 @@ describe("authenticated app state", () => {
     expect(next.contentIndex).toBe(0);
   });
 
-  test("set search query transitions empty search-results back home", () => {
+  test("set search query only updates the draft", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "search-results" as const,
@@ -146,7 +146,66 @@ describe("authenticated app state", () => {
       searchQuery: ""
     });
 
-    expect(next.mainView).toBe("home");
+    expect(next.mainView).toBe("search-results");
+    expect(next.browseState.searchQuery).toBe("");
+  });
+
+  test("submitting search query switches to results and marks it busy", () => {
+    const initial = {
+      ...createInitialAuthenticatedAppState(""),
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        searchQuery: " weekend "
+      }
+    };
+
+    const next = authenticatedAppReducer(initial, {
+      type: "submit-search-query"
+    });
+
+    expect(next.mainView).toBe("search-results");
+    expect(next.browseState.submittedSearchQuery).toBe("weekend");
+    expect(next.browseState.searchRequestId).toBe(1);
+    expect(next.browseState.searchBusy).toBeTrue();
+  });
+
+  test("reset search clears draft, submitted query, and pending state", () => {
+    const initial = {
+      ...createInitialAuthenticatedAppState(""),
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        searchQuery: "weekend",
+        submittedSearchQuery: "weekend",
+        searchRequestId: 2,
+        searchBusy: true,
+        searchError: "nope",
+        searchResults: {
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000
+            }
+          ],
+          playlists: [],
+          albums: [],
+          artists: []
+        }
+      }
+    };
+
+    const next = authenticatedAppReducer(initial, {
+      type: "reset-search"
+    });
+
+    expect(next.browseState.searchQuery).toBe("");
+    expect(next.browseState.submittedSearchQuery).toBe("");
+    expect(next.browseState.searchRequestId).toBe(0);
+    expect(next.browseState.searchBusy).toBeFalse();
+    expect(next.browseState.searchResults.tracks).toHaveLength(0);
   });
 
   test("selection movement is bounded at list edges", () => {

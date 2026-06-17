@@ -344,18 +344,19 @@ describe("authenticated app selectors", () => {
     ).toBe(" Na · Allar Kalina · 131 tracks");
   });
 
-  test("top search bar keeps home and playlist prompts distinct", () => {
+  test("top search bar stays compact", () => {
     const state = createInitialAuthenticatedAppState("");
 
-    expect(getSearchPromptLine(state.homeSnapshot)).toBe(" What do you want to play?");
-    expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe(" Type [/] or press [enter] to search");
-    expect(getTopBarHeight(state.browseState)).toBe(4);
+    expect(getSearchPromptLine(state.homeSnapshot)).toBe(" Search Spotify");
+    expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe(" Search Spotify");
+    expect(getSearchInputLine(state.browseState, state.homeSnapshot, true)).toBe(" ");
+    expect(getTopBarHeight(state.browseState)).toBe(3);
     expect(
       getTopBarHeight({
         ...state.browseState,
         searchBusy: true,
         searchError: "nope"
       })
-    ).toBe(6);
+    ).toBe(5);
   });
 });

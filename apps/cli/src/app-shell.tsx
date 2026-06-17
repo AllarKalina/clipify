@@ -57,6 +57,7 @@ export function AuthenticatedShell(props: AppShellProps) {
             height={topBarHeight}
             width={contentWidth}
             player={props.player}
+            searchEditing={props.searchEditing}
           />
           <AppPageBody
             mainView={props.mainView}

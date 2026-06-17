@@ -170,7 +170,7 @@ export function AppPageBody({
           {clipLine(
             mainView === "playlist-detail"
               ? "This playlist has no playable tracks yet."
-              : mainView === "search-results" && browse.searchQuery
+              : mainView === "search-results" && browse.submittedSearchQuery
               ? "No results for this query."
               : `Nothing to show in ${getMainViewLabel(mainView)} yet.`,
             contentWidth

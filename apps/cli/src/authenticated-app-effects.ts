@@ -55,27 +55,33 @@ export function useAuthenticatedAppEffects({
   }, [autoStartLink, autoLinkStarted, context, dispatch, state.homeSnapshot.spotify, state.linkFlow, state.statusLine]);
 
   useEffect(() => {
-    if (!state.browseState.searchQuery.trim()) {
+    if (!state.browseState.searchRequestId || !state.browseState.submittedSearchQuery) {
       return;
     }
 
-    const timeout = setTimeout(() => {
-      dispatch({ type: "search-started" });
+    let cancelled = false;
+    const query = state.browseState.submittedSearchQuery;
 
-      void (async () => {
-        try {
-          const query = state.browseState.searchQuery.trim();
-          const results = await client.searchCli(query);
-          dispatch({ type: "search-completed", results });
-          dispatch({ type: "set-content-index", contentIndex: 0 });
-        } catch (error) {
-          dispatch({ type: "search-failed", error: toMessage(error) });
+    void (async () => {
+      try {
+        const results = await client.searchCli(query);
+        if (cancelled) {
+          return;
         }
-      })();
-    }, 250);
+        dispatch({ type: "search-completed", results });
+        dispatch({ type: "set-content-index", contentIndex: 0 });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        dispatch({ type: "search-failed", error: toMessage(error) });
+      }
+    })();
 
-    return () => clearTimeout(timeout);
-  }, [client, dispatch, state.browseState.searchQuery]);
+    return () => {
+      cancelled = true;
+    };
+  }, [client, dispatch, state.browseState.searchRequestId, state.browseState.submittedSearchQuery]);
 
   useEffect(() => {
     dispatch({ type: "reset-progress-tick" });

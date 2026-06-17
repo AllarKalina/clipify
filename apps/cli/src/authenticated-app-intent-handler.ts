@@ -23,6 +23,12 @@ type HandleAuthenticatedIntentArgs = {
   playerModeMutationsInFlight: MutableRefObject<number>;
 };
 
+function leaveSearchEditing(state: AuthenticatedAppState, dispatch: Dispatch<AuthenticatedAppAction>) {
+  if (state.searchEditing) {
+    dispatch({ type: "set-search-editing", searchEditing: false });
+  }
+}
+
 export function handleAuthenticatedIntent({
   intent,
   state,
@@ -51,12 +57,14 @@ export function handleAuthenticatedIntent({
       return;
     }
     case "toggle-focus":
+      leaveSearchEditing(state, dispatch);
       dispatch({
         type: "set-focus-region",
         focusRegion: state.focusRegion === "sidebar" ? "content" : "sidebar"
       });
       return;
     case "move-sidebar-selection":
+      leaveSearchEditing(state, dispatch);
       dispatch({ type: "move-sidebar-selection", direction: intent.direction });
       return;
     case "activate-sidebar-item": {
@@ -67,17 +75,22 @@ export function handleAuthenticatedIntent({
       return;
     }
     case "set-focus-region":
+      leaveSearchEditing(state, dispatch);
       dispatch({ type: "set-focus-region", focusRegion: intent.focusRegion });
       return;
     case "go-home":
-      dispatch({ type: "set-search-query", searchQuery: "" });
+      dispatch({ type: "reset-search" });
       dispatch({ type: "set-main-view", mainView: "home" });
       dispatch({ type: "set-focus-region", focusRegion: "content" });
       return;
     case "move-content-selection":
+      leaveSearchEditing(state, dispatch);
       dispatch({ type: "move-content-selection", direction: intent.direction });
       return;
     case "set-content-index":
+      if (intent.contentIndex !== 0) {
+        leaveSearchEditing(state, dispatch);
+      }
       dispatch({ type: "set-content-index", contentIndex: intent.contentIndex });
       return;
     case "start-search-editing":
@@ -96,6 +109,9 @@ export function handleAuthenticatedIntent({
         dispatch({ type: "set-main-view", mainView: "home" });
       }
       dispatch({ type: "set-search-editing", searchEditing: false });
+      return;
+    case "submit-search-query":
+      dispatch({ type: "submit-search-query" });
       return;
     case "append-search-query":
       dispatch({

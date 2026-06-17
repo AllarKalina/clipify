@@ -83,6 +83,8 @@ export type ShellBrowseState = {
   playlistDetail: PlaylistDetail | null;
   pinnedPlaylistNames: string[];
   searchQuery: string;
+  submittedSearchQuery: string;
+  searchRequestId: number;
   searchResults: SearchResults;
   searchBusy: boolean;
   searchError: string;
@@ -97,6 +99,8 @@ export function createInitialShellBrowseState(pinnedPlaylistNames: string[] = []
     playlistDetail: null,
     pinnedPlaylistNames,
     searchQuery: "",
+    submittedSearchQuery: "",
+    searchRequestId: 0,
     searchResults: {
       tracks: [],
       playlists: [],
