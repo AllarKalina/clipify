@@ -98,6 +98,22 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "activate-selected-item" });
   });
 
+  test("escape returns playlist detail content to home", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      focusRegion: "content" as const,
+      contentIndex: 1,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "go-home" });
+  });
+
   test("sidebar arrows navigate library entries", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),

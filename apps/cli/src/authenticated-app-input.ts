@@ -209,6 +209,10 @@ export function resolveAuthenticatedIntent(
     return { type: "go-home" };
   }
 
+  if (key.escape && state.mainView !== "home") {
+    return { type: "go-home" };
+  }
+
   if (input === "o") {
     return { type: "logout" };
   }
