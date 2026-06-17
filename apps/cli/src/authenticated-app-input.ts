@@ -22,6 +22,8 @@ export type AuthenticatedIntent =
   | { type: "submit-search-query" }
   | { type: "append-search-query"; value: string }
   | { type: "trim-search-query" }
+  | { type: "trim-search-query-word" }
+  | { type: "clear-search-query" }
   | { type: "go-home" }
   | { type: "logout" }
   | { type: "open-device-picker" }
@@ -163,7 +165,7 @@ export function resolveAuthenticatedIntent(
     return { type: "exit" };
   }
 
-  if ((key.meta || key.super) && input === "s") {
+  if (key.super && input === "s") {
     return { type: "activate-control-prefix" };
   }
 
@@ -266,6 +268,14 @@ export function resolveAuthenticatedIntent(
       return { type: "none" };
     }
 
+    if (key.super && (key.backspace || key.delete)) {
+      return { type: "clear-search-query" };
+    }
+
+    if (key.meta && (key.backspace || key.delete)) {
+      return { type: "trim-search-query-word" };
+    }
+
     if (key.backspace || key.delete) {
       return { type: "trim-search-query" };
     }
@@ -346,7 +356,7 @@ export function resolveAuthenticatedIntent(
     }
 
     if ((input === "/" || key.return) && selectCanStartSearchEditing(state)) {
-      return { type: "start-search-editing" };
+      return key.return && state.browseState.searchQuery.trim() ? { type: "submit-search-query" } : { type: "start-search-editing" };
     }
 
     if ((input === "/" || key.return) && state.homeSnapshot.spotify === "relink-required") {
@@ -355,6 +365,20 @@ export function resolveAuthenticatedIntent(
 
     if (key.return && selectSelectedItem(state)) {
       return { type: "activate-selected-item" };
+    }
+
+    if (selectCanStartSearchEditing(state)) {
+      if (key.super && (key.backspace || key.delete)) {
+        return { type: "clear-search-query" };
+      }
+
+      if (key.meta && (key.backspace || key.delete)) {
+        return { type: "trim-search-query-word" };
+      }
+
+      if (key.backspace || key.delete) {
+        return { type: "trim-search-query" };
+      }
     }
 
     if (input && !key.ctrl && !key.meta && !key.super && selectCanStartSearchEditing(state)) {

@@ -29,6 +29,10 @@ function leaveSearchEditing(state: AuthenticatedAppState, dispatch: Dispatch<Aut
   }
 }
 
+function trimSearchQueryWord(searchQuery: string) {
+  return searchQuery.replace(/\s+$/, "").replace(/\S+$/, "");
+}
+
 export function handleAuthenticatedIntent({
   intent,
   state,
@@ -139,10 +143,22 @@ export function handleAuthenticatedIntent({
       });
       return;
     case "trim-search-query":
+      dispatch({ type: "set-search-editing", searchEditing: true });
       dispatch({
         type: "set-search-query",
         searchQuery: state.browseState.searchQuery.slice(0, -1)
       });
+      return;
+    case "trim-search-query-word":
+      dispatch({ type: "set-search-editing", searchEditing: true });
+      dispatch({
+        type: "set-search-query",
+        searchQuery: trimSearchQueryWord(state.browseState.searchQuery)
+      });
+      return;
+    case "clear-search-query":
+      dispatch({ type: "set-search-editing", searchEditing: true });
+      dispatch({ type: "set-search-query", searchQuery: "" });
       return;
     case "logout":
       logoutAuthenticatedApp(context);
