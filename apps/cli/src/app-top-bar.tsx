@@ -39,6 +39,18 @@ export function getSearchInputLine(browse: ShellBrowseState, player: HomeSnapsho
   return iconLabel(NERD_ICONS.search, getSearchLabel(browse, player, searchEditing));
 }
 
+export function clipSearchInputLabel(value: string, width: number): string {
+  if (width <= 0) {
+    return "";
+  }
+
+  if (value.length <= width) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(0, width - 1))}…`;
+}
+
 export function getTopBarHeight(browse: ShellBrowseState) {
   return 3 + (browse.searchError ? 1 : 0) + (browse.searchBusy ? 1 : 0);
 }
@@ -49,8 +61,8 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
   const searchActive = searchSelected && focusRegion === "content";
   const searchLabel = getSearchLabel(browse, player, searchEditing);
   const cursor = searchActive ? (searchEditing ? "▌" : "▏") : "";
-  const inputWidth = Math.max(1, contentWidth - 4 - cursor.length);
-  const clippedSearchLabel = clipLine(searchLabel, inputWidth);
+  const inputWidth = Math.max(1, contentWidth - 2 - cursor.length);
+  const clippedSearchLabel = clipSearchInputLabel(searchLabel, inputWidth);
   const mutedPlaceholder = !browse.searchQuery && !searchEditing && player.spotify !== "relink-required";
 
   return (
@@ -65,7 +77,6 @@ export function AppTopBar({ browse, focusRegion, contentIndex, height, width, pl
       flexShrink={0}
     >
       <Text>
-        <Text color={searchActive ? "green" : "cyan"}>{searchActive ? "› " : "  "}</Text>
         <Text color={searchActive ? "green" : "white"}>{`${NERD_ICONS.search} `}</Text>
         <Text color={mutedPlaceholder ? "gray" : "white"} bold={searchEditing}>
           {clippedSearchLabel}

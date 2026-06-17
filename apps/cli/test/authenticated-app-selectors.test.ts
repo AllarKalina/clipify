@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
 import { buildVisibleListLines, formatPlaylistDetailHeader } from "../src/app-page-body";
-import { getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
+import { clipSearchInputLabel, getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
   test("builds home sections as quick launch plus picked for you", () => {
@@ -350,6 +350,8 @@ describe("authenticated app selectors", () => {
     expect(getSearchPromptLine(state.homeSnapshot)).toBe(" Search Spotify");
     expect(getSearchInputLine(state.browseState, state.homeSnapshot)).toBe(" Search Spotify");
     expect(getSearchInputLine(state.browseState, state.homeSnapshot, true)).toBe(" ");
+    expect(clipSearchInputLabel("sadads dsadssd", 40)).toBe("sadads dsadssd");
+    expect(clipSearchInputLabel("sadads dsadssd", 8)).toBe("sadads …");
     expect(getTopBarHeight(state.browseState)).toBe(3);
     expect(
       getTopBarHeight({
