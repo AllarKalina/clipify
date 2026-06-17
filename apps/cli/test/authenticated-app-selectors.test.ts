@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { buildVisibleListLines, formatPlaylistDetailHeader, getListScrollMargin, shouldRenderMainViewLabel } from "../src/app-page-body";
+import {
+  buildVisibleListLines,
+  formatPlaylistDetailHeader,
+  formatTrackRow,
+  getListScrollMargin,
+  shouldRenderMainViewLabel
+} from "../src/app-page-body";
 import { clipSearchInputLabel, getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
@@ -377,6 +383,39 @@ describe("authenticated app selectors", () => {
     expect(
       formatPlaylistDetailHeader(playlistDetail)
     ).toBe(" Na · Allar Kalina · 131 tracks");
+  });
+
+  test("track rows separate title from artist metadata", () => {
+    const wide = formatTrackRow(
+      {
+        id: "track-1",
+        title: "I Wanna Dance with Somebody (Who Loves Me)",
+        subtitle: "Whitney Houston",
+        meta: "Whitney",
+        action: { type: "noop" }
+      },
+      7,
+      80
+    );
+
+    expect(wide.indexLabel).toBe("07");
+    expect(wide.title.trimEnd()).toBe("I Wanna Dance with Somebody (Who Loves Me)");
+    expect(wide.metadata.trimEnd()).toBe("Whitney Houston");
+
+    const narrow = formatTrackRow(
+      {
+        id: "track-1",
+        title: "I Wanna Dance with Somebody (Who Loves Me)",
+        subtitle: "Whitney Houston",
+        meta: "Whitney",
+        action: { type: "noop" }
+      },
+      7,
+      30
+    );
+
+    expect(narrow.metadata).toBe("");
+    expect(narrow.title.trimEnd()).toBe("I Wanna Dance with Some…");
   });
 
   test("top search bar stays compact", () => {

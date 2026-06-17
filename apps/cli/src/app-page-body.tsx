@@ -6,10 +6,61 @@ import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
-function renderRow(content: string, selected: boolean, activeRegion: boolean) {
+type TrackRowLayout = {
+  indexLabel: string;
+  metadata: string;
+  marker: string;
+  title: string;
+};
+
+export function formatTrackRow(item: ContentItem, absoluteIndex: number, width: number): TrackRowLayout {
+  const indexLabel = absoluteIndex < 100 ? String(absoluteIndex).padStart(2, "0") : String(absoluteIndex);
+  const marker = "▸";
+  const prefixWidth = marker.length + 1 + indexLabel.length + 2;
+  const availableWidth = Math.max(1, width - prefixWidth);
+  const metadataText = item.subtitle;
+
+  if (!metadataText || availableWidth < 32) {
+    return {
+      indexLabel,
+      marker,
+      title: clipLine(metadataText ? `${item.title} · ${metadataText}` : item.title, availableWidth),
+      metadata: ""
+    };
+  }
+
+  const metadataWidth = Math.min(metadataText.length, Math.max(16, Math.floor(availableWidth * 0.38)));
+  const titleWidth = Math.max(1, availableWidth - metadataWidth - 3);
+
+  return {
+    indexLabel,
+    marker,
+    title: clipLine(item.title, titleWidth),
+    metadata: clipLine(metadataText, metadataWidth)
+  };
+}
+
+function renderRow(item: ContentItem, absoluteIndex: number, selected: boolean, activeRegion: boolean, width: number) {
+  const layout = formatTrackRow(item, absoluteIndex, width);
+  const activeSelected = selected && activeRegion;
+  const markerColor = activeSelected ? "black" : selected ? "green" : "gray";
+  const markerBackground = activeSelected ? "green" : undefined;
+  const titleColor = activeSelected ? "green" : "white";
+  const metadataColor = activeSelected ? "white" : "gray";
+
   return (
-    <Text color={selected && activeRegion ? "black" : "white"} backgroundColor={selected && activeRegion ? "green" : undefined} bold={selected}>
-      {content}
+    <Text bold={selected}>
+      <Text color={markerColor} backgroundColor={markerBackground}>
+        {selected ? layout.marker : " "} {layout.indexLabel}
+      </Text>
+      <Text>  </Text>
+      <Text color={titleColor}>{layout.title}</Text>
+      {layout.metadata ? (
+        <>
+          <Text color="gray"> · </Text>
+          <Text color={metadataColor}>{layout.metadata}</Text>
+        </>
+      ) : null}
     </Text>
   );
 }
@@ -222,16 +273,7 @@ export function AppPageBody({
               </Text>
             ) : (
               <React.Fragment key={line.item.id}>
-                {renderRow(
-                  clipLine(
-                    line.item.meta
-                      ? `${line.item.title} · ${line.item.subtitle} · ${line.item.meta}`
-                      : `${line.item.title} · ${line.item.subtitle}`,
-                    rowWidth
-                  ),
-                  line.absoluteIndex === contentIndex,
-                  focusRegion === "content"
-                )}
+                {renderRow(line.item, line.absoluteIndex, line.absoluteIndex === contentIndex, focusRegion === "content", rowWidth)}
               </React.Fragment>
             )
           )
