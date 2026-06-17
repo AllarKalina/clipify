@@ -44,7 +44,8 @@ describe("authenticated app selectors", () => {
     const viewModel = selectShellViewModel(state);
     expect(viewModel.activeSections.map((section) => section.title)).toEqual([" Quick launch", " Picked for you"]);
     expect(viewModel.activeSections[0]?.items[0]?.action).toEqual({
-      type: "play-context",
+      type: "play-and-open-playlist",
+      playlistId: "playlist-1",
       uri: "spotify:playlist:1"
     });
     expect(viewModel.selectedItem?.title).toBe("Roadtrip");

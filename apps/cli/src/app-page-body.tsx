@@ -16,7 +16,8 @@ function renderRow(content: string, selected: boolean, activeRegion: boolean) {
 
 function renderTile(item: ContentItem, selected: boolean, activeRegion: boolean, width: number) {
   const lineOne = clipLine(item.title, width - 2);
-  const lineTwo = clipLine(item.subtitle || item.meta || " ", width - 2);
+  const supportingText = item.meta ? `${item.subtitle} · ${item.meta}` : item.subtitle || " ";
+  const lineTwo = clipLine(supportingText, width - 2);
 
   return (
     <Box
@@ -111,7 +112,6 @@ export function AppPageBody({
   focusRegion,
   width,
   height,
-  searchEditing,
   player,
   linkPending
 }: AppPageBodyProps) {
@@ -121,7 +121,8 @@ export function AppPageBody({
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
   const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
   const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - playlistDetailMetadata.length - 1) : 0;
-  const headerLineCount = playlistDetail ? 2 : 1;
+  const showMainHeader = mainView !== "home";
+  const headerLineCount = playlistDetail ? 2 : showMainHeader ? 1 : 0;
   const listAvailableLines = Math.max(1, height - headerLineCount - 1);
   const visibleListLines =
     mainView === "home"
@@ -132,21 +133,23 @@ export function AppPageBody({
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height}>
-      <Box marginBottom={1} flexDirection="column">
-        <Text color="green" bold>
-          {clipLine(viewLabel, contentWidth)}
-        </Text>
-        {playlistDetail ? (
-          <Text>
-            <Text color="green" bold>
-              {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
-            </Text>
-            <Text color="white">
-              {clipLine(` ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
-            </Text>
+      {showMainHeader ? (
+        <Box marginBottom={1} flexDirection="column">
+          <Text color="green" bold>
+            {clipLine(viewLabel, contentWidth)}
           </Text>
-        ) : null}
-      </Box>
+          {playlistDetail ? (
+            <Text>
+              <Text color="green" bold>
+                {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
+              </Text>
+              <Text color="white">
+                {clipLine(` ${playlistDetailMetadata}`, Math.max(1, contentWidth - playlistAccentWidth))}
+              </Text>
+            </Text>
+          ) : null}
+        </Box>
+      ) : null}
       {player.spotify === "relink-required" ? (
         <Text color="yellow">
           {clipLine(
@@ -218,9 +221,6 @@ export function AppPageBody({
           )
         )
       )}
-      {!searchEditing && mainView === "home" ? (
-        <Text color="white">{clipLine("Quick launch starts playback. Sidebar opens library detail. Featured picks open detail.", contentWidth)}</Text>
-      ) : null}
     </Box>
   );
 }

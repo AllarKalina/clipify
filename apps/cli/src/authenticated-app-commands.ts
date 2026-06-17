@@ -94,6 +94,43 @@ async function loadLibrarySection(client: ApiClient, libraryId: string) {
   return client.getCliLibraryView(libraryId);
 }
 
+function openPlaylistDetail(
+  context: AuthenticatedCommandContext,
+  playlistId: string,
+  options: { manageBusy?: boolean; showSuccessStatus?: boolean } = {}
+) {
+  const { client, dispatch, getState } = context;
+  const manageBusy = options.manageBusy ?? true;
+  const showSuccessStatus = options.showSuccessStatus ?? true;
+
+  if (manageBusy) {
+    dispatch({ type: "set-busy", busy: true });
+  }
+
+  void loadLibrarySection(client, playlistId)
+    .then((detail) => {
+      if (!detail.section) {
+        throw new Error("Playlist view not available");
+      }
+
+      dispatch({
+        type: "open-playlist-detail",
+        detail: toPlaylistDetail(detail.section, getState().browseState, playlistId)
+      });
+      if (showSuccessStatus) {
+        dispatch({ type: "set-status-line", statusLine: `Opened ${detail.section.title}` });
+      }
+    })
+    .catch((error) => {
+      dispatch({ type: "set-status-line", statusLine: `Playlist load failed: ${toMessage(error)}` });
+    })
+    .finally(() => {
+      if (manageBusy) {
+        dispatch({ type: "set-busy", busy: false });
+      }
+    });
+}
+
 export async function refreshAuthenticatedApp(
   context: AuthenticatedCommandContext,
   successLine: string
@@ -337,25 +374,15 @@ export function executeContentAction(
   }
 
   if (action.type === "open-playlist") {
-    dispatch({ type: "set-busy", busy: true });
-    void loadLibrarySection(client, action.playlistId)
-      .then((detail) => {
-        if (!detail.section) {
-          throw new Error("Playlist view not available");
-        }
+    openPlaylistDetail(context, action.playlistId);
+    return;
+  }
 
-        dispatch({
-          type: "open-playlist-detail",
-          detail: toPlaylistDetail(detail.section, getState().browseState, action.playlistId)
-        });
-        dispatch({ type: "set-status-line", statusLine: `Opened ${detail.section.title}` });
-      })
-      .catch((error) => {
-        dispatch({ type: "set-status-line", statusLine: `Playlist load failed: ${toMessage(error)}` });
-      })
-      .finally(() => {
-        dispatch({ type: "set-busy", busy: false });
-      });
+  if (action.type === "play-and-open-playlist") {
+    openPlaylistDetail(context, action.playlistId, { manageBusy: false, showSuccessStatus: false });
+    runPlaybackAction(context, "Started playlist", (targetClient) =>
+      targetClient.runCliPlayerAction({ action: "play-context", contextUri: action.uri })
+    );
     return;
   }
 

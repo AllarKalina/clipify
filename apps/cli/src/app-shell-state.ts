@@ -57,6 +57,7 @@ export type SearchResults = {
 export type ContentAction =
   | { type: "play-track"; uri: string }
   | { type: "play-context"; uri: string }
+  | { type: "play-and-open-playlist"; playlistId: string; uri: string }
   | { type: "open-playlist"; playlistId: string }
   | { type: "open-liked-tracks" }
   | { type: "noop" };
@@ -256,7 +257,7 @@ export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowse
         title: playlist.name,
         subtitle: playlist.ownerName,
         meta: `${playlist.trackCount} tracks`,
-        action: { type: "play-context", uri: playlist.uri } as const
+        action: { type: "play-and-open-playlist", playlistId: playlist.id, uri: playlist.uri } as const
       }))
     },
     {
