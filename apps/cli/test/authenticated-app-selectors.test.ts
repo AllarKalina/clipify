@@ -303,6 +303,32 @@ describe("authenticated app selectors", () => {
     ]);
   });
 
+  test("list viewport can keep playlist section title out of scrolling rows", () => {
+    const lines = buildVisibleListLines(
+      [
+        {
+          id: "playlist-tracks",
+          title: "Na",
+          items: [
+            { id: "1", title: "A", subtitle: "artist", action: { type: "noop" } },
+            { id: "2", title: "B", subtitle: "artist", action: { type: "noop" } },
+            { id: "3", title: "C", subtitle: "artist", action: { type: "noop" } },
+            { id: "4", title: "D", subtitle: "artist", action: { type: "noop" } }
+          ]
+        }
+      ],
+      1,
+      3,
+      { stickySectionIds: ["playlist-tracks"] }
+    );
+
+    expect(lines).toEqual([
+      { type: "item", item: expect.objectContaining({ title: "A" }), absoluteIndex: 1 },
+      { type: "item", item: expect.objectContaining({ title: "B" }), absoluteIndex: 2 },
+      { type: "item", item: expect.objectContaining({ title: "C" }), absoluteIndex: 3 }
+    ]);
+  });
+
   test("top search bar keeps home and playlist prompts distinct", () => {
     const state = createInitialAuthenticatedAppState("");
 

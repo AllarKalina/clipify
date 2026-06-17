@@ -52,12 +52,24 @@ type ListRenderLine =
   | { type: "section"; id: string; title: string }
   | { type: "item"; item: ContentItem; absoluteIndex: number };
 
-export function buildVisibleListLines(sections: ContentSection[], contentIndex: number, availableLines: number): ListRenderLine[] {
+type BuildVisibleListLinesOptions = {
+  stickySectionIds?: string[];
+};
+
+export function buildVisibleListLines(
+  sections: ContentSection[],
+  contentIndex: number,
+  availableLines: number,
+  options: BuildVisibleListLinesOptions = {}
+): ListRenderLine[] {
   const allLines: ListRenderLine[] = [];
   let absoluteIndex = 1;
+  const stickySectionIds = new Set(options.stickySectionIds ?? []);
 
   for (const section of sections) {
-    allLines.push({ type: "section", id: section.id, title: section.title });
+    if (!stickySectionIds.has(section.id)) {
+      allLines.push({ type: "section", id: section.id, title: section.title });
+    }
 
     for (const item of section.items) {
       allLines.push({
@@ -94,16 +106,27 @@ export function AppPageBody({
   const contentWidth = width - 4;
   const rowWidth = Math.max(1, contentWidth - 1);
   const viewLabel = getMainViewLabel(mainView);
-  const headerLineCount = 1;
+  const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
+  const headerLineCount = playlistDetail ? 2 : 1;
   const listAvailableLines = Math.max(1, height - headerLineCount - 1);
-  const visibleListLines = mainView === "home" ? [] : buildVisibleListLines(sections, contentIndex, listAvailableLines);
+  const visibleListLines =
+    mainView === "home"
+      ? []
+      : buildVisibleListLines(sections, contentIndex, listAvailableLines, {
+          stickySectionIds: playlistDetail ? ["playlist-tracks"] : []
+        });
 
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1} width={width} height={height} minHeight={height}>
       <Box marginBottom={1} flexDirection="column">
         <Text color="green" bold>
-          {clipLine(viewLabel, contentWidth)}
+          {clipLine(playlistDetail ? `${viewLabel} · ${playlistDetail.name}` : viewLabel, contentWidth)}
         </Text>
+        {playlistDetail ? (
+          <Text color="white">
+            {clipLine(`${playlistDetail.ownerName || "Spotify"} · ${playlistDetail.trackCount} tracks`, contentWidth)}
+          </Text>
+        ) : null}
       </Box>
       {player.spotify === "relink-required" ? (
         <Text color="yellow">
