@@ -407,6 +407,58 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent({ ...state, contentIndex: 4 }, "", { downArrow: true })).toEqual({ type: "none" });
   });
 
+  test("shift arrows jump playlist detail selection by five tracks without crossing edges", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      focusRegion: "content" as const,
+      contentIndex: 4,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 12,
+          uri: "spotify:playlist:1",
+          tracks: Array.from({ length: 12 }, (_, index) => ({
+            id: `track-${index + 1}`,
+            trackName: `Track ${index + 1}`,
+            artistName: "Fleetwood Mac",
+            albumName: "Rumours",
+            uri: `spotify:track:${index + 1}`,
+            durationMs: 257000
+          }))
+        }
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "", { downArrow: true, shift: true })).toEqual({
+      type: "set-content-index",
+      contentIndex: 9
+    });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 9 }, "", { upArrow: true, shift: true })).toEqual({
+      type: "set-content-index",
+      contentIndex: 4
+    });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 3 }, "", { upArrow: true, shift: true })).toEqual({
+      type: "set-content-index",
+      contentIndex: 1
+    });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 10 }, "", { downArrow: true, shift: true })).toEqual({
+      type: "set-content-index",
+      contentIndex: 12
+    });
+    expect(resolveAuthenticatedIntent({ ...state, contentIndex: 12 }, "", { downArrow: true, shift: true })).toEqual({ type: "none" });
+  });
+
   test("control keys require command prefix", () => {
     const state = createInitialAuthenticatedAppState("");
 

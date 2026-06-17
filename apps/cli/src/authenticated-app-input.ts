@@ -152,6 +152,20 @@ function isTrimSearchInputWord(input: string, key: { ctrl?: boolean; meta?: bool
   return (key.meta && (key.backspace || key.delete)) || (key.ctrl && input === "w");
 }
 
+function resolveTrackJumpMove(state: AuthenticatedAppState, direction: "up" | "down", step = 5): number | null {
+  if (state.mainView !== "playlist-detail" && state.mainView !== "liked-tracks") {
+    return null;
+  }
+
+  const lastIndex = getMainItemCount(state) - 1;
+  if (lastIndex < 1 || state.contentIndex < 1) {
+    return null;
+  }
+
+  const delta = direction === "down" ? step : -step;
+  return Math.max(1, Math.min(lastIndex, state.contentIndex + delta));
+}
+
 export function resolveAuthenticatedIntent(
   state: AuthenticatedAppState,
   input: string,
@@ -166,6 +180,7 @@ export function resolveAuthenticatedIntent(
     backspace?: boolean;
     delete?: boolean;
     tab?: boolean;
+    shift?: boolean;
     meta?: boolean;
     super?: boolean;
   }
@@ -343,6 +358,13 @@ export function resolveAuthenticatedIntent(
     }
 
     if (key.upArrow) {
+      if (key.shift) {
+        const jumpTarget = resolveTrackJumpMove(state, "up");
+        if (jumpTarget !== null) {
+          return jumpTarget === state.contentIndex ? { type: "none" } : { type: "set-content-index", contentIndex: jumpTarget };
+        }
+      }
+
       const lastIndex = getMainItemCount(state) - 1;
       const searchJumpThreshold = state.mainView === "home" ? 2 : 1;
       if (lastIndex >= 1 && state.contentIndex <= searchJumpThreshold) {
@@ -357,6 +379,13 @@ export function resolveAuthenticatedIntent(
     }
 
     if (key.downArrow) {
+      if (key.shift) {
+        const jumpTarget = resolveTrackJumpMove(state, "down");
+        if (jumpTarget !== null) {
+          return jumpTarget === state.contentIndex ? { type: "none" } : { type: "set-content-index", contentIndex: jumpTarget };
+        }
+      }
+
       const lastIndex = getMainItemCount(state) - 1;
       const lastReachableIndex = state.mainView === "home" ? Math.max(1, lastIndex - 1) : lastIndex;
       if (lastIndex >= 1 && state.contentIndex >= lastReachableIndex) {
