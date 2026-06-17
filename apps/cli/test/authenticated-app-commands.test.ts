@@ -355,6 +355,19 @@ describe("authenticated app commands", () => {
     ).toBe("No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.");
   });
 
+  test("maps no-device playback failures with available device context", () => {
+    expect(
+      getPlaybackFailureMessage(
+        new ApiClientError("No active Spotify device. Start playback in Spotify first.", 409, "/v1/cli/player/action", "NO_ACTIVE_DEVICE"),
+        "Started playback",
+        {
+          deviceName: "Living Room",
+          deviceStatus: "available"
+        }
+      )
+    ).toBe("Living Room is available, but playback is controlled elsewhere. Press [d] to transfer.");
+  });
+
   test("refresh logs out on unauthorized bootstrap", async () => {
     const initialState = createInitialAuthenticatedAppState("Restoring session...");
     let didLogout = false;

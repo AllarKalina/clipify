@@ -108,10 +108,6 @@ export function reconcilePlayerDevice(snapshot: HomeSnapshot, devices: SpotifyDe
     };
   }
 
-  if (snapshot.deviceStatus === "active" && snapshot.deviceName) {
-    return snapshot;
-  }
-
   return {
     ...snapshot,
     deviceId: primaryDevice.id,

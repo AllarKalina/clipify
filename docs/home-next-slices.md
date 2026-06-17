@@ -31,6 +31,10 @@ Desired outcomes:
 - explain `no active device` vs `playback controlled elsewhere`
 - surface a clearer failure state when transport has nowhere to go
 
+Status:
+
+- started with stale active-device reconciliation and contextual no-device transport errors
+
 ## 2. Spotify-Like Home Reshape
 
 Goal: make the authenticated shell feel like a compact Spotify client.

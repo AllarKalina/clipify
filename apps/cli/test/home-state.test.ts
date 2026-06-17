@@ -52,6 +52,34 @@ describe("home state utilities", () => {
     expect(next.deviceStatus).toBe("available");
   });
 
+  test("does not preserve stale active device when only available devices remain", () => {
+    const snapshot = {
+      ...createInitialHomeSnapshot(),
+      deviceId: "device-1",
+      deviceName: "MacBook Air",
+      deviceType: "Computer",
+      deviceStatus: "active" as const,
+      supportsVolume: true,
+      volumePercent: 55
+    };
+    const next = reconcilePlayerDevice(snapshot, [
+      {
+        id: "device-2",
+        name: "Living Room",
+        type: "Speaker",
+        isActive: false,
+        isRestricted: false,
+        supportsVolume: true,
+        volumePercent: 35
+      }
+    ]);
+
+    expect(next.deviceId).toBe("device-2");
+    expect(next.deviceName).toBe("Living Room");
+    expect(next.deviceStatus).toBe("available");
+    expect(next.volumePercent).toBe(35);
+  });
+
   test("ticks progress only while actively playing", () => {
     const snapshot = {
       ...createInitialHomeSnapshot(),

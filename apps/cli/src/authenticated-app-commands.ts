@@ -222,7 +222,7 @@ export function runPlaybackAction(
   label: string,
   action: (targetClient: ApiClient) => Promise<unknown>
 ) {
-  const { client, dispatch } = context;
+  const { client, dispatch, getState } = context;
   dispatch({ type: "set-busy", busy: true });
 
   void (async () => {
@@ -231,7 +231,7 @@ export function runPlaybackAction(
       await refreshAuthenticatedApp(context, label);
     } catch (error) {
       dispatch({ type: "set-busy", busy: false });
-      dispatch({ type: "set-status-line", statusLine: getPlaybackFailureMessage(error, label) });
+      dispatch({ type: "set-status-line", statusLine: getPlaybackFailureMessage(error, label, getState().homeSnapshot) });
     }
   })();
 }
@@ -255,7 +255,7 @@ export function runOptimisticPlayerModeAction(
     } catch (error) {
       mutationState.current = Math.max(0, mutationState.current - 1);
       await refreshAuthenticatedPlayerSilently(context);
-      dispatch({ type: "set-status-line", statusLine: getPlaybackFailureMessage(error, label) });
+      dispatch({ type: "set-status-line", statusLine: getPlaybackFailureMessage(error, label, context.getState().homeSnapshot) });
       return;
     }
 

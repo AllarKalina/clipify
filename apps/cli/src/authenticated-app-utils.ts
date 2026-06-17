@@ -17,7 +17,21 @@ export function nextRepeatMode(mode: HomeSnapshot["repeatMode"]): HomeSnapshot["
   return "off";
 }
 
-export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string): string {
+type PlaybackFailureContext = Pick<HomeSnapshot, "deviceName" | "deviceStatus">;
+
+function getNoActiveDeviceMessage(player?: PlaybackFailureContext): string {
+  if (player?.deviceStatus === "available" && player.deviceName) {
+    return `${player.deviceName} is available, but playback is controlled elsewhere. Press [d] to transfer.`;
+  }
+
+  if (player?.deviceStatus === "restricted" && player.deviceName) {
+    return `${player.deviceName} is restricted. Pick a different device with [d].`;
+  }
+
+  return "No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.";
+}
+
+export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string, player?: PlaybackFailureContext): string {
   const apiError = error as ApiClientError;
   if (apiError?.name !== "ApiClientError") {
     return `${fallbackLabel} failed: ${toMessage(error)}`;
@@ -32,7 +46,7 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string)
   }
 
   if (apiError.code === "NO_ACTIVE_DEVICE") {
-    return "No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.";
+    return getNoActiveDeviceMessage(player);
   }
 
   if (apiError.code === "DEVICE_RESTRICTED") {
@@ -48,7 +62,7 @@ export function getPlaybackFailureMessage(error: unknown, fallbackLabel: string)
   }
 
   if (apiError.status === 409 && apiError.message.toLowerCase().includes("no active spotify device")) {
-    return "No active Spotify device. Press [d] to transfer playback, or start playback in Spotify first.";
+    return getNoActiveDeviceMessage(player);
   }
 
   if (apiError.status === 409 && apiError.message.toLowerCase().includes("restricted")) {
