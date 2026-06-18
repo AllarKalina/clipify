@@ -23,12 +23,12 @@ function getSortDescription(mode: TrackSortMode): string {
 function SortPickerLine({
   children,
   color,
-  backgroundColor,
+  backgroundColor = "black",
   bold = false
 }: {
   children: string;
   color: "black" | "cyan" | "green" | "white" | "yellow";
-  backgroundColor?: "green";
+  backgroundColor?: "black" | "green";
   bold?: boolean;
 }) {
   return (
@@ -44,20 +44,20 @@ export function SortPickerOverlay({ width, height, selectedIndex, currentMode }:
   }
 
   const panelWidth = Math.min(58, Math.max(26, width - 4));
-  const contentWidth = panelWidth - 4;
+  const contentWidth = panelWidth - 2;
 
   return (
     <Box position="absolute" width={width} height={height} justifyContent="center" alignItems="center" overflow="hidden">
-      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} width={panelWidth} overflow="hidden">
+      <Box flexDirection="column" borderStyle="round" borderColor="yellow" backgroundColor="black" width={panelWidth} overflow="hidden">
         <SortPickerLine color="yellow" bold>
-          {clipLine("Sort Tracks", contentWidth)}
+          {clipLine(" Sort Tracks", contentWidth)}
         </SortPickerLine>
-        <SortPickerLine color="white">{clipLine("choose with arrows, enter applies", contentWidth)}</SortPickerLine>
+        <SortPickerLine color="white">{clipLine(" choose with arrows, enter applies", contentWidth)}</SortPickerLine>
         {TRACK_SORT_MODES.map((mode, index) => {
           const selected = selectedIndex === index;
           const active = currentMode === mode;
           const activeLabel = contentWidth >= 34 && active ? " (current)" : "";
-          const label = `${getTrackSortLabel(mode).padEnd(8, " ")} ${getSortDescription(mode)}${activeLabel}`;
+          const label = ` ${getTrackSortLabel(mode).padEnd(8, " ")} ${getSortDescription(mode)}${activeLabel}`;
 
           return (
             <SortPickerLine
