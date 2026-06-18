@@ -20,32 +20,54 @@ function getSortDescription(mode: TrackSortMode): string {
         : "artist name";
 }
 
+function SortPickerLine({
+  children,
+  color,
+  backgroundColor,
+  bold = false
+}: {
+  children: string;
+  color: "black" | "cyan" | "green" | "white" | "yellow";
+  backgroundColor?: "green";
+  bold?: boolean;
+}) {
+  return (
+    <Text color={color} backgroundColor={backgroundColor} bold={bold} wrap="truncate">
+      {children}
+    </Text>
+  );
+}
+
 export function SortPickerOverlay({ width, height, selectedIndex, currentMode }: SortPickerOverlayProps) {
-  const panelWidth = Math.min(58, Math.max(38, width - 8));
+  if (width < 30 || height < 8) {
+    return null;
+  }
+
+  const panelWidth = Math.min(58, Math.max(26, width - 4));
   const contentWidth = panelWidth - 4;
 
   return (
-    <Box position="absolute" width={width} height={height} justifyContent="center" alignItems="center">
-      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} width={panelWidth}>
-        <Text color="yellow" bold>
-          Sort Tracks
-        </Text>
-        <Text color="white">{clipLine("[↑↓] choose  [enter] apply  [esc] close", contentWidth)}</Text>
+    <Box position="absolute" width={width} height={height} justifyContent="center" alignItems="center" overflow="hidden">
+      <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1} width={panelWidth} overflow="hidden">
+        <SortPickerLine color="yellow" bold>
+          {clipLine("Sort Tracks", contentWidth)}
+        </SortPickerLine>
+        <SortPickerLine color="white">{clipLine("choose with arrows, enter applies", contentWidth)}</SortPickerLine>
         {TRACK_SORT_MODES.map((mode, index) => {
           const selected = selectedIndex === index;
           const active = currentMode === mode;
-          const marker = active ? "●" : " ";
-          const label = `${marker} ${getTrackSortLabel(mode).padEnd(8, " ")} ${getSortDescription(mode)}`;
+          const activeLabel = contentWidth >= 34 && active ? " (current)" : "";
+          const label = `${getTrackSortLabel(mode).padEnd(8, " ")} ${getSortDescription(mode)}${activeLabel}`;
 
           return (
-            <Text
+            <SortPickerLine
               key={mode}
               color={selected ? "black" : active ? "cyan" : "white"}
               backgroundColor={selected ? "green" : undefined}
               bold={selected || active}
             >
               {clipLine(label, contentWidth)}
-            </Text>
+            </SortPickerLine>
           );
         })}
       </Box>
