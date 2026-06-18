@@ -153,6 +153,10 @@ function isTrimSearchInputWord(input: string, key: { ctrl?: boolean; meta?: bool
   return (key.meta && (key.backspace || key.delete)) || (key.ctrl && input === "w");
 }
 
+function isControlPrefixInput(input: string, key: { meta?: boolean; super?: boolean }) {
+  return input === "s" && (key.super || key.meta);
+}
+
 function resolveTrackJumpMove(state: AuthenticatedAppState, direction: "up" | "down", step = 5): number | null {
   if (state.mainView !== "playlist-detail" && state.mainView !== "liked-tracks") {
     return null;
@@ -190,7 +194,7 @@ export function resolveAuthenticatedIntent(
     return { type: "exit" };
   }
 
-  if (key.super && input === "s") {
+  if (isControlPrefixInput(input, key)) {
     return { type: "activate-control-prefix" };
   }
 

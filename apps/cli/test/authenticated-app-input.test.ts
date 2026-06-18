@@ -463,6 +463,7 @@ describe("authenticated app input", () => {
     const state = createInitialAuthenticatedAppState("");
 
     expect(resolveAuthenticatedIntent(state, "s", { super: true })).toEqual({ type: "activate-control-prefix" });
+    expect(resolveAuthenticatedIntent(state, "s", { meta: true })).toEqual({ type: "activate-control-prefix" });
     expect(resolveAuthenticatedIntent(state, " ", {})).toEqual({ type: "none" });
     expect(resolveAuthenticatedIntent(state, ",", {})).toEqual({ type: "none" });
     expect(resolveAuthenticatedIntent(state, ".", {})).toEqual({ type: "none" });
