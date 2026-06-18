@@ -253,11 +253,15 @@ describe("authenticated app state", () => {
     expect(next.contentIndex).toBe(0);
   });
 
-  test("cycling track sort keeps the selected playlist track selected", () => {
+  test("sort picker applies sort and keeps the selected playlist track selected", () => {
     const initial = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
       contentIndex: 3,
+      sortPicker: {
+        open: true,
+        selectedIndex: 1
+      },
       browseState: {
         ...createInitialAuthenticatedAppState("").browseState,
         playlistDetail: {
@@ -301,10 +305,30 @@ describe("authenticated app state", () => {
       }
     };
 
-    const next = authenticatedAppReducer(initial, { type: "cycle-track-sort" });
+    const next = authenticatedAppReducer(initial, { type: "submit-sort-selection" });
 
     expect(next.browseState.trackSortMode).toBe("added");
     expect(next.contentIndex).toBe(1);
+    expect(next.sortPicker.open).toBeFalse();
+  });
+
+  test("sort picker opens on current sort and moves within sort options", () => {
+    const opened = authenticatedAppReducer(
+      {
+        ...createInitialAuthenticatedAppState(""),
+        browseState: {
+          ...createInitialAuthenticatedAppState("").browseState,
+          trackSortMode: "added" as const
+        }
+      },
+      { type: "open-sort-picker" }
+    );
+    const moved = authenticatedAppReducer(opened, { type: "move-sort-selection", direction: "down" });
+    const closed = authenticatedAppReducer(moved, { type: "close-sort-picker" });
+
+    expect(opened.sortPicker).toEqual({ open: true, selectedIndex: 1 });
+    expect(moved.sortPicker.selectedIndex).toBe(2);
+    expect(closed.sortPicker.open).toBeFalse();
   });
 
   test("set search query only updates the draft", () => {

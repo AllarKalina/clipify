@@ -8,6 +8,9 @@ export type AuthenticatedIntent =
   | { type: "close-device-picker" }
   | { type: "move-device-selection"; direction: "up" | "down" }
   | { type: "submit-device-selection" }
+  | { type: "close-sort-picker" }
+  | { type: "move-sort-selection"; direction: "up" | "down" }
+  | { type: "submit-sort-selection" }
   | { type: "toggle-focus" }
   | { type: "set-focus-region"; focusRegion: "sidebar" | "content" }
   | { type: "move-sidebar-selection"; direction: "up" | "down" }
@@ -37,7 +40,7 @@ export type AuthenticatedIntent =
   | { type: "cycle-repeat"; mode: AuthenticatedAppState["homeSnapshot"]["repeatMode"] }
   | { type: "set-volume"; volumePercent: number }
   | { type: "start-link" }
-  | { type: "cycle-track-sort" }
+  | { type: "open-sort-picker" }
   | { type: "relink-required" };
 
 function getHomeTileSectionCounts(state: AuthenticatedAppState): number[] {
@@ -222,6 +225,26 @@ export function resolveAuthenticatedIntent(
     return { type: "none" };
   }
 
+  if (state.sortPicker.open) {
+    if (key.escape) {
+      return { type: "close-sort-picker" };
+    }
+
+    if (key.upArrow) {
+      return { type: "move-sort-selection", direction: "up" };
+    }
+
+    if (key.downArrow) {
+      return { type: "move-sort-selection", direction: "down" };
+    }
+
+    if (key.return) {
+      return { type: "submit-sort-selection" };
+    }
+
+    return { type: "none" };
+  }
+
   if (state.controlPrefixActive) {
     if (key.escape) {
       return { type: "clear-control-prefix" };
@@ -286,7 +309,7 @@ export function resolveAuthenticatedIntent(
     }
 
     if (input === "a" && (state.mainView === "playlist-detail" || state.mainView === "liked-tracks")) {
-      return { type: "cycle-track-sort" };
+      return { type: "open-sort-picker" };
     }
 
     return resolveAuthenticatedIntent({ ...state, controlPrefixActive: false }, input, key);

@@ -7,6 +7,7 @@ import { AppSidebar } from "./app-sidebar";
 import { AppTopBar, getTopBarHeight } from "./app-top-bar";
 import { BottomPlayer } from "./bottom-player";
 import { DevicePickerOverlay } from "./device-picker-overlay";
+import { SortPickerOverlay } from "./sort-picker-overlay";
 import type { HomeSnapshot } from "./home-state";
 
 type AppShellProps = {
@@ -29,6 +30,8 @@ type AppShellProps = {
   devicePickerDevices: SpotifyDeviceSummary[];
   devicePickerIndex: number;
   devicePickerLoading: boolean;
+  sortPickerOpen: boolean;
+  sortPickerIndex: number;
 };
 
 export function AuthenticatedShell(props: AppShellProps) {
@@ -93,6 +96,14 @@ export function AuthenticatedShell(props: AppShellProps) {
           devices={props.devicePickerDevices}
           selectedIndex={props.devicePickerIndex}
           loading={props.devicePickerLoading}
+        />
+      ) : null}
+      {props.sortPickerOpen ? (
+        <SortPickerOverlay
+          width={shellWidth}
+          height={props.height}
+          selectedIndex={props.sortPickerIndex}
+          currentMode={props.browse.trackSortMode}
         />
       ) : null}
     </Box>

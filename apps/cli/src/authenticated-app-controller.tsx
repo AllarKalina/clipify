@@ -110,6 +110,8 @@ export function AuthenticatedAppController({
       devicePickerDevices={state.devicePicker.devices}
       devicePickerIndex={state.devicePicker.selectedIndex}
       devicePickerLoading={state.devicePicker.loading}
+      sortPickerOpen={state.sortPicker.open}
+      sortPickerIndex={state.sortPicker.selectedIndex}
     />
   );
 }

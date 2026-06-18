@@ -7,8 +7,8 @@ import {
   createInitialShellBrowseState,
   buildLibrarySidebarItems,
   flattenSections,
-  getNextTrackSortMode,
   moveSelection,
+  TRACK_SORT_MODES,
   type AppFocusRegion,
   type MainView,
   type PlaylistDetail,
@@ -26,6 +26,11 @@ export type DevicePickerState = {
   open: boolean;
   loading: boolean;
   devices: SpotifyDeviceSummary[];
+  selectedIndex: number;
+};
+
+export type SortPickerState = {
+  open: boolean;
   selectedIndex: number;
 };
 
@@ -51,6 +56,7 @@ export type AuthenticatedAppState = {
   statusLine: string;
   busy: boolean;
   devicePicker: DevicePickerState;
+  sortPicker: SortPickerState;
 };
 
 export type AuthenticatedAppAction =
@@ -76,7 +82,10 @@ export type AuthenticatedAppAction =
   | { type: "search-failed"; error: string }
   | { type: "replace-browse-state"; browseState: ShellBrowseState }
   | { type: "patch-browse-state"; patch: Partial<ShellBrowseState> }
-  | { type: "cycle-track-sort" }
+  | { type: "open-sort-picker" }
+  | { type: "close-sort-picker" }
+  | { type: "move-sort-selection"; direction: "up" | "down" }
+  | { type: "submit-sort-selection" }
   | { type: "open-liked-tracks" }
   | { type: "open-playlist-detail"; detail: PlaylistDetail }
   | { type: "close-playlist-detail" }
@@ -161,6 +170,21 @@ function findTrackContentIndex(state: AuthenticatedAppState, uri: string): numbe
   return itemIndex >= 0 ? itemIndex + 1 : null;
 }
 
+function getTrackSortIndex(state: AuthenticatedAppState): number {
+  return Math.max(0, TRACK_SORT_MODES.indexOf(state.browseState.trackSortMode));
+}
+
+function withTrackSortMode(state: AuthenticatedAppState, trackSortMode: ShellBrowseState["trackSortMode"]): AuthenticatedAppState {
+  const selectedTrackUri = getSelectedTrackUri(state);
+  const nextState = withBrowseState(state, {
+    ...state.browseState,
+    trackSortMode
+  });
+  const nextContentIndex = selectedTrackUri ? findTrackContentIndex(nextState, selectedTrackUri) : null;
+
+  return nextContentIndex !== null ? { ...nextState, contentIndex: nextContentIndex } : nextState;
+}
+
 export function createInitialAuthenticatedAppState(
   initialStatusLine: string,
   pinnedPlaylistNames: string[] = []
@@ -183,6 +207,10 @@ export function createInitialAuthenticatedAppState(
       open: false,
       loading: false,
       devices: [],
+      selectedIndex: 0
+    },
+    sortPicker: {
+      open: false,
       selectedIndex: 0
     }
   };
@@ -349,16 +377,23 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ...state.browseState,
         ...action.patch
       });
-    case "cycle-track-sort": {
-      const selectedTrackUri = getSelectedTrackUri(state);
-      const nextState = withBrowseState(state, {
-        ...state.browseState,
-        trackSortMode: getNextTrackSortMode(state.browseState.trackSortMode)
-      });
-      const nextContentIndex = selectedTrackUri ? findTrackContentIndex(nextState, selectedTrackUri) : null;
-
-      return nextContentIndex ? { ...nextState, contentIndex: nextContentIndex } : nextState;
-    }
+    case "open-sort-picker":
+      return { ...state, sortPicker: { open: true, selectedIndex: getTrackSortIndex(state) } };
+    case "close-sort-picker":
+      return { ...state, sortPicker: { ...state.sortPicker, open: false } };
+    case "move-sort-selection":
+      return {
+        ...state,
+        sortPicker: {
+          ...state.sortPicker,
+          selectedIndex: moveSelection(state.sortPicker.selectedIndex, action.direction, TRACK_SORT_MODES.length)
+        }
+      };
+    case "submit-sort-selection":
+      return {
+        ...withTrackSortMode(state, TRACK_SORT_MODES[state.sortPicker.selectedIndex] ?? state.browseState.trackSortMode),
+        sortPicker: { ...state.sortPicker, open: false }
+      };
     case "open-liked-tracks":
       return {
         ...withBrowseState(state, state.browseState),

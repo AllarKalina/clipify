@@ -490,7 +490,7 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "exit" });
   });
 
-  test("command prefix cycles track sort only in track list views", () => {
+  test("command prefix opens track sort picker only in track list views", () => {
     const trackListState = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
@@ -502,7 +502,22 @@ describe("authenticated app input", () => {
       controlPrefixActive: true
     };
 
-    expect(resolveAuthenticatedIntent(trackListState, "a", {})).toEqual({ type: "cycle-track-sort" });
+    expect(resolveAuthenticatedIntent(trackListState, "a", {})).toEqual({ type: "open-sort-picker" });
     expect(resolveAuthenticatedIntent(homeState, "a", {})).toEqual({ type: "none" });
+  });
+
+  test("sort picker owns arrows enter and escape while open", () => {
+    const state = {
+      ...createInitialAuthenticatedAppState(""),
+      sortPicker: {
+        open: true,
+        selectedIndex: 1
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "move-sort-selection", direction: "down" });
+    expect(resolveAuthenticatedIntent(state, "", { upArrow: true })).toEqual({ type: "move-sort-selection", direction: "up" });
+    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "submit-sort-selection" });
+    expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "close-sort-picker" });
   });
 });

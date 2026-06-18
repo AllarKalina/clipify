@@ -12,7 +12,7 @@ import {
 } from "./authenticated-app-commands";
 import type { AuthenticatedIntent } from "./authenticated-app-input";
 import { selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
-import { getNextTrackSortMode, getTrackSortLabel } from "./app-shell-state";
+import { getTrackSortLabel, TRACK_SORT_MODES } from "./app-shell-state";
 import type { AuthenticatedAppAction, AuthenticatedAppState } from "./authenticated-app-state";
 
 type HandleAuthenticatedIntentArgs = {
@@ -63,6 +63,18 @@ export function handleAuthenticatedIntent({
       if (selectedDevice) {
         runDeviceTransfer(context, selectedDevice);
       }
+      return;
+    }
+    case "close-sort-picker":
+      dispatch({ type: "close-sort-picker" });
+      return;
+    case "move-sort-selection":
+      dispatch({ type: "move-sort-selection", direction: intent.direction });
+      return;
+    case "submit-sort-selection": {
+      const selectedSortMode = TRACK_SORT_MODES[state.sortPicker.selectedIndex] ?? state.browseState.trackSortMode;
+      dispatch({ type: "submit-sort-selection" });
+      dispatch({ type: "set-status-line", statusLine: `Track sort: ${getTrackSortLabel(selectedSortMode)}` });
       return;
     }
     case "toggle-focus":
@@ -173,12 +185,9 @@ export function handleAuthenticatedIntent({
     case "refresh":
       void refreshAuthenticatedApp(context, "Refreshed");
       return;
-    case "cycle-track-sort": {
-      const nextSortMode = getNextTrackSortMode(state.browseState.trackSortMode);
-      dispatch({ type: "cycle-track-sort" });
-      dispatch({ type: "set-status-line", statusLine: `Track sort: ${getTrackSortLabel(nextSortMode)}` });
+    case "open-sort-picker":
+      dispatch({ type: "open-sort-picker" });
       return;
-    }
     case "activate-selected-item": {
       const selectedItem = selectSelectedItem(state);
       if (selectedItem) {

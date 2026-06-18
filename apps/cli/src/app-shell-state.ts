@@ -26,6 +26,7 @@ export type TrackSummary = {
 };
 
 export type TrackSortMode = "original" | "added" | "title" | "artist";
+export const TRACK_SORT_MODES: TrackSortMode[] = ["original", "added", "title", "artist"];
 
 export type RecentTrackSummary = TrackSummary & {
   playedAt: string;
@@ -146,10 +147,6 @@ export function flattenSections(sections: ContentSection[]): ContentItem[] {
 
 export function getTrackSortLabel(sortMode: TrackSortMode): string {
   return sortMode === "title" ? "title" : sortMode === "artist" ? "artist" : sortMode === "added" ? "recent" : "playlist";
-}
-
-export function getNextTrackSortMode(sortMode: TrackSortMode): TrackSortMode {
-  return sortMode === "original" ? "added" : sortMode === "added" ? "title" : sortMode === "title" ? "artist" : "original";
 }
 
 function normalizeSortKey(value: string) {

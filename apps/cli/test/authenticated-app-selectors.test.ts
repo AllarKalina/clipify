@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { getNextTrackSortMode, getTrackSortLabel } from "../src/app-shell-state";
+import { getTrackSortLabel, TRACK_SORT_MODES } from "../src/app-shell-state";
 import {
   buildVisibleListLines,
   formatPlaylistDetailHeader,
@@ -337,7 +337,7 @@ describe("authenticated app selectors", () => {
     const viewModel = selectShellViewModel(state);
     expect(viewModel.activeSections[0]?.items.map((item) => item.title)).toEqual(["Newest", "Middle", "Oldest"]);
     expect(getTrackSortLabel(state.browseState.trackSortMode)).toBe("recent");
-    expect(getNextTrackSortMode("added")).toBe("title");
+    expect(TRACK_SORT_MODES).toEqual(["original", "added", "title", "artist"]);
   });
 
   test("list viewport keeps consecutive playlist rows around the selection", () => {
