@@ -4,10 +4,9 @@ import {
   buildLibrarySidebarItems,
   buildLikedTracksSections,
   buildPlaylistDetailSections,
-  buildSearchSections,
-  flattenSections,
-  getMainViewLabel
-} from "./app-shell-state";
+  buildSearchSections
+} from "./app-shell-sections";
+import { flattenSections, getMainViewLabel } from "./app-shell-navigation";
 import type { AuthenticatedAppState } from "./authenticated-app-state";
 
 export function selectSidebarItems(state: AuthenticatedAppState) {

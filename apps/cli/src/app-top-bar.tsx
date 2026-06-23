@@ -1,6 +1,6 @@
 import { Box, Text } from "ink";
 import React from "react";
-import type { AppFocusRegion, ShellBrowseState } from "./app-shell-state";
+import type { AppFocusRegion, ShellBrowseState } from "./app-shell-types";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 import { iconLabel, NERD_ICONS } from "./nerd-icons";

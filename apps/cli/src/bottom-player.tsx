@@ -2,7 +2,8 @@ import { Box, Text } from "ink";
 import React from "react";
 import { describePlayerDevice, getPlayerDeviceHint } from "./device-picker-state";
 import type { HomeSnapshot } from "./home-state";
-import { getMainViewLabel, type AppFocusRegion, type MainView } from "./app-shell-state";
+import { getMainViewLabel } from "./app-shell-navigation";
+import type { AppFocusRegion, MainView } from "./app-shell-types";
 import { clipLine, formatDuration, formatProgress } from "./app-shell-utils";
 
 type BottomPlayerProps = {

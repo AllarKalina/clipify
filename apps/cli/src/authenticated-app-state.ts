@@ -1,13 +1,13 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
+import { moveSelection } from "./app-shell-navigation";
 import {
   createInitialShellBrowseState,
-  moveSelection,
   type AppFocusRegion,
   type MainView,
   type PlaylistDetail,
   type SearchResults,
   type ShellBrowseState
-} from "./app-shell-state";
+} from "./app-shell-types";
 import {
   clampSelection,
   getMainItemCount,

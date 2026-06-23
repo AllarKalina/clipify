@@ -1,7 +1,7 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
 import { Box } from "ink";
 import React from "react";
-import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
+import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-types";
 import { AppPageBody } from "./app-page-body";
 import { AppSidebar } from "./app-sidebar";
 import { AppTopBar, getTopBarHeight } from "./app-top-bar";

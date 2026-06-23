@@ -1,7 +1,8 @@
 import { Box, Text } from "ink";
 import React from "react";
-import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-state";
-import { getMainViewLabel, getTrackSortLabel } from "./app-shell-state";
+import { getMainViewLabel } from "./app-shell-navigation";
+import { getTrackSortLabel } from "./app-shell-track-sorting";
+import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-types";
 import { clipLine } from "./app-shell-utils";
 import type { HomeSnapshot } from "./home-state";
 import { iconLabel, NERD_ICONS } from "./nerd-icons";

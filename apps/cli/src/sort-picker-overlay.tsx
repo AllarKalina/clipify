@@ -1,7 +1,8 @@
 import { Box, Text } from "ink";
 import React from "react";
 import { clipLine } from "./app-shell-utils";
-import { getTrackSortLabel, TRACK_SORT_MODES, type TrackSortMode } from "./app-shell-state";
+import { getTrackSortLabel, TRACK_SORT_MODES } from "./app-shell-track-sorting";
+import type { TrackSortMode } from "./app-shell-types";
 
 type SortPickerOverlayProps = {
   width: number;

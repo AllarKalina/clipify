@@ -12,7 +12,7 @@ import {
 } from "./authenticated-app-commands";
 import type { AuthenticatedIntent } from "./authenticated-app-input";
 import { selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
-import { getTrackSortLabel, TRACK_SORT_MODES } from "./app-shell-state";
+import { getTrackSortLabel, TRACK_SORT_MODES } from "./app-shell-track-sorting";
 import type { AuthenticatedAppAction, AuthenticatedAppState } from "./authenticated-app-state";
 
 type HandleAuthenticatedIntentArgs = {

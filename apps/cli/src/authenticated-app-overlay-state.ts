@@ -1,5 +1,7 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
-import { moveSelection, TRACK_SORT_MODES, type ShellBrowseState } from "./app-shell-state";
+import { moveSelection } from "./app-shell-navigation";
+import { TRACK_SORT_MODES } from "./app-shell-track-sorting";
+import type { ShellBrowseState } from "./app-shell-types";
 import { findTrackContentIndex, getSelectedTrackUri, withBrowseState } from "./authenticated-app-list-state";
 import type { AuthenticatedAppState, DevicePickerState, SortPickerState } from "./authenticated-app-state";
 import { clampDeviceSelection } from "./device-picker-state";

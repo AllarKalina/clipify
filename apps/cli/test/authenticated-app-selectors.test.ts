@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { selectCanStartSearchEditing, selectShellViewModel } from "../src/authenticated-app-selectors";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
-import { getTrackSortLabel, TRACK_SORT_MODES } from "../src/app-shell-state";
+import { getTrackSortLabel, TRACK_SORT_MODES } from "../src/app-shell-track-sorting";
 import {
   buildVisibleListLines,
   formatPlaylistDetailHeader,

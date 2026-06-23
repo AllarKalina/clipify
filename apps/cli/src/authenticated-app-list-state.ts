@@ -3,10 +3,10 @@ import {
   buildLibrarySidebarItems,
   buildLikedTracksSections,
   buildPlaylistDetailSections,
-  buildSearchSections,
-  flattenSections,
-  type ShellBrowseState
-} from "./app-shell-state";
+  buildSearchSections
+} from "./app-shell-sections";
+import { flattenSections } from "./app-shell-navigation";
+import type { ShellBrowseState } from "./app-shell-types";
 import type { AuthenticatedAppState } from "./authenticated-app-state";
 
 function buildMainSections(state: AuthenticatedAppState) {

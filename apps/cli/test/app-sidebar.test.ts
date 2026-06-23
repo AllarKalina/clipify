@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { ContentItem } from "../src/app-shell-state";
+import type { ContentItem } from "../src/app-shell-types";
 import { buildProfileName, getSidebarListHeight, getVisibleSidebarItems } from "../src/app-sidebar";
 
 function createSidebarItems(count: number): ContentItem[] {
