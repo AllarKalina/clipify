@@ -300,11 +300,16 @@ export function buildHomeSections(homeSnapshot: HomeSnapshot, state: ShellBrowse
     return [];
   }
 
+  const quickLaunchPlaylists = sortPlaylistsForLibrary(state.playlists, state.pinnedPlaylistNames, [
+    homeSnapshot.spotifyDisplayName,
+    homeSnapshot.userName
+  ]).slice(0, 6);
+
   return [
     {
       id: "quick-launch",
       title: iconLabel(NERD_ICONS.quickLaunch, "Quick launch"),
-      items: state.playlists.slice(0, 6).map((playlist) => ({
+      items: quickLaunchPlaylists.map((playlist) => ({
         id: `quick-launch-${playlist.id}`,
         title: playlist.name,
         subtitle: playlist.ownerName,

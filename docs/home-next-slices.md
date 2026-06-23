@@ -58,6 +58,7 @@ Status:
 - bottom player owns now-playing; Home no longer duplicates it
 - sidebar now represents the user library
 - Home shows search, quick launch, and featured picks
+- Quick launch uses library priority: pinned playlists, then owned playlists, then Spotify order
 - search results replace Home content in the main pane
 
 ## 3. Background Refresh Polish
