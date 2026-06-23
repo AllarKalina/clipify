@@ -465,7 +465,7 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "exit" });
   });
 
-  test("command prefix plays selected tracks without leaking into search input", () => {
+  test("command prefix leaves selected track playback to enter", () => {
     const trackListState = {
       ...createInitialAuthenticatedAppState(""),
       mainView: "playlist-detail" as const,
@@ -501,8 +501,12 @@ describe("authenticated app input", () => {
       }
     };
 
-    expect(resolveAuthenticatedIntent(trackListState, "p", {})).toEqual({ type: "play-selected-track" });
-    expect(resolveAuthenticatedIntent({ ...trackListState, contentIndex: 0 }, "p", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent(trackListState, "p", {})).toEqual({ type: "none" });
+    expect(resolveAuthenticatedIntent({ ...trackListState, contentIndex: 0 }, "p", {})).toEqual({
+      type: "start-search-editing-with-input",
+      value: "p"
+    });
+    expect(resolveAuthenticatedIntent(trackListState, "", { return: true })).toEqual({ type: "activate-selected-item" });
   });
 
   test("command prefix opens selected content context before falling back to logout", () => {

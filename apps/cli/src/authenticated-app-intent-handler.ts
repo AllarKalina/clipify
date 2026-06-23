@@ -196,13 +196,6 @@ export function handleAuthenticatedIntent({
       }
       return;
     }
-    case "play-selected-track": {
-      const selectedItem = selectSelectedItem(state);
-      if (selectedItem?.action.type === "play-track") {
-        executeContentAction(context, selectedItem.action);
-      }
-      return;
-    }
     case "open-selected-context": {
       const selectedItem = selectSelectedItem(state);
       if (selectedItem) {

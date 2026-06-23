@@ -461,7 +461,7 @@ describe("authenticated app selectors", () => {
         },
         true
       )
-    ).toBe("cmd+s [p] play  [a] sort   esc back");
+    ).toBe("cmd+s [a] sort   esc back");
 
     expect(
       getPlaylistActionHint(
