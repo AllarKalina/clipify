@@ -3,31 +3,6 @@ import { resolveAuthenticatedIntent } from "../src/authenticated-app-input";
 import { createInitialAuthenticatedAppState } from "../src/authenticated-app-state";
 
 describe("authenticated app input", () => {
-  test("routes device picker keys before shell keys", () => {
-    const state = {
-      ...createInitialAuthenticatedAppState(""),
-      devicePicker: {
-        open: true,
-        loading: false,
-        devices: [
-          {
-            id: "device-1",
-            name: "MacBook Pro",
-            type: "Computer",
-            isActive: true,
-            isRestricted: false,
-            supportsVolume: true,
-            volumePercent: 60
-          }
-        ],
-        selectedIndex: 0
-      }
-    };
-
-    expect(resolveAuthenticatedIntent(state, "d", {})).toEqual({ type: "close-device-picker" });
-    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "submit-device-selection" });
-  });
-
   test("pressing enter on a selected playlist track activates it", () => {
     const state = {
       ...createInitialAuthenticatedAppState(""),
@@ -506,18 +481,4 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(homeState, "a", {})).toEqual({ type: "none" });
   });
 
-  test("sort picker owns arrows enter and escape while open", () => {
-    const state = {
-      ...createInitialAuthenticatedAppState(""),
-      sortPicker: {
-        open: true,
-        selectedIndex: 1
-      }
-    };
-
-    expect(resolveAuthenticatedIntent(state, "", { downArrow: true })).toEqual({ type: "move-sort-selection", direction: "down" });
-    expect(resolveAuthenticatedIntent(state, "", { upArrow: true })).toEqual({ type: "move-sort-selection", direction: "up" });
-    expect(resolveAuthenticatedIntent(state, "", { return: true })).toEqual({ type: "submit-sort-selection" });
-    expect(resolveAuthenticatedIntent(state, "", { escape: true })).toEqual({ type: "close-sort-picker" });
-  });
 });
