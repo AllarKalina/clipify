@@ -1,4 +1,5 @@
-import { getMainItemCount, type AuthenticatedAppState } from "./authenticated-app-state";
+import { getMainItemCount } from "./authenticated-app-list-state";
+import type { AuthenticatedAppState } from "./authenticated-app-state";
 
 function getHomeTileSectionCounts(state: AuthenticatedAppState): number[] {
   if (state.mainView !== "home" || state.homeSnapshot.spotify !== "linked") {

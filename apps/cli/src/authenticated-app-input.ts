@@ -1,6 +1,7 @@
 import { nextRepeatMode } from "./authenticated-app-utils";
 import { selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
-import { getMainItemCount, type AuthenticatedAppState } from "./authenticated-app-state";
+import { getMainItemCount } from "./authenticated-app-list-state";
+import type { AuthenticatedAppState } from "./authenticated-app-state";
 import { resolveHomeHorizontalMove, resolveHomeVerticalMove, resolveTrackJumpMove } from "./authenticated-app-navigation";
 import { resolveOverlayIntent } from "./authenticated-app-overlays";
 import { resolveActiveSearchInputIntent, resolveSearchEntryIntent } from "./authenticated-app-search-input";

@@ -1,21 +1,24 @@
 import type { SpotifyDeviceSummary } from "@clipify/api-client";
 import {
-  buildHomeSections,
-  buildLikedTracksSections,
-  buildPlaylistDetailSections,
-  buildSearchSections,
   createInitialShellBrowseState,
-  buildLibrarySidebarItems,
-  flattenSections,
   moveSelection,
-  TRACK_SORT_MODES,
   type AppFocusRegion,
   type MainView,
   type PlaylistDetail,
   type SearchResults,
   type ShellBrowseState
 } from "./app-shell-state";
-import { clampDeviceSelection } from "./device-picker-state";
+import {
+  clampSelection,
+  getMainItemCount,
+  getSidebarItemCount,
+  withBrowseState
+} from "./authenticated-app-list-state";
+import {
+  createInitialDevicePickerState,
+  createInitialSortPickerState,
+  reduceOverlayState
+} from "./authenticated-app-overlay-state";
 import { createPendingAuthenticatedHomeSnapshot, type HomeSnapshot } from "./home-state";
 
 export type LinkFlow = {
@@ -96,45 +99,6 @@ export type AuthenticatedAppAction =
   | { type: "move-device-selection"; direction: "up" | "down" }
   | { type: "set-link-flow"; linkFlow: LinkFlow | null };
 
-function buildMainSections(state: AuthenticatedAppState) {
-  return state.mainView === "home"
-    ? buildHomeSections(state.homeSnapshot, state.browseState)
-    : state.mainView === "search-results"
-      ? buildSearchSections(state.browseState)
-      : state.mainView === "liked-tracks"
-        ? buildLikedTracksSections(state.browseState)
-        : buildPlaylistDetailSections(state.browseState);
-}
-
-function getSidebarItemCount(state: AuthenticatedAppState): number {
-  return buildLibrarySidebarItems(state.browseState, state.browseState.pinnedPlaylistNames).length;
-}
-
-export function getMainItemCount(state: AuthenticatedAppState): number {
-  return 1 + flattenSections(buildMainSections(state)).length;
-}
-
-function clampSelection(current: number, count: number): number {
-  if (count <= 0) {
-    return 0;
-  }
-
-  return Math.min(Math.max(0, current), count - 1);
-}
-
-function withBrowseState(state: AuthenticatedAppState, browseState: ShellBrowseState): AuthenticatedAppState {
-  const nextState = {
-    ...state,
-    browseState
-  };
-
-  return {
-    ...nextState,
-    sidebarIndex: clampSelection(state.sidebarIndex, getSidebarItemCount(nextState)),
-    contentIndex: clampSelection(state.contentIndex, getMainItemCount(nextState))
-  };
-}
-
 function getPlaylistReturnTarget(state: AuthenticatedAppState): PlaylistReturnTarget {
   if (state.mainView === "playlist-detail") {
     return {
@@ -151,38 +115,6 @@ function getPlaylistReturnTarget(state: AuthenticatedAppState): PlaylistReturnTa
     sidebarIndex: state.sidebarIndex,
     contentIndex: state.contentIndex
   };
-}
-
-function getSelectedTrackUri(state: AuthenticatedAppState): string | null {
-  if (state.contentIndex <= 0) {
-    return null;
-  }
-
-  const selectedItem = flattenSections(buildMainSections(state))[state.contentIndex - 1];
-  return selectedItem?.action.type === "play-track" ? selectedItem.action.uri : null;
-}
-
-function findTrackContentIndex(state: AuthenticatedAppState, uri: string): number | null {
-  const itemIndex = flattenSections(buildMainSections(state)).findIndex(
-    (item) => item.action.type === "play-track" && item.action.uri === uri
-  );
-
-  return itemIndex >= 0 ? itemIndex + 1 : null;
-}
-
-function getTrackSortIndex(state: AuthenticatedAppState): number {
-  return Math.max(0, TRACK_SORT_MODES.indexOf(state.browseState.trackSortMode));
-}
-
-function withTrackSortMode(state: AuthenticatedAppState, trackSortMode: ShellBrowseState["trackSortMode"]): AuthenticatedAppState {
-  const selectedTrackUri = getSelectedTrackUri(state);
-  const nextState = withBrowseState(state, {
-    ...state.browseState,
-    trackSortMode
-  });
-  const nextContentIndex = selectedTrackUri ? findTrackContentIndex(nextState, selectedTrackUri) : null;
-
-  return nextContentIndex !== null ? { ...nextState, contentIndex: nextContentIndex } : nextState;
 }
 
 export function createInitialAuthenticatedAppState(
@@ -203,16 +135,8 @@ export function createInitialAuthenticatedAppState(
     linkFlow: null,
     statusLine: initialStatusLine,
     busy: false,
-    devicePicker: {
-      open: false,
-      loading: false,
-      devices: [],
-      selectedIndex: 0
-    },
-    sortPicker: {
-      open: false,
-      selectedIndex: 0
-    }
+    devicePicker: createInitialDevicePickerState(),
+    sortPicker: createInitialSortPickerState()
   };
 }
 
@@ -378,22 +302,10 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
         ...action.patch
       });
     case "open-sort-picker":
-      return { ...state, sortPicker: { open: true, selectedIndex: getTrackSortIndex(state) } };
     case "close-sort-picker":
-      return { ...state, sortPicker: { ...state.sortPicker, open: false } };
     case "move-sort-selection":
-      return {
-        ...state,
-        sortPicker: {
-          ...state.sortPicker,
-          selectedIndex: moveSelection(state.sortPicker.selectedIndex, action.direction, TRACK_SORT_MODES.length)
-        }
-      };
     case "submit-sort-selection":
-      return {
-        ...withTrackSortMode(state, TRACK_SORT_MODES[state.sortPicker.selectedIndex] ?? state.browseState.trackSortMode),
-        sortPicker: { ...state.sortPicker, open: false }
-      };
+      return reduceOverlayState(state, action);
     case "open-liked-tracks":
       return {
         ...withBrowseState(state, state.browseState),
@@ -439,51 +351,11 @@ export function authenticatedAppReducer(state: AuthenticatedAppState, action: Au
       );
     }
     case "open-device-picker":
-      return {
-        ...state,
-        devicePicker: {
-          ...state.devicePicker,
-          open: true
-        }
-      };
     case "close-device-picker":
-      return {
-        ...state,
-        devicePicker: {
-          ...state.devicePicker,
-          open: false,
-          loading: false
-        }
-      };
     case "set-device-picker-loading":
-      return {
-        ...state,
-        devicePicker: {
-          ...state.devicePicker,
-          loading: action.loading
-        }
-      };
     case "set-device-list":
-      return {
-        ...state,
-        devicePicker: {
-          ...state.devicePicker,
-          devices: action.devices,
-          selectedIndex: clampDeviceSelection(state.devicePicker.selectedIndex, action.devices.length)
-        }
-      };
     case "move-device-selection":
-      return {
-        ...state,
-        devicePicker: {
-          ...state.devicePicker,
-          selectedIndex: moveSelection(
-            state.devicePicker.selectedIndex,
-            action.direction,
-            state.devicePicker.devices.length
-          )
-        }
-      };
+      return reduceOverlayState(state, action);
     case "set-link-flow":
       return { ...state, linkFlow: action.linkFlow };
     default:
