@@ -1,4 +1,5 @@
 import { nextRepeatMode } from "./authenticated-app-utils";
+import { canOpenSelectedContext, canPlaySelectedTrack } from "./authenticated-app-context-actions";
 import { selectSelectedItem, selectSidebarItem } from "./authenticated-app-selectors";
 import { getMainItemCount } from "./authenticated-app-list-state";
 import type { AuthenticatedAppState } from "./authenticated-app-state";
@@ -46,6 +47,14 @@ export function resolveAuthenticatedIntent(
 
     if (input === "h") {
       return { type: "go-home" };
+    }
+
+    if (input === "p") {
+      return canPlaySelectedTrack(state) ? { type: "play-selected-track" } : { type: "none" };
+    }
+
+    if (input === "o" && canOpenSelectedContext(state)) {
+      return { type: "open-selected-context" };
     }
 
     if (input === "o") {

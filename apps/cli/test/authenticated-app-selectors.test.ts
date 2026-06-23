@@ -11,6 +11,7 @@ import {
   getListScrollMargin,
   shouldRenderMainViewLabel
 } from "../src/app-page-body";
+import { getPlaylistActionHint } from "../src/authenticated-app-context-actions";
 import { clipSearchInputLabel, getSearchInputLine, getSearchPromptLine, getTopBarHeight } from "../src/app-top-bar";
 
 describe("authenticated app selectors", () => {
@@ -400,6 +401,7 @@ describe("authenticated app selectors", () => {
 
   test("body list height accounts for borders and sticky playlist header", () => {
     expect(getBodyListAvailableLines(37, true)).toBe(33);
+    expect(getBodyListAvailableLines(37, true, true)).toBe(32);
     expect(getBodyListAvailableLines(37, false)).toBe(35);
     expect(getBodyListAvailableLines(3, true)).toBe(1);
   });
@@ -446,6 +448,34 @@ describe("authenticated app selectors", () => {
     expect(
       formatPlaylistDetailHeader(playlistDetail)
     ).toBe(" Na · Allar Kalina · 131 tracks");
+  });
+
+  test("playlist action hint reflects the selected row action", () => {
+    expect(
+      getPlaylistActionHint(
+        {
+          id: "track-1",
+          title: "Dreams",
+          subtitle: "Fleetwood Mac",
+          action: { type: "play-track", uri: "spotify:track:1" }
+        },
+        true
+      )
+    ).toBe("cmd+s [p] play  [a] sort   esc back");
+
+    expect(
+      getPlaylistActionHint(
+        {
+          id: "playlist-1",
+          title: "Roadtrip",
+          subtitle: "Allar",
+          action: { type: "open-playlist", playlistId: "playlist-1" }
+        },
+        true
+      )
+    ).toBe("cmd+s [o] open  [a] sort   esc back");
+
+    expect(getPlaylistActionHint(null, false)).toBe("");
   });
 
   test("track rows separate title from artist metadata", () => {

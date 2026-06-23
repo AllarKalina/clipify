@@ -1,6 +1,7 @@
 import type { Dispatch, MutableRefObject } from "react";
 import {
   executeContentAction,
+  executeOpenContextAction,
   logoutAuthenticatedApp,
   openDevicePicker,
   refreshAuthenticatedApp,
@@ -192,6 +193,20 @@ export function handleAuthenticatedIntent({
       const selectedItem = selectSelectedItem(state);
       if (selectedItem) {
         executeContentAction(context, selectedItem.action);
+      }
+      return;
+    }
+    case "play-selected-track": {
+      const selectedItem = selectSelectedItem(state);
+      if (selectedItem?.action.type === "play-track") {
+        executeContentAction(context, selectedItem.action);
+      }
+      return;
+    }
+    case "open-selected-context": {
+      const selectedItem = selectSelectedItem(state);
+      if (selectedItem) {
+        executeOpenContextAction(context, selectedItem.action);
       }
       return;
     }

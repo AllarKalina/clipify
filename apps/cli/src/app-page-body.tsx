@@ -4,6 +4,7 @@ import { getMainViewLabel } from "./app-shell-navigation";
 import { getTrackSortLabel } from "./app-shell-track-sorting";
 import type { ContentItem, ContentSection, AppFocusRegion, MainView, ShellBrowseState } from "./app-shell-types";
 import { clipLine } from "./app-shell-utils";
+import { getPlaylistActionHint } from "./authenticated-app-context-actions";
 import type { HomeSnapshot } from "./home-state";
 import { iconLabel, NERD_ICONS } from "./nerd-icons";
 
@@ -142,9 +143,9 @@ export function getListScrollMargin(availableLines: number, requestedMargin = 2)
   return Math.min(requestedMargin, Math.max(1, Math.floor((availableLines - 1) / 3)));
 }
 
-export function getBodyListAvailableLines(height: number, showHeader: boolean): number {
+export function getBodyListAvailableLines(height: number, showHeader: boolean, showActionHint = false): number {
   const borderLines = 2;
-  const headerLines = showHeader ? 2 : 0;
+  const headerLines = showHeader ? 2 + Number(showActionHint) : 0;
   return Math.max(1, height - borderLines - headerLines);
 }
 
@@ -201,6 +202,9 @@ export function AppPageBody({
   const playlistDetail = mainView === "playlist-detail" ? browse.playlistDetail : null;
   const playlistDetailMetadata = playlistDetail ? getPlaylistDetailMetadata(playlistDetail) : "";
   const trackSortMetadata = mainView === "playlist-detail" || mainView === "liked-tracks" ? getTrackSortMetadata(browse) : "";
+  const activeItem = sections.flatMap((section) => section.items)[contentIndex - 1] ?? null;
+  const playlistActionHint =
+    playlistDetail && focusRegion === "content" ? getPlaylistActionHint(activeItem, focusRegion === "content") : "";
   const headerMetadata = playlistDetail
     ? trackSortMetadata
       ? `${playlistDetailMetadata} · `
@@ -209,7 +213,7 @@ export function AppPageBody({
   const playlistAccentWidth = playlistDetail ? Math.max(1, contentWidth - headerMetadata.length - trackSortMetadata.length - 1) : 0;
   const showMainHeader = shouldRenderMainViewLabel(mainView, playlistDetail);
   const showHeader = Boolean(playlistDetail) || showMainHeader;
-  const listAvailableLines = getBodyListAvailableLines(height, showHeader);
+  const listAvailableLines = getBodyListAvailableLines(height, showHeader, Boolean(playlistActionHint));
   const visibleListLines =
     mainView === "home"
       ? []
@@ -222,15 +226,18 @@ export function AppPageBody({
       {showHeader ? (
         <Box marginBottom={1} flexDirection="column">
           {playlistDetail ? (
-            <Text>
-              <Text color="green" bold>
-                {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
+            <>
+              <Text>
+                <Text color="green" bold>
+                  {clipLine(iconLabel(NERD_ICONS.playlists, playlistDetail.name), playlistAccentWidth)}
+                </Text>
+                <Text color="white">
+                  {clipLine(` ${headerMetadata}`, Math.max(1, contentWidth - playlistAccentWidth - trackSortMetadata.length))}
+                </Text>
+                {trackSortMetadata ? <Text color={browse.trackSortMode === "original" ? "gray" : "cyan"}>{trackSortMetadata}</Text> : null}
               </Text>
-              <Text color="white">
-                {clipLine(` ${headerMetadata}`, Math.max(1, contentWidth - playlistAccentWidth - trackSortMetadata.length))}
-              </Text>
-              {trackSortMetadata ? <Text color={browse.trackSortMode === "original" ? "gray" : "cyan"}>{trackSortMetadata}</Text> : null}
-            </Text>
+              {playlistActionHint ? <Text color="gray">{clipLine(playlistActionHint, contentWidth)}</Text> : null}
+            </>
           ) : (
             <Text>
               <Text color="green" bold>

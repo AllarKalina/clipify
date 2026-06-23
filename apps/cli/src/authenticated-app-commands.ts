@@ -1,5 +1,5 @@
 export type { AuthenticatedCommandContext } from "./authenticated-command-context";
-export { executeContentAction } from "./authenticated-app-library-commands";
+export { executeContentAction, executeOpenContextAction } from "./authenticated-app-library-commands";
 export {
   runDeviceTransfer,
   runOptimisticPlayerModeAction,

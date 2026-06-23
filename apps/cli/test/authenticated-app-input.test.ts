@@ -465,6 +465,78 @@ describe("authenticated app input", () => {
     expect(resolveAuthenticatedIntent(state, "q", {})).toEqual({ type: "exit" });
   });
 
+  test("command prefix plays selected tracks without leaking into search input", () => {
+    const trackListState = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "playlist-detail" as const,
+      focusRegion: "content" as const,
+      contentIndex: 1,
+      controlPrefixActive: true,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlistDetail: {
+          id: "playlist-1",
+          name: "Roadtrip",
+          description: "",
+          imageUrl: "",
+          ownerName: "Allar",
+          trackCount: 1,
+          uri: "spotify:playlist:1",
+          tracks: [
+            {
+              id: "track-1",
+              trackName: "Dreams",
+              artistName: "Fleetwood Mac",
+              albumName: "Rumours",
+              uri: "spotify:track:1",
+              durationMs: 257000
+            }
+          ]
+        }
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(trackListState, "p", {})).toEqual({ type: "play-selected-track" });
+    expect(resolveAuthenticatedIntent({ ...trackListState, contentIndex: 0 }, "p", {})).toEqual({ type: "none" });
+  });
+
+  test("command prefix opens selected content context before falling back to logout", () => {
+    const homeState = {
+      ...createInitialAuthenticatedAppState(""),
+      mainView: "home" as const,
+      focusRegion: "content" as const,
+      contentIndex: 1,
+      controlPrefixActive: true,
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("").browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 20,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      }
+    };
+
+    expect(resolveAuthenticatedIntent(homeState, "o", {})).toEqual({ type: "open-selected-context" });
+    expect(resolveAuthenticatedIntent({ ...homeState, contentIndex: 0 }, "o", {})).toEqual({ type: "logout" });
+  });
+
   test("command prefix opens track sort picker only in track list views", () => {
     const trackListState = {
       ...createInitialAuthenticatedAppState(""),

@@ -47,6 +47,8 @@ export type AuthenticatedIntent =
   | { type: "open-device-picker" }
   | { type: "refresh" }
   | { type: "activate-selected-item" }
+  | { type: "play-selected-track" }
+  | { type: "open-selected-context" }
   | { type: "toggle-playback" }
   | { type: "previous-track" }
   | { type: "next-track" }

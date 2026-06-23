@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ApiClient } from "@clipify/api-client";
 import { ApiClientError } from "@clipify/api-client";
-import { executeContentAction, refreshAuthenticatedApp } from "../src/authenticated-app-commands";
+import { executeContentAction, executeOpenContextAction, refreshAuthenticatedApp } from "../src/authenticated-app-commands";
 import { getPlaybackFailureMessage } from "../src/authenticated-app-utils";
 import {
   authenticatedAppReducer,
@@ -444,6 +444,82 @@ describe("authenticated app commands", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(playerAction).toEqual({ action: "play-context", contextUri: "spotify:playlist:1" });
+    expect(actions).toContainEqual({
+      type: "open-playlist-detail",
+      detail: expect.objectContaining({
+        id: "playlist-1",
+        name: "Roadtrip",
+        tracks: [expect.objectContaining({ trackName: "Dreams" })]
+      })
+    });
+  });
+
+  test("context open command opens quick launch playlist without starting playback", async () => {
+    let playerAction: unknown = null;
+    const actions: AuthenticatedAppAction[] = [];
+    let state: AuthenticatedAppState = {
+      ...createInitialAuthenticatedAppState("Ready"),
+      homeSnapshot: {
+        ...createInitialAuthenticatedAppState("Ready").homeSnapshot,
+        backend: "connected" as const,
+        spotify: "linked" as const
+      },
+      browseState: {
+        ...createInitialAuthenticatedAppState("Ready").browseState,
+        playlists: [
+          {
+            id: "playlist-1",
+            name: "Roadtrip",
+            description: "",
+            imageUrl: "",
+            ownerName: "Allar",
+            trackCount: 24,
+            uri: "spotify:playlist:1"
+          }
+        ]
+      }
+    };
+
+    executeOpenContextAction(
+      {
+        client: createClient({
+          getCliLibraryView: async () =>
+            ({
+              section: {
+                id: "playlist-1",
+                title: "Roadtrip",
+                items: [
+                  {
+                    id: "track-1",
+                    title: "Dreams",
+                    subtitle: "Fleetwood Mac",
+                    meta: "Rumours",
+                    action: { uri: "spotify:track:1" }
+                  }
+                ]
+              }
+            }) as Awaited<ReturnType<ApiClient["getCliLibraryView"]>>,
+          runCliPlayerAction: async (action) => {
+            playerAction = action;
+            return { ok: true, action: "play" };
+          }
+        }),
+        dispatch(action) {
+          actions.push(action);
+          state = authenticatedAppReducer(state, action);
+        },
+        getState: () => state,
+        onLogoutComplete() {
+          throw new Error("should not logout");
+        },
+        openBrowserOnLink: false
+      },
+      { type: "play-and-open-playlist", playlistId: "playlist-1", uri: "spotify:playlist:1" }
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(playerAction).toBeNull();
     expect(actions).toContainEqual({
       type: "open-playlist-detail",
       detail: expect.objectContaining({

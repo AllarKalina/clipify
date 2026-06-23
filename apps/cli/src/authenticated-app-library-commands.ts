@@ -46,6 +46,32 @@ function openPlaylistDetail(
     });
 }
 
+export function executeOpenContextAction(
+  context: AuthenticatedCommandContext,
+  action: ContentAction
+) {
+  if (action.type === "open-liked-tracks") {
+    executeContentAction(context, action);
+    return;
+  }
+
+  if (action.type === "open-playlist") {
+    openPlaylistDetail(context, action.playlistId);
+    return;
+  }
+
+  if (action.type === "play-and-open-playlist") {
+    openPlaylistDetail(context, action.playlistId);
+    return;
+  }
+
+  if (action.type === "play-context") {
+    runPlaybackAction(context, "Started context", (targetClient) =>
+      targetClient.runCliPlayerAction({ action: "play-context", contextUri: action.uri })
+    );
+  }
+}
+
 export function executeContentAction(
   context: AuthenticatedCommandContext,
   action: ContentAction
